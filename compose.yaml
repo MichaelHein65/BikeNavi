@@ -1,0 +1,44 @@
+name: bikenavi
+services:
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: bikenavi
+      POSTGRES_DB: bikenavi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Bitte .env ausfüllen}
+    volumes:
+      - database:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bikenavi -d bikenavi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 384m
+  backend:
+    build: ./server
+    environment:
+      DATABASE_URL: postgresql+psycopg://bikenavi:${POSTGRES_PASSWORD:?Bitte .env ausfüllen}@database/bikenavi
+      BIKENAVI_TOKEN: ${BIKENAVI_TOKEN:?Bitte .env ausfüllen}
+      ORS_API_KEY: ${ORS_API_KEY:-}
+    ports:
+      - "127.0.0.1:${BIKENAVI_PORT:-8093}:8000"
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 384m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+volumes:
+  database:

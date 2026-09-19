@@ -1,0 +1,187 @@
+{
+  "id": "2b9b4e13-2593-4dc4-a8c0-229708f66936",
+  "coordinates": [
+    {
+      "latitude": 49.414601,
+      "longitude": 8.681496,
+      "altitude": 114.0
+    },
+    {
+      "latitude": 49.414599,
+      "longitude": 8.68147,
+      "altitude": 114.0
+    },
+    {
+      "latitude": 49.41465,
+      "longitude": 8.681488,
+      "altitude": 114.0
+    },
+    {
+      "latitude": 49.415706,
+      "longitude": 8.681424,
+      "altitude": 114.0
+    },
+    {
+      "latitude": 49.415746,
+      "longitude": 8.681423,
+      "altitude": 114.0
+    },
+    {
+      "latitude": 49.415795,
+      "longitude": 8.681426,
+      "altitude": 114.0
+    },
+    {
+      "latitude": 49.41659,
+      "longitude": 8.681656,
+      "altitude": 116.0
+    },
+    {
+      "latitude": 49.417081,
+      "longitude": 8.681826,
+      "altitude": 114.0
+    },
+    {
+      "latitude": 49.417287,
+      "longitude": 8.681875,
+      "altitude": 114.0
+    },
+    {
+      "latitude": 49.417392,
+      "longitude": 8.681881,
+      "altitude": 114.0
+    },
+    {
+      "latitude": 49.417471,
+      "longitude": 8.681865,
+      "altitude": 114.0
+    },
+    {
+      "latitude": 49.417632,
+      "longitude": 8.681784,
+      "altitude": 116.0
+    },
+    {
+      "latitude": 49.41822,
+      "longitude": 8.681533,
+      "altitude": 115.0
+    },
+    {
+      "latitude": 49.418283,
+      "longitude": 8.681515,
+      "altitude": 115.0
+    },
+    {
+      "latitude": 49.418555,
+      "longitude": 8.683217,
+      "altitude": 117.0
+    },
+    {
+      "latitude": 49.418563,
+      "longitude": 8.683297,
+      "altitude": 117.0
+    },
+    {
+      "latitude": 49.418613,
+      "longitude": 8.683285,
+      "altitude": 117.0
+    },
+    {
+      "latitude": 49.419008,
+      "longitude": 8.683176,
+      "altitude": 117.0
+    },
+    {
+      "latitude": 49.419059,
+      "longitude": 8.683166,
+      "altitude": 117.0
+    },
+    {
+      "latitude": 49.419067,
+      "longitude": 8.683238,
+      "altitude": 117.0
+    },
+    {
+      "latitude": 49.419256,
+      "longitude": 8.684929,
+      "altitude": 116.0
+    },
+    {
+      "latitude": 49.419265,
+      "longitude": 8.685026,
+      "altitude": 117.0
+    },
+    {
+      "latitude": 49.419275,
+      "longitude": 8.68511,
+      "altitude": 117.0
+    },
+    {
+      "latitude": 49.41942,
+      "longitude": 8.686409,
+      "altitude": 119.0
+    },
+    {
+      "latitude": 49.419427,
+      "longitude": 8.686493,
+      "altitude": 119.0
+    },
+    {
+      "latitude": 49.419429,
+      "longitude": 8.686507,
+      "altitude": 119.0
+    }
+  ],
+  "distance": 852.2,
+  "duration": 139.4,
+  "ascent": 9.0,
+  "descent": 4.0,
+  "maneuvers": [
+    {
+      "instruction": "Weiter westlich auf Gerhart-Hauptmann-Straße",
+      "distance": 1.9,
+      "coordinateIndex": 0,
+      "type": 11
+    },
+    {
+      "instruction": "Biegen Sie scharf rechts auf Wielandtstraße ab",
+      "distance": 416.6,
+      "coordinateIndex": 1,
+      "type": 3
+    },
+    {
+      "instruction": "Biegen Sie rechts auf Seitzstraße ab",
+      "distance": 132.6,
+      "coordinateIndex": 13,
+      "type": 1
+    },
+    {
+      "instruction": "Biegen Sie links auf Quinckestraße ab",
+      "distance": 55.9,
+      "coordinateIndex": 15,
+      "type": 0
+    },
+    {
+      "instruction": "Biegen Sie rechts auf Moltkestraße ab",
+      "distance": 245.2,
+      "coordinateIndex": 18,
+      "type": 1
+    },
+    {
+      "instruction": "Sie erreichen Moltkestraße (geradeaus)",
+      "distance": 0.0,
+      "coordinateIndex": 25,
+      "type": 10
+    }
+  ],
+  "surfaces": [
+    {
+      "name": "Asphalt",
+      "distance": 852.2,
+      "percentage": 100.0
+    }
+  ],
+  "warnings": [],
+  "provider": "openrouteservice",
+  "calculatedAt": 1789756311.841866
+}

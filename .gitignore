@@ -1,0 +1,16 @@
+.DS_Store
+.build/
+build/
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+.env
+.env.*
+!.env.example
+*.sqlite*
+*.xcuserstate
+xcuserdata/
+server/data/
+*.egg-info/
+artifacts/
