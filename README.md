@@ -18,6 +18,8 @@ Sobald Start und Ziel gesetzt sind, erhält die Planung automatisch den Namen �
 
 Den unteren Datenbereich nach unten wischen, um nur den Tourtitel stehen zu lassen und mehr Karte zu sehen; nach oben wischen zeigt wieder alle Daten. Der kleine Pfeil neben dem Titel funktioniert ebenso.
 
+In **Deine Wegpunkte** steht **Tour umkehren** bereit. Start, Ziel und alle Zwischenziele werden dabei in umgekehrter Reihenfolge übernommen; anschließend wird die Route neu berechnet.
+
 Orte lassen sich beim Kartenpunkt oder bei einem Suchtreffer als Favorit speichern. Beim Speichern kann ein frei gewählter Name wie „Zuhause“ oder „Arbeit“ vergeben werden. Das Lesezeichen oben rechts öffnet **Meine Orte**: Dort wird der Einsatzzweck Start, Zwischenziel oder Ziel gewählt; Orte lassen sich zudem umbenennen oder löschen.
 
 In der Fahrtansicht startet der Tab **Fahren** eine berechnete Planung. Die Karte zeigt die Belagsfarben, folgt der Fahrtrichtung und weist auf den nächsten Abbieger hin. Weicht die Fahrt mindestens 80 m für zehn Sekunden von der Route ab, berechnet die App über den Pi eine neue Verbindung; noch offene Zwischenziele bleiben erhalten. Weitere automatische Berechnungen warten mindestens 90 Sekunden.

@@ -254,6 +254,14 @@ final class AppState: ObservableObject {
         }
         addPoint(Waypoint(name: "Mein Standort", coordinate: coordinate), role: .start)
     }
+    func reversePlan() {
+        guard plan.reverseWaypoints() else {
+            errorMessage = "Zum Umkehren werden ein Start und ein Ziel benötigt."
+            return
+        }
+        mapFocus = plan.startPoint?.coordinate
+        invalidateRoute()
+    }
     private func requestAutomaticStart() {
         guard plan.isAwaitingStart else { return }
         location.request()

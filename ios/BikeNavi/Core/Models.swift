@@ -222,6 +222,13 @@ struct TourDocument: Codable, Identifiable, Equatable {
     }
 
     @discardableResult
+    mutating func reverseWaypoints() -> Bool {
+        guard canCalculateRoute else { return false }
+        waypoints.reverse()
+        return true
+    }
+
+    @discardableResult
     mutating func completeAutomaticStart(_ coordinate: Coordinate) -> Bool {
         guard isAwaitingStart, !waypoints.isEmpty else { return false }
         setStart(Waypoint(name: "Mein Standort", coordinate: coordinate))

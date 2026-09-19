@@ -402,6 +402,9 @@ struct WaypointsView: View {
                     Button("Start suchen") { searchRole = .start }
                     Button("Zwischenziel suchen") { searchRole = .via }
                     Button("Ziel suchen") { searchRole = .destination }
+                    Button { state.reversePlan() } label: {
+                        Label("Tour umkehren", systemImage: "arrow.triangle.2.circlepath")
+                    }.disabled(!state.plan.canCalculateRoute)
                     Button("Zurück zum Start") {
                         if var first = state.plan.startPoint { first.id = UUID(); state.plan.waypoints.append(first); state.invalidateRoute() }
                     }.disabled(state.plan.startPoint == nil)

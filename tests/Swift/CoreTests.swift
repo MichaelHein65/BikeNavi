@@ -57,6 +57,18 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(restored.id, identifier)
         XCTAssertEqual(restored.name, "Zuhause")
     }
+    func testReversingAPlanReversesAllWaypoints() {
+        var document = TourDocument()
+        let start = Waypoint(name: "Start", coordinate: Coordinate(latitude: 49, longitude: 8))
+        let via = Waypoint(name: "Pause", coordinate: Coordinate(latitude: 49.1, longitude: 8.1))
+        let destination = Waypoint(name: "Ziel", coordinate: Coordinate(latitude: 49.2, longitude: 8.2))
+        document.waypoints = [start, via, destination]
+        XCTAssertTrue(document.reverseWaypoints())
+        XCTAssertEqual(document.waypoints, [destination, via, start])
+        var incomplete = TourDocument()
+        incomplete.waypoints = [destination]
+        XCTAssertFalse(incomplete.reverseWaypoints())
+    }
     func testAcknowledgmentDoesNotEraseAnEditMadeDuringUpload() throws {
         let db = try store()
         var document = TourDocument()
