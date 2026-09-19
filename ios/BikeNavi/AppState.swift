@@ -116,6 +116,7 @@ final class AppState: ObservableObject {
     private var lastAnnouncement: Int?
     private var segment = 0
     private let speech = AVSpeechSynthesizer()
+    private let rideActivity = RideActivityController()
 
     init(store: LocalStore) {
         self.store = store
@@ -130,6 +131,7 @@ final class AppState: ObservableObject {
             activeRide = unfinished
             segment = (unfinished.track.last?.segment ?? 0) + 1
             try? store.save(unfinished)
+            rideActivity.restore(tourName: unfinished.title, paused: true)
             notice = "Deine letzte Fahrt ist gespeichert. Du kannst sie fortsetzen oder beenden."
         }
         location.onLocation = { [weak self] sample in self?.receive(sample) }
@@ -430,6 +432,7 @@ final class AppState: ObservableObject {
             lastAnnouncement = nil
             location.setRiding(true)
             UIApplication.shared.isIdleTimerDisabled = true
+            rideActivity.start(tourName: ride.title)
             tab = 1
             reload()
         } catch { errorMessage = error.localizedDescription }
@@ -455,6 +458,7 @@ final class AppState: ObservableObject {
             progress = nil
             location.setRiding(false)
             UIApplication.shared.isIdleTimerDisabled = false
+            rideActivity.end()
             reload()
             notice = "Die vorherige unterbrochene Fahrt wurde in Touren gespeichert."
         } catch { errorMessage = error.localizedDescription }
@@ -468,6 +472,8 @@ final class AppState: ObservableObject {
             activeRide = ride
             location.setRiding(ride.recordingState == .recording)
             UIApplication.shared.isIdleTimerDisabled = ride.recordingState == .recording
+            if ride.recordingState == .recording { rideActivity.start(tourName: ride.title) }
+            else { rideActivity.update(progress: progress, paused: true, rerouting: false) }
             reload()
         } catch { errorMessage = error.localizedDescription }
     }
@@ -481,6 +487,7 @@ final class AppState: ObservableObject {
             progress = nil
             location.setRiding(false)
             UIApplication.shared.isIdleTimerDisabled = false
+            rideActivity.end()
             reload()
             tab = 2
             Task { await sync() }
@@ -504,6 +511,7 @@ final class AppState: ObservableObject {
     private func reroute(from position: Coordinate, ride: TourDocument, traveled: Double) {
         guard rerouteTask == nil, let api, let destination = ride.destinationPoint else { return }
         rerouting = true
+        rideActivity.update(progress: progress, paused: false, rerouting: true)
         let rideID = ride.id
         var request = ride
         var remaining = remainingWaypoints(for: ride, after: traveled)
@@ -521,6 +529,7 @@ final class AppState: ObservableObject {
                 tracker = RouteTracker()
                 progress = nil
                 rerouting = false
+                rideActivity.update(progress: nil, paused: false, rerouting: false)
                 notice = "Route ab deinem aktuellen Standort angepasst."
                 reload()
                 await sync()
@@ -560,6 +569,7 @@ final class AppState: ObservableObject {
         }
         if let route = ride.route, sample.horizontalAccuracy >= 0, sample.horizontalAccuracy <= 50 {
             progress = tracker.update(position: point.coordinate, timestamp: point.timestamp, route: route)
+            rideActivity.update(progress: progress, paused: false, rerouting: rerouting)
             if let progress, let activeRide, api != nil,
                reroutePolicy.observe(distanceFromRoute: progress.distanceFromRoute, timestamp: point.timestamp) {
                 reroute(from: point.coordinate, ride: activeRide, traveled: progress.traveled)

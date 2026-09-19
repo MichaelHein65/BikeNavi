@@ -20,6 +20,8 @@ E81ADEE0CB0D2B35C334CEFC = { isa = PBXFileReference; lastKnownFileType = sourcec
 1CBA98370579754A632E1E4F = { isa = PBXBuildFile; fileRef = E81ADEE0CB0D2B35C334CEFC; };
 83AA2910125505D328BF6CD9 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ios/BikeNavi/PlannerView.swift"; sourceTree = SOURCE_ROOT; };
 58D77049D6A142ADF70FAEE9 = { isa = PBXBuildFile; fileRef = 83AA2910125505D328BF6CD9; };
+1015D799D4820E7EB872317E = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ios/BikeNavi/RideActivityController.swift"; sourceTree = SOURCE_ROOT; };
+3AE59ABC2CC5CE3FAB4CFAB8 = { isa = PBXBuildFile; fileRef = 1015D799D4820E7EB872317E; };
 2833A658A4AA1168264ACEEB = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ios/BikeNavi/RideView.swift"; sourceTree = SOURCE_ROOT; };
 0E32DF5309F79997D1BFDF5A = { isa = PBXBuildFile; fileRef = 2833A658A4AA1168264ACEEB; };
 C139D2EF091A33169820126A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ios/BikeNavi/RouteMap.swift"; sourceTree = SOURCE_ROOT; };
@@ -28,19 +30,28 @@ DCE1556065B8679771C47F10 = { isa = PBXFileReference; lastKnownFileType = sourcec
 BBA18B38A04DB108F2503A36 = { isa = PBXBuildFile; fileRef = DCE1556065B8679771C47F10; };
 CEE7D1AD3154302B049F7AAF = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ios/BikeNavi/SurfaceLegend.swift"; sourceTree = SOURCE_ROOT; };
 39F1588554BEE21C3F4D64AA = { isa = PBXBuildFile; fileRef = CEE7D1AD3154302B049F7AAF; };
+D367326AB58440808DFD19C4 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ios/Shared/RideActivityAttributes.swift"; sourceTree = SOURCE_ROOT; };
+5ED15D62C40496EE1D0EBC1D = { isa = PBXBuildFile; fileRef = D367326AB58440808DFD19C4; };
 7D1043473D55BFA90E8530D3 = { isa = PBXFileReference; explicitFileType = wrapper.application; path = BikeNavi.app; sourceTree = BUILT_PRODUCTS_DIR; };
 11F49EDBF308A47902D18BBF = { isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = BikeNaviUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 26809650F2BC9377C8579F28 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = tests/UI/PlannerUITests.swift; sourceTree = SOURCE_ROOT; };
+45C92396A8C486D06C02ACCB = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ios/BikeNaviWidget/BikeNaviLiveActivity.swift"; sourceTree = SOURCE_ROOT; };
+778CACE3B2EBA70328541CD9 = { isa = PBXBuildFile; fileRef = 45C92396A8C486D06C02ACCB; };
+2A9674D9E00AB47BCF360D2B = { isa = PBXBuildFile; fileRef = D367326AB58440808DFD19C4; };
 BA8C03EC606442FCCD5262CC = { isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/maplibre/maplibre-gl-native-distribution"; requirement = { kind = exactVersion; version = 6.31.0; }; };
 66B74162CCB405409563530D = { isa = XCSwiftPackageProductDependency; package = BA8C03EC606442FCCD5262CC; productName = MapLibre; };
 741D43774B3B213F84D622DF = { isa = PBXBuildFile; productRef = 66B74162CCB405409563530D; };
 7561BFB015D8F536760CB671 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (741D43774B3B213F84D622DF,); runOnlyForDeploymentPostprocessing = 0; };
-BCE16DD0260827ECF338C787 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (1F64A1A2490424EB45C2A429,0384F90A219E8DB693565EEA,FFD4362342F4A8E73C606BFC,565D892E801DA1FECF439262,0F16D3F06C8DE9C56983C734,E97C7BFDFA6A11C7DB3508E0,A6F2643A5C4714679C69791B,E69A49E774218B102CE5050F,1CBA98370579754A632E1E4F,58D77049D6A142ADF70FAEE9,0E32DF5309F79997D1BFDF5A,B4BBCA30DD640960CF193E16,BBA18B38A04DB108F2503A36,39F1588554BEE21C3F4D64AA,); runOnlyForDeploymentPostprocessing = 0; };
+BCE16DD0260827ECF338C787 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (1F64A1A2490424EB45C2A429,0384F90A219E8DB693565EEA,FFD4362342F4A8E73C606BFC,565D892E801DA1FECF439262,0F16D3F06C8DE9C56983C734,E97C7BFDFA6A11C7DB3508E0,A6F2643A5C4714679C69791B,E69A49E774218B102CE5050F,1CBA98370579754A632E1E4F,58D77049D6A142ADF70FAEE9,3AE59ABC2CC5CE3FAB4CFAB8,0E32DF5309F79997D1BFDF5A,B4BBCA30DD640960CF193E16,BBA18B38A04DB108F2503A36,39F1588554BEE21C3F4D64AA,5ED15D62C40496EE1D0EBC1D,); runOnlyForDeploymentPostprocessing = 0; };
 3685E330EC5277A9DD5661C6 = { isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = ios/BikeNavi/Assets.xcassets; sourceTree = SOURCE_ROOT; };
 716E9590E60B3AFA6E62BF18 = { isa = PBXBuildFile; fileRef = 3685E330EC5277A9DD5661C6; };
 0189424A5A60FED329FA868E = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (716E9590E60B3AFA6E62BF18,); runOnlyForDeploymentPostprocessing = 0; };
-FBDC4F23F93125BBEEAE800C = { isa = PBXGroup; children = (7D1043473D55BFA90E8530D3,11F49EDBF308A47902D18BBF,); name = Products; sourceTree = "<group>"; };
-64292B1C2B2E13EAD8788FC8 = { isa = PBXGroup; children = (36F5E285D21C6D956BF6B334,C72B912766C04162228F3433,10C709F7581E80349AFD54A7,6886645C1DF7D4D0B3355312,791A3F47E3F253D6D28BD9E1,024C74F1270D34CCB351B8C4,EA1C3DC71120FA1EDDEE10FD,5CAD07FFBD9F03DA61B8A859,E81ADEE0CB0D2B35C334CEFC,83AA2910125505D328BF6CD9,2833A658A4AA1168264ACEEB,C139D2EF091A33169820126A,DCE1556065B8679771C47F10,CEE7D1AD3154302B049F7AAF,26809650F2BC9377C8579F28,3685E330EC5277A9DD5661C6,FBDC4F23F93125BBEEAE800C,); sourceTree = "<group>"; };
+D1FC3980C62A8D20F6C0FFF0 = { isa = PBXFileReference; explicitFileType = wrapper.app-extension; path = BikeNaviLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+82CE34952E166218838BE670 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (778CACE3B2EBA70328541CD9,2A9674D9E00AB47BCF360D2B,); runOnlyForDeploymentPostprocessing = 0; };
+112482586DC9325ECD958FF1 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+2093904A82FF706A79646301 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+FBDC4F23F93125BBEEAE800C = { isa = PBXGroup; children = (7D1043473D55BFA90E8530D3,D1FC3980C62A8D20F6C0FFF0,11F49EDBF308A47902D18BBF,); name = Products; sourceTree = "<group>"; };
+64292B1C2B2E13EAD8788FC8 = { isa = PBXGroup; children = (36F5E285D21C6D956BF6B334,C72B912766C04162228F3433,10C709F7581E80349AFD54A7,6886645C1DF7D4D0B3355312,791A3F47E3F253D6D28BD9E1,024C74F1270D34CCB351B8C4,EA1C3DC71120FA1EDDEE10FD,5CAD07FFBD9F03DA61B8A859,E81ADEE0CB0D2B35C334CEFC,83AA2910125505D328BF6CD9,1015D799D4820E7EB872317E,2833A658A4AA1168264ACEEB,C139D2EF091A33169820126A,DCE1556065B8679771C47F10,CEE7D1AD3154302B049F7AAF,D367326AB58440808DFD19C4,26809650F2BC9377C8579F28,45C92396A8C486D06C02ACCB,3685E330EC5277A9DD5661C6,FBDC4F23F93125BBEEAE800C,); sourceTree = "<group>"; };
 369E70E1EE7A07C74E211771 = { isa = XCBuildConfiguration; name = Debug; buildSettings = {
     CLANG_ENABLE_MODULES = YES;
     SWIFT_VERSION = 5.0;
@@ -78,7 +89,47 @@ FBDC4F23F93125BBEEAE800C = { isa = PBXGroup; children = (7D1043473D55BFA90E8530D
     SWIFT_EMIT_LOC_STRINGS = YES;
  SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; }; };
 0BAADF0FBB4BB92BBD30F875 = { isa = XCConfigurationList; buildConfigurations = (369E70E1EE7A07C74E211771,502D350B1D76FA1259FFDE36,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-0E8A3AD980EC179856012B7E = { isa = PBXNativeTarget; buildConfigurationList = 0BAADF0FBB4BB92BBD30F875; buildPhases = (BCE16DD0260827ECF338C787,7561BFB015D8F536760CB671,0189424A5A60FED329FA868E,); buildRules = (); dependencies = (); name = BikeNavi; packageProductDependencies = (66B74162CCB405409563530D,); productName = BikeNavi; productReference = 7D1043473D55BFA90E8530D3; productType = "com.apple.product-type.application"; };
+AE1B1B99519C9634D6BDD103 = { isa = XCBuildConfiguration; name = Debug; buildSettings = {
+        PRODUCT_BUNDLE_IDENTIFIER = de.michaelhein.BikeNavi.LiveActivity;
+        PRODUCT_NAME = BikeNaviLiveActivity;
+        INFOPLIST_FILE = ios/BikeNaviWidget/Info.plist;
+        MARKETING_VERSION = 0.1.0;
+        CURRENT_PROJECT_VERSION = 1;
+        SWIFT_VERSION = 5.0;
+        IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+        SDKROOT = iphoneos;
+        TARGETED_DEVICE_FAMILY = 1;
+        CODE_SIGN_STYLE = Automatic;
+        GENERATE_INFOPLIST_FILE = NO;
+        APPLICATION_EXTENSION_API_ONLY = YES;
+        SKIP_INSTALL = YES;
+        LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+        SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = dwarf; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+        }; };
+BE26C825C3333E65C7546621 = { isa = XCBuildConfiguration; name = Release; buildSettings = {
+        PRODUCT_BUNDLE_IDENTIFIER = de.michaelhein.BikeNavi.LiveActivity;
+        PRODUCT_NAME = BikeNaviLiveActivity;
+        INFOPLIST_FILE = ios/BikeNaviWidget/Info.plist;
+        MARKETING_VERSION = 0.1.0;
+        CURRENT_PROJECT_VERSION = 1;
+        SWIFT_VERSION = 5.0;
+        IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+        SDKROOT = iphoneos;
+        TARGETED_DEVICE_FAMILY = 1;
+        CODE_SIGN_STYLE = Automatic;
+        GENERATE_INFOPLIST_FILE = NO;
+        APPLICATION_EXTENSION_API_ONLY = YES;
+        SKIP_INSTALL = YES;
+        LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+        SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+        }; };
+91F11B0BFBBBE4BF09EA8F48 = { isa = XCConfigurationList; buildConfigurations = (AE1B1B99519C9634D6BDD103,BE26C825C3333E65C7546621,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+FAD79F600E79F84B420BD567 = { isa = PBXNativeTarget; buildConfigurationList = 91F11B0BFBBBE4BF09EA8F48; buildPhases = (82CE34952E166218838BE670,112482586DC9325ECD958FF1,2093904A82FF706A79646301,); buildRules = (); dependencies = (); name = BikeNaviLiveActivity; packageProductDependencies = (); productName = BikeNaviLiveActivity; productReference = D1FC3980C62A8D20F6C0FFF0; productType = "com.apple.product-type.app-extension"; };
+937A01D863611CD7A85B6FE9 = { isa = PBXContainerItemProxy; containerPortal = 98F54143AB4E86B28C3AFEE0; proxyType = 1; remoteGlobalIDString = FAD79F600E79F84B420BD567; remoteInfo = BikeNaviLiveActivity; };
+A9181351A1FEE60D4A78323F = { isa = PBXTargetDependency; target = FAD79F600E79F84B420BD567; targetProxy = 937A01D863611CD7A85B6FE9; };
+D4FAAAFCC3C6961AB2B22D7E = { isa = PBXBuildFile; fileRef = D1FC3980C62A8D20F6C0FFF0; settings = { ATTRIBUTES = (RemoveHeadersOnCopy,); }; };
+750AF8B558936E3AECB9A82F = { isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (D4FAAAFCC3C6961AB2B22D7E,); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+0E8A3AD980EC179856012B7E = { isa = PBXNativeTarget; buildConfigurationList = 0BAADF0FBB4BB92BBD30F875; buildPhases = (BCE16DD0260827ECF338C787,7561BFB015D8F536760CB671,0189424A5A60FED329FA868E,750AF8B558936E3AECB9A82F,); buildRules = (); dependencies = (A9181351A1FEE60D4A78323F,); name = BikeNavi; packageProductDependencies = (66B74162CCB405409563530D,); productName = BikeNavi; productReference = 7D1043473D55BFA90E8530D3; productType = "com.apple.product-type.application"; };
 64FF3C8D719B0055D4092657 = { isa = PBXBuildFile; fileRef = 26809650F2BC9377C8579F28; };
 4D33AD45EAF7E58DD0F1D97D = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (64FF3C8D719B0055D4092657,); runOnlyForDeploymentPostprocessing = 0; };
 E5E22CAB535879BC29C0F4F5 = { isa = XCBuildConfiguration; name = Debug; buildSettings = {
@@ -107,5 +158,5 @@ E5E22CAB535879BC29C0F4F5 = { isa = XCBuildConfiguration; name = Debug; buildSett
 E1E886C523BA547F0BF54F2B = { isa = PBXContainerItemProxy; containerPortal = 98F54143AB4E86B28C3AFEE0; proxyType = 1; remoteGlobalIDString = 0E8A3AD980EC179856012B7E; remoteInfo = BikeNavi; };
 AF0FB728F3142D6B44312054 = { isa = PBXTargetDependency; target = 0E8A3AD980EC179856012B7E; targetProxy = E1E886C523BA547F0BF54F2B; };
 922C1ED034346FC9CC8F1EEC = { isa = PBXNativeTarget; buildConfigurationList = 49A6CD41A58AA10A9802997E; buildPhases = (4D33AD45EAF7E58DD0F1D97D,); buildRules = (); dependencies = (AF0FB728F3142D6B44312054,); name = BikeNaviUITests; productName = BikeNaviUITests; productReference = 11F49EDBF308A47902D18BBF; productType = "com.apple.product-type.bundle.ui-testing"; };
-98F54143AB4E86B28C3AFEE0 = { isa = PBXProject; attributes = { LastUpgradeCheck = 2610; }; buildConfigurationList = 0BAADF0FBB4BB92BBD30F875; compatibilityVersion = "Xcode 14.0"; developmentRegion = de; hasScannedForEncodings = 0; knownRegions = (de,en,Base); mainGroup = 64292B1C2B2E13EAD8788FC8; packageReferences = (BA8C03EC606442FCCD5262CC,); productRefGroup = FBDC4F23F93125BBEEAE800C; projectDirPath = ""; projectRoot = ""; targets = (0E8A3AD980EC179856012B7E,922C1ED034346FC9CC8F1EEC,); };
+98F54143AB4E86B28C3AFEE0 = { isa = PBXProject; attributes = { LastUpgradeCheck = 2610; }; buildConfigurationList = 0BAADF0FBB4BB92BBD30F875; compatibilityVersion = "Xcode 14.0"; developmentRegion = de; hasScannedForEncodings = 0; knownRegions = (de,en,Base); mainGroup = 64292B1C2B2E13EAD8788FC8; packageReferences = (BA8C03EC606442FCCD5262CC,); productRefGroup = FBDC4F23F93125BBEEAE800C; projectDirPath = ""; projectRoot = ""; targets = (0E8A3AD980EC179856012B7E,FAD79F600E79F84B420BD567,922C1ED034346FC9CC8F1EEC,); };
 }; rootObject = 98F54143AB4E86B28C3AFEE0; }

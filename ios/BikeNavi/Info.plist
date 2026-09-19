@@ -15,4 +15,5 @@
 <key>NSLocationAlwaysAndWhenInUseUsageDescription</key><string>Während einer gestarteten Tour zeichnet BikeNavi deinen Weg auch bei gesperrtem Bildschirm auf.</string>
 <key>NSLocalNetworkUsageDescription</key><string>BikeNavi verbindet sich mit deinem privaten Pi-Server, um Touren zu synchronisieren.</string>
 <key>UIBackgroundModes</key><array><string>location</string></array>
+<key>NSSupportsLiveActivities</key><true/>
 </dict></plist>
