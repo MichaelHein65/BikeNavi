@@ -6,10 +6,23 @@ extension Coordinate {
     var cl: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: latitude, longitude: longitude) }
 }
 
+final class SavedPlaceAnnotation: MLNPointAnnotation {
+    let place: SavedPlace
+    init(place: SavedPlace) {
+        self.place = place
+        super.init()
+        coordinate = place.coordinate.cl
+        title = place.name
+        subtitle = "Gespeicherter Ort"
+    }
+    required init?(coder: NSCoder) { nil }
+}
+
 struct RouteMap: UIViewRepresentable {
     var styleURL: String
     var route: CalculatedRoute?
     var waypoints: [Waypoint] = []
+    var savedPlaces: [SavedPlace] = []
     var track: [TrackPoint] = []
     var focus: Coordinate?
     var fitRevision: UUID?
@@ -19,6 +32,7 @@ struct RouteMap: UIViewRepresentable {
     var topOverlayInset: CGFloat = 65
     var hasStart = true
     var onTap: ((Coordinate) -> Void)?
+    var onSavedPlaceTap: ((SavedPlace) -> Void)?
     var onError: ((String) -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -49,7 +63,7 @@ struct RouteMap: UIViewRepresentable {
             if followHeading { c.beginNavigation() }
             else { map.userTrackingMode = .follow }
         }
-        if c.routeID != route?.id || c.points != waypoints || c.trackCount != track.count || c.colorBySurface != colorBySurface || c.hasStart != hasStart {
+        if c.routeID != route?.id || c.points != waypoints || c.savedPlaces != savedPlaces || c.trackCount != track.count || c.colorBySurface != colorBySurface || c.hasStart != hasStart {
             c.redraw()
         }
         if c.focus != focus, let focus {
@@ -66,6 +80,7 @@ struct RouteMap: UIViewRepresentable {
         weak var map: MLNMapView?
         var routeID: UUID?
         var points: [Waypoint] = []
+        var savedPlaces: [SavedPlace] = []
         var trackCount = -1
         var colorBySurface = false
         var hasStart = true
@@ -75,7 +90,17 @@ struct RouteMap: UIViewRepresentable {
         init(_ parent: RouteMap) { self.parent = parent }
         @objc func tapped(_ gesture: UITapGestureRecognizer) {
             guard let map, gesture.state == .ended else { return }
-            let c = map.convert(gesture.location(in: map), toCoordinateFrom: map)
+            let location = gesture.location(in: map)
+            let nearbyPlace = (map.annotations ?? []).compactMap { annotation -> (SavedPlace, CGFloat)? in
+                guard let pin = annotation as? SavedPlaceAnnotation else { return nil }
+                let point = map.convert(pin.coordinate, toPointTo: map)
+                return (pin.place, hypot(point.x - location.x, point.y - location.y))
+            }.min { $0.1 < $1.1 }
+            if let nearbyPlace, nearbyPlace.1 <= 34 {
+                parent.onSavedPlaceTap?(nearbyPlace.0)
+                return
+            }
+            let c = map.convert(location, toCoordinateFrom: map)
             parent.onTap?(Coordinate(latitude: c.latitude, longitude: c.longitude))
         }
         func redraw() {
@@ -109,15 +134,21 @@ struct RouteMap: UIViewRepresentable {
                 pin.subtitle = index == 0 && parent.hasStart ? "Start" : (index == parent.waypoints.count - 1 ? "Ziel" : "\(index + (parent.hasStart ? 0 : 1))")
                 map.addAnnotation(pin)
             }
+            for place in parent.savedPlaces {
+                map.addAnnotation(SavedPlaceAnnotation(place: place))
+            }
             routeID = parent.route?.id
             points = parent.waypoints
+            savedPlaces = parent.savedPlaces
             trackCount = parent.track.count
             colorBySurface = parent.colorBySurface
             hasStart = parent.hasStart
         }
         func fit() {
             guard let map, let annotations = map.annotations, !annotations.isEmpty else { return }
-            map.showAnnotations(annotations, edgePadding: UIEdgeInsets(top: parent.topOverlayInset, left: 40, bottom: 45, right: 40), animated: true, completionHandler: nil)
+            let routeAnnotations = annotations.filter { !($0 is SavedPlaceAnnotation) }
+            let target = routeAnnotations.isEmpty ? annotations : routeAnnotations
+            map.showAnnotations(target, edgePadding: UIEdgeInsets(top: parent.topOverlayInset, left: 40, bottom: 45, right: 40), animated: true, completionHandler: nil)
         }
         func beginNavigation() {
             guard let map else { return }
@@ -144,6 +175,20 @@ struct RouteMap: UIViewRepresentable {
         func mapView(_ mapView: MLNMapView, lineWidthForPolylineAnnotation annotation: MLNPolyline) -> CGFloat { 5 }
         func mapView(_ mapView: MLNMapView, viewFor annotation: MLNAnnotation) -> MLNAnnotationView? {
             guard annotation is MLNPointAnnotation else { return nil }
+            if annotation is SavedPlaceAnnotation {
+                let view = MLNAnnotationView(reuseIdentifier: "saved-place")
+                view.frame = CGRect(x: 0, y: 0, width: 32, height: 32)
+                view.backgroundColor = UIColor(Theme.lime)
+                view.layer.cornerRadius = 10
+                view.layer.borderWidth = 2
+                view.layer.borderColor = UIColor(Theme.forest).cgColor
+                let image = UIImageView(image: UIImage(systemName: "bookmark.fill"))
+                image.frame = view.bounds.insetBy(dx: 7, dy: 7)
+                image.tintColor = UIColor(Theme.forest)
+                image.contentMode = .scaleAspectFit
+                view.addSubview(image)
+                return view
+            }
             let view = MLNAnnotationView(reuseIdentifier: "waypoint")
             view.frame = CGRect(x: 0, y: 0, width: 34, height: 34)
             view.backgroundColor = UIColor(Theme.forest)

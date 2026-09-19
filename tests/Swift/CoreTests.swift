@@ -69,6 +69,18 @@ final class CoreTests: XCTestCase {
         incomplete.waypoints = [destination]
         XCTAssertFalse(incomplete.reverseWaypoints())
     }
+    func testAutomaticTitlePrefersNearbySavedPlacesAndStaysShort() {
+        var document = TourDocument()
+        document.waypoints = [
+            Waypoint(name: "Eine sehr lange Straßenadresse 12, Rodgau, Hessen, Deutschland", coordinate: Coordinate(latitude: 49.9995, longitude: 8)),
+            Waypoint(name: "Ausflugsziel am See, Seligenstadt, Hessen, Deutschland", coordinate: Coordinate(latitude: 50.1, longitude: 8.1)),
+        ]
+        let home = SavedPlace(name: "Zuhause", coordinate: Coordinate(latitude: 50, longitude: 8))
+        let tooFarAway = SavedPlace(name: "Nicht dieses Ziel", coordinate: Coordinate(latitude: 50.102, longitude: 8.1))
+        document.updateAutomaticTitle(savedPlaces: [home, tooFarAway])
+        XCTAssertEqual(document.title, "Zuhause → Ausflugsziel am See")
+        XCTAssertLessThanOrEqual(document.title.count, 67)
+    }
     func testAcknowledgmentDoesNotEraseAnEditMadeDuringUpload() throws {
         let db = try store()
         var document = TourDocument()

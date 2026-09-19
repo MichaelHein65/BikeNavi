@@ -176,6 +176,7 @@ final class AppState: ObservableObject {
         do {
             try store.save(SavedPlace(name: cleaned, coordinate: coordinate))
             reload()
+            refreshTitleForSavedPlaces()
         } catch { errorMessage = error.localizedDescription }
     }
     func savePlace(_ waypoint: Waypoint) { savePlace(name: waypoint.name, coordinate: waypoint.coordinate) }
@@ -187,14 +188,20 @@ final class AppState: ObservableObject {
             revised.name = cleaned
             try store.save(revised)
             reload()
+            refreshTitleForSavedPlaces()
         } catch { errorMessage = error.localizedDescription }
     }
     func deletePlace(_ place: SavedPlace) {
-        do { try store.delete(place); reload() } catch { errorMessage = error.localizedDescription }
+        do { try store.delete(place); reload(); refreshTitleForSavedPlaces() } catch { errorMessage = error.localizedDescription }
+    }
+    private func refreshTitleForSavedPlaces() {
+        let oldTitle = plan.title
+        plan.updateAutomaticTitle(savedPlaces: savedPlaces)
+        if plan.title != oldTitle { savePlan() }
     }
     func savePlan() {
         do {
-            plan.updateAutomaticTitle()
+            plan.updateAutomaticTitle(savedPlaces: savedPlaces)
             var snapshot = plan
             if snapshot.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { snapshot.title = "Meine nächste Tour" }
             try store.save(snapshot)

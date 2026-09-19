@@ -10,6 +10,8 @@ struct PlannerView: View {
     @State private var showSavedPlaces = false
     @State private var choosingPoint = false
     @State private var saveCandidate: Waypoint?
+    @State private var selectedMapPlace: SavedPlace?
+    @State private var choosingSavedPlace = false
     @State private var mapError: String?
     @AppStorage("planningDetailsExpanded") private var detailsExpanded = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -17,11 +19,14 @@ struct PlannerView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
-                RouteMap(styleURL: state.mapStyleURL, route: state.plan.route, waypoints: state.plan.waypoints,
+                RouteMap(styleURL: state.mapStyleURL, route: state.plan.route, waypoints: state.plan.waypoints, savedPlaces: state.savedPlaces,
                          focus: state.mapFocus, fitRevision: state.mapRevision, colorBySurface: true, topOverlayInset: 170, hasStart: !state.plan.isAwaitingStart,
                          onTap: {
                              if editingTourName { finishEditingName() }
                              else { state.selectedPoint = $0; choosingPoint = true }
+                         }, onSavedPlaceTap: {
+                             selectedMapPlace = $0
+                             choosingSavedPlace = true
                          }, onError: { mapError = $0 })
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
@@ -79,6 +84,13 @@ struct PlannerView: View {
                 }
             }
             .sheet(item: $saveCandidate) { SavedPlaceEditor(candidate: $0) }
+            .confirmationDialog(selectedMapPlace?.name ?? "Gespeicherten Ort verwenden", isPresented: $choosingSavedPlace, titleVisibility: .visible) {
+                ForEach(PointRole.allCases) { role in
+                    Button("Als \(role.title) setzen") {
+                        if let place = selectedMapPlace { state.addSavedPlace(place, role: role) }
+                    }
+                }
+            }
         }
         .onDisappear { editingTourName = false }
         .onChange(of: state.plan.id) { _, _ in editingTourName = false }

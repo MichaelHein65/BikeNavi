@@ -24,10 +24,21 @@ struct Waypoint: Codable, Identifiable, Equatable {
     }
 
     var tourTitleName: String {
-        if needsPlaceName {
-            return String(format: "%.3f, %.3f", locale: Locale(identifier: "en_US_POSIX"), coordinate.latitude, coordinate.longitude)
+        shortTourTitleName(savedPlaces: [])
+    }
+
+    func shortTourTitleName(savedPlaces: [SavedPlace]) -> String {
+        if let favourite = savedPlaces.min(by: {
+            $0.coordinate.distance(to: coordinate) < $1.coordinate.distance(to: coordinate)
+        }), favourite.coordinate.distance(to: coordinate) <= 100 {
+            return String(favourite.name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(32))
         }
-        return String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(90))
+        if needsPlaceName {
+            return String(format: "%.2f, %.2f", locale: Locale(identifier: "en_US_POSIX"), coordinate.latitude, coordinate.longitude)
+        }
+        let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let concise = cleaned.split(separator: ",", maxSplits: 1).first.map(String.init) ?? cleaned
+        return String(concise.trimmingCharacters(in: .whitespacesAndNewlines).prefix(32))
     }
 }
 
@@ -235,7 +246,7 @@ struct TourDocument: Codable, Identifiable, Equatable {
         return true
     }
 
-    mutating func updateAutomaticTitle() {
+    mutating func updateAutomaticTitle(savedPlaces: [SavedPlace] = []) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard kind == .plan,
               usesAutomaticTitle ?? (trimmed.isEmpty || trimmed == "Meine nächste Tour") else { return }
@@ -244,7 +255,7 @@ struct TourDocument: Codable, Identifiable, Equatable {
             title = "Meine nächste Tour"
             return
         }
-        title = "\(start.tourTitleName) → \(destination.tourTitleName)"
+        title = "\(start.shortTourTitleName(savedPlaces: savedPlaces)) → \(destination.shortTourTitleName(savedPlaces: savedPlaces))"
     }
 
     mutating func rename(to value: String) {
