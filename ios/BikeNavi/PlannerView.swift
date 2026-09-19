@@ -168,6 +168,12 @@ struct PlannerView: View {
                                 .font(.caption).multilineTextAlignment(.leading)
                         }.disabled(state.calculating)
                     }
+                    if route.intersectionContexts?.isEmpty != false {
+                        Button { Task { await state.calculateRoute() } } label: {
+                            Text(state.calculating ? "Kreuzungen werden geladen …" : "Kreuzungsdetails fehlen · Route neu berechnen")
+                                .font(.caption).multilineTextAlignment(.leading)
+                        }.disabled(state.calculating)
+                    }
                     HStack {
                         Button { showDetails = true } label: { Image(systemName: "chart.xyaxis.line").frame(width: 44, height: 44) }
                             .buttonStyle(.bordered).accessibilityLabel("Höhenprofil und Wegbeläge")

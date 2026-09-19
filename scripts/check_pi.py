@@ -37,7 +37,9 @@ with httpx.Client(base_url=url, timeout=90) as client:
     route = response.json()
     assert route["surfaceSections"]
     assert all(0 <= s["startIndex"] < s["endIndex"] < len(route["coordinates"]) for s in route["surfaceSections"])
-    print(f"Pi: E-Bike-Route mit {route['distance']:.0f} Metern berechnet.")
+    assert route["intersectionContexts"]
+    assert any(len(context["roads"]) >= 3 for context in route["intersectionContexts"])
+    print(f"Pi: E-Bike-Route mit {route['distance']:.0f} Metern und OSM-Kreuzungen berechnet.")
     document = {"id": str(uuid4()), "kind": "plan", "title": "Technischer Verbindungstest · Heidelberg",
                 "usesAutomaticTitle": False,
                 "createdAt": time.time(), "updatedAt": time.time(), "waypoints": waypoints,

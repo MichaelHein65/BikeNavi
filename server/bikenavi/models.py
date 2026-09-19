@@ -46,6 +46,16 @@ class SurfaceSection(Model):
     surface: int = Field(ge=0)
 
 
+class ContextRoad(Model):
+    coordinates: list[Coordinate] = Field(min_length=2, max_length=12)
+    kind: int = Field(ge=0, le=2)
+
+
+class IntersectionContext(Model):
+    coordinateIndex: int = Field(ge=0)
+    roads: list[ContextRoad] = Field(default_factory=list, max_length=10)
+
+
 class Route(Model):
     id: UUID
     coordinates: list[Coordinate] = Field(min_length=2, max_length=100_000)
@@ -56,6 +66,7 @@ class Route(Model):
     maneuvers: list[Maneuver] = Field(default_factory=list, max_length=10_000)
     surfaces: list[Surface] = Field(default_factory=list)
     surfaceSections: list[SurfaceSection] | None = Field(default=None, max_length=100_000)
+    intersectionContexts: list[IntersectionContext] | None = Field(default=None, max_length=10_000)
     warnings: list[str] = Field(default_factory=list)
     provider: str = "openrouteservice"
     calculatedAt: float
@@ -69,6 +80,8 @@ class Route(Model):
             if not previous_end <= section.startIndex < section.endIndex < len(self.coordinates):
                 raise ValueError("Ungültige oder überlappende Belagsabschnitte")
             previous_end = section.endIndex
+        if any(context.coordinateIndex >= len(self.coordinates) for context in self.intersectionContexts or []):
+            raise ValueError("Kreuzungsdarstellung liegt außerhalb der Route")
         return self
 
 

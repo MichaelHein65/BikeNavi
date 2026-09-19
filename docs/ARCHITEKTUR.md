@@ -8,6 +8,7 @@ flowchart LR
     PHONE <-->|HTTPS über Tailscale| API[FastAPI auf dem Pi]
     API --> ARCHIVE[PostgreSQL\nversioniertes Tourenarchiv]
     API --> ORS[openrouteservice\nRouting · Suche · Ortsnamen]
+    API --> OSM[OSM Overpass\nKreuzungen · Nebenstraßen]
     PHONE --> MAP[OpenFreeMap / OSM-Karte]
 ```
 
@@ -25,7 +26,7 @@ flowchart LR
 | `Navigation.swift` | Fortschritt auf der Route, GPS-Filter und Regel für Neuberechnung |
 | `GPX.swift` | Export abgeschlossener Fahrten |
 
-MapLibre zeichnet die Karten, Wegpunkte, Aufzeichnung und Routenabschnitte. Belagsinformationen sind an Geometrie-Indizes gebunden. Fehlen diese Indizes bei einer älteren Route, bleibt ihre Linie grau statt Beläge zu erraten.
+MapLibre zeichnet die Karten, Wegpunkte, Aufzeichnung und Routenabschnitte. Belagsinformationen sind an Geometrie-Indizes gebunden. Fehlen diese Indizes bei einer älteren Route, bleibt ihre Linie grau statt Beläge zu erraten. Der Pi ergänzt Abbiegestellen einmalig um nahe OSM-Straßen aus Overpass. Die App speichert diese Kreuzungsgeometrie in der Route und zeichnet sie ohne Karten- oder Netzwerkzugriff in der Live-Aktivität.
 
 Die Fahrtansicht folgt der Fahrtrichtung bei einer Zoomstufe für ungefähr 300 m Vorausschau. Eine Abweichung löst nur bei mindestens 80 m Abstand über zehn Sekunden eine neue Anfrage aus. Danach schützt eine Wartezeit von 90 Sekunden vor wiederholten Anfragen. Die neue Route beginnt am aktuellen Standort und enthält verbleibende Zwischenziele sowie das Ziel.
 

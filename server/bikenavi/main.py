@@ -11,10 +11,12 @@ from .storage import Storage
 
 
 def create_app(database_url: str | None = None, token: str | None = None,
-               ors_key: str | None = None, transport=None) -> FastAPI:
+               ors_key: str | None = None, transport=None,
+               overpass_url: str | None = None) -> FastAPI:
     db_url = database_url or os.getenv("DATABASE_URL", "sqlite:///./bikenavi.sqlite")
     access_token = token if token is not None else os.getenv("BIKENAVI_TOKEN", "")
     key = ors_key if ors_key is not None else os.getenv("ORS_API_KEY", "")
+    context_url = overpass_url if overpass_url is not None else os.getenv("OVERPASS_URL", "")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -22,7 +24,7 @@ def create_app(database_url: str | None = None, token: str | None = None,
             raise RuntimeError("BIKENAVI_TOKEN muss mindestens 32 Zeichen lang sein.")
         app.state.storage = Storage(db_url)
         async with httpx.AsyncClient(timeout=35, transport=transport) as client:
-            app.state.ors = ORS(key, client)
+            app.state.ors = ORS(key, client, context_url)
             yield
         app.state.storage.engine.dispose()
 

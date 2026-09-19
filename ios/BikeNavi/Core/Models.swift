@@ -137,6 +137,16 @@ struct RouteSurfaceSection: Codable, Equatable {
     var kind: SurfaceKind { SurfaceKind(code: surface) }
 }
 
+struct ContextRoad: Codable, Equatable {
+    var coordinates: [Coordinate]
+    var kind: Int
+}
+
+struct IntersectionContext: Codable, Equatable {
+    var coordinateIndex: Int
+    var roads: [ContextRoad]
+}
+
 struct CalculatedRoute: Codable, Identifiable, Equatable {
     var id: UUID
     var coordinates: [Coordinate]
@@ -151,6 +161,7 @@ struct CalculatedRoute: Codable, Identifiable, Equatable {
     var calculatedAt: Double
     // Older saved routes contain only totals, which cannot locate a surface on the map.
     var surfaceSections: [RouteSurfaceSection]?
+    var intersectionContexts: [IntersectionContext]?
 
     var coloredSections: [RouteSurfaceSection] {
         guard coordinates.count > 1 else { return [] }

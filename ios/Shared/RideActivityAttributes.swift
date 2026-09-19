@@ -12,6 +12,21 @@ struct RideActivityPoint: Codable, Hashable {
     }
 }
 
+struct RideActivityRoadPoint: Codable, Hashable {
+    var x: Int
+    var y: Int
+}
+
+struct RideActivityRoad: Codable, Hashable {
+    var points: [RideActivityRoadPoint]
+    var kind: Int
+
+    enum CodingKeys: String, CodingKey {
+        case points = "p"
+        case kind = "k"
+    }
+}
+
 struct RideActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         var instruction: String
@@ -22,6 +37,7 @@ struct RideActivityAttributes: ActivityAttributes {
         var routePoints: [RideActivityPoint]? = nil
         var currentPointIndex: Int? = nil
         var maneuverPointIndex: Int? = nil
+        var sideRoads: [RideActivityRoad]? = nil
     }
 
     var tourName: String

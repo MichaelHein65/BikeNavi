@@ -1,3 +1,4 @@
+import math
 import time
 from uuid import uuid4
 
@@ -12,6 +13,68 @@ SURFACES = {0: "Unbekannt", 1: "Befestigt", 2: "Unbefestigt", 3: "Asphalt", 4: "
             13: "Eis / Schnee", 14: "Pflaster", 15: "Sand", 16: "Holzschnitzel",
             17: "Gras", 18: "Rasengitter"}
 PAVED = {1, 3, 4, 5, 6, 14}
+
+
+def _distance_m(a: dict, b: dict) -> float:
+    radians = math.pi / 180
+    latitude = (a["latitude"] + b["latitude"]) * radians / 2
+    x = (b["longitude"] - a["longitude"]) * radians * math.cos(latitude)
+    y = (b["latitude"] - a["latitude"]) * radians
+    return math.hypot(x, y) * 6_371_000
+
+
+def _road_kind(highway: str) -> int:
+    if highway in {"motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link", "secondary", "secondary_link"}:
+        return 2
+    if highway in {"tertiary", "tertiary_link", "residential", "unclassified", "living_street", "service", "road"}:
+        return 1
+    return 0
+
+
+def parse_intersection_contexts(route: dict, elements: list[dict]) -> list[dict]:
+    ways = []
+    for element in elements:
+        geometry = element.get("geometry")
+        highway = element.get("tags", {}).get("highway")
+        if element.get("type") != "way" or not isinstance(highway, str) or not isinstance(geometry, list):
+            continue
+        points = [{"latitude": point.get("lat"), "longitude": point.get("lon"), "altitude": None}
+                  for point in geometry if isinstance(point, dict)]
+        if len(points) >= 2 and all(isinstance(point["latitude"], (int, float)) and
+                                    isinstance(point["longitude"], (int, float)) for point in points):
+            ways.append((element.get("id"), _road_kind(highway), points))
+
+    contexts = []
+    seen_indices = set()
+    for maneuver in route.get("maneuvers", []):
+        index = maneuver.get("coordinateIndex")
+        if maneuver.get("type") not in range(0, 10) or not isinstance(index, int) or index in seen_indices:
+            continue
+        if not 0 <= index < len(route["coordinates"]):
+            continue
+        seen_indices.add(index)
+        center = route["coordinates"][index]
+        candidates = []
+        used = set()
+        for way_id, kind, points in ways:
+            nearest, distance = min(enumerate(points), key=lambda item: _distance_m(center, item[1]))
+            meters = _distance_m(center, distance)
+            if meters > 55:
+                continue
+            start, end = max(0, nearest - 4), min(len(points), nearest + 5)
+            line = points[start:end]
+            if len(line) < 2:
+                continue
+            key = way_id if way_id is not None else tuple((round(p["latitude"], 7), round(p["longitude"], 7)) for p in line)
+            if key in used:
+                continue
+            used.add(key)
+            candidates.append((meters, {"coordinates": line[:12], "kind": kind}))
+        candidates.sort(key=lambda item: (item[0], -item[1]["kind"]))
+        roads = [road for _, road in candidates[:10]]
+        if roads:
+            contexts.append({"coordinateIndex": index, "roads": roads})
+    return contexts
 
 
 def parse_route(body: dict) -> dict:
@@ -46,9 +109,10 @@ def parse_route(body: dict) -> dict:
 
 
 class ORS:
-    def __init__(self, api_key: str, client: httpx.AsyncClient):
+    def __init__(self, api_key: str, client: httpx.AsyncClient, overpass_url: str = ""):
         self.key = api_key
         self.client = client
+        self.overpass_url = overpass_url
 
     async def request(self, method: str, path: str, **kwargs) -> dict:
         if not self.key:
@@ -112,7 +176,38 @@ class ORS:
             route["warnings"].append("Gravel verwendet zunächst das Tourenradprofil. Die Beläge siehst du in der Streckenübersicht.")
         if not route["surfaces"]:
             route["warnings"].append("Für diese Route fehlen Angaben zur Wegbeschaffenheit.")
+        route["intersectionContexts"] = await self.intersection_contexts(route)
         return route
+
+    async def intersection_contexts(self, route: dict) -> list[dict]:
+        if not self.overpass_url:
+            return []
+        targets = []
+        seen = set()
+        for maneuver in route.get("maneuvers", []):
+            index = maneuver.get("coordinateIndex")
+            if maneuver.get("type") in range(0, 10) and isinstance(index, int) and index not in seen and 0 <= index < len(route["coordinates"]):
+                seen.add(index)
+                targets.append(route["coordinates"][index])
+        if not targets:
+            return []
+        elements = {}
+        for offset in range(0, len(targets), 30):
+            clauses = "\n".join(
+                f'way(around:45,{point["latitude"]:.7f},{point["longitude"]:.7f})["highway"];'
+                for point in targets[offset:offset + 30]
+            )
+            query = f"[out:json][timeout:20];({clauses});out tags geom;"
+            try:
+                response = await self.client.post(self.overpass_url, data={"data": query},
+                                                  headers={"User-Agent": "BikeNavi/0.1 personal cycling navigation"})
+                response.raise_for_status()
+                for element in response.json().get("elements", []):
+                    if isinstance(element, dict):
+                        elements[(element.get("type"), element.get("id"))] = element
+            except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+                continue
+        return parse_intersection_contexts(route, list(elements.values()))
 
     async def search(self, text: str, lat: float | None, lon: float | None) -> list[dict]:
         params = {"text": text, "size": 8, "lang": "de"}

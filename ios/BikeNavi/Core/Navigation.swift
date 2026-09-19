@@ -61,6 +61,17 @@ struct NavigationPreview: Equatable {
     var points: [NavigationPreviewPoint]
     var currentPointIndex: Int
     var maneuverPointIndex: Int?
+    var roads: [NavigationPreviewRoad]
+}
+
+struct NavigationPreviewRoad: Equatable {
+    var points: [NavigationPreviewRoadPoint]
+    var kind: Int
+}
+
+struct NavigationPreviewRoadPoint: Equatable {
+    var x: Int
+    var y: Int
 }
 
 /// Produces a compact, direction-up route diagram for glanceable navigation.
@@ -94,19 +105,26 @@ enum NavigationPreviewBuilder {
 
         let anchor = interpolated(at: traveled, coordinates: route.coordinates, cumulative: cumulative).coordinate
         let fallbackHeading = routeHeading(at: traveled, coordinates: route.coordinates, cumulative: cumulative)
-        let heading = (headingDegrees?.isFinite == true && headingDegrees! >= 0 ? headingDegrees! : fallbackHeading) * .pi / 180
+        let selectedHeading: Double
+        if let headingDegrees, headingDegrees.isFinite, headingDegrees >= 0 { selectedHeading = headingDegrees }
+        else { selectedHeading = fallbackHeading }
+        let heading = selectedHeading * .pi / 180
         let cosLatitude = cos(anchor.latitude * .pi / 180)
         let sections = route.coloredSections
+        let project: (Coordinate) -> (x: Double, y: Double) = { coordinate in
+            let east = (coordinate.longitude - anchor.longitude) * cosLatitude * 111_320
+            let north = (coordinate.latitude - anchor.latitude) * 111_320
+            let across = east * cos(heading) - north * sin(heading)
+            let forward = east * sin(heading) + north * cos(heading)
+            return (across, -forward)
+        }
         var samples: [(x: Double, y: Double, surface: Int)] = []
         for distance in distances {
             let item = interpolated(at: distance, coordinates: route.coordinates, cumulative: cumulative)
-            let east = (item.coordinate.longitude - anchor.longitude) * cosLatitude * 111_320
-            let north = (item.coordinate.latitude - anchor.latitude) * 111_320
-            let across = east * cos(heading) - north * sin(heading)
-            let forward = east * sin(heading) + north * cos(heading)
+            let projected = project(item.coordinate)
             let segment = min(max(0, item.segmentIndex), route.coordinates.count - 2)
             let surface = sections.first(where: { segment >= $0.startIndex && segment < $0.endIndex })?.surface ?? 0
-            samples.append((across, -forward, surface))
+            samples.append((projected.x, projected.y, surface))
         }
         guard !samples.isEmpty else { return nil }
         let minY = samples.map(\.y).min() ?? 0
@@ -129,7 +147,19 @@ enum NavigationPreviewBuilder {
                 abs(distances[$0] - distance) < abs(distances[$1] - distance)
             })
         }
-        return NavigationPreview(points: points, currentPointIndex: currentIndex, maneuverPointIndex: maneuverIndex)
+        let context = progress.nextManeuver.flatMap { maneuver in
+            route.intersectionContexts?.first(where: { $0.coordinateIndex == maneuver.coordinateIndex })
+        }
+        let roads = context?.roads.compactMap { road -> NavigationPreviewRoad? in
+            let roadPoints = road.coordinates.map { coordinate -> NavigationPreviewRoadPoint in
+                let value = project(coordinate)
+                return NavigationPreviewRoadPoint(x: Int((500 + value.x * scale).rounded()),
+                                                  y: Int((80 + (value.y - minY) * scale).rounded()))
+            }
+            return roadPoints.count > 1 ? NavigationPreviewRoad(points: roadPoints, kind: road.kind) : nil
+        } ?? []
+        return NavigationPreview(points: points, currentPointIndex: currentIndex,
+                                 maneuverPointIndex: maneuverIndex, roads: roads)
     }
 
     private static func interpolated(at distance: Double, coordinates: [Coordinate],

@@ -152,6 +152,7 @@ final class AppState: ObservableObject {
         #endif
         if plan.isAwaitingStart { Task { requestAutomaticStart() } }
         else if plan.waypoints.count >= 2 { Task { refreshPlanName() } }
+        refreshRouteContextIfNeeded()
     }
 
     var api: APIClient? {
@@ -322,6 +323,12 @@ final class AppState: ObservableObject {
             if !Task.isCancelled { errorMessage = error.localizedDescription; calculating = false }
         }
     }
+    private func refreshRouteContextIfNeeded() {
+        guard plan.canCalculateRoute, plan.route != nil,
+              plan.route?.intersectionContexts?.isEmpty != false, api != nil else { return }
+        routeTask?.cancel()
+        routeTask = Task { await calculateRoute() }
+    }
     func newPlan() {
         savePlan()
         routeTask?.cancel()
@@ -342,6 +349,7 @@ final class AppState: ObservableObject {
         mapRevision = UUID()
         refreshPlanName()
         if plan.isAwaitingStart { requestAutomaticStart() }
+        refreshRouteContextIfNeeded()
         tab = 0
     }
 

@@ -90,6 +90,15 @@ private struct RoutePreviewView: View {
                         .stroke(Color.white.opacity(0.09), lineWidth: 1))
                 if points.count > 1 {
                     Canvas { context, size in
+                        for road in state.sideRoads ?? [] where road.points.count > 1 {
+                            var street = Path()
+                            street.move(to: position(road.points[0], in: size))
+                            for point in road.points.dropFirst() { street.addLine(to: position(point, in: size)) }
+                            let width = road.kind == 2 ? 4.5 : (road.kind == 1 ? 3.2 : 2.1)
+                            let opacity = road.kind == 2 ? 0.42 : (road.kind == 1 ? 0.31 : 0.22)
+                            context.stroke(street, with: .color(.white.opacity(opacity)),
+                                           style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
+                        }
                         var outline = Path()
                         outline.move(to: position(points[0], in: size))
                         for point in points.dropFirst() { outline.addLine(to: position(point, in: size)) }
@@ -139,10 +148,16 @@ private struct RoutePreviewView: View {
                 }
             }
         }
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .accessibilityHidden(true)
     }
 
     private func position(_ point: RideActivityPoint, in size: CGSize) -> CGPoint {
+        CGPoint(x: CGFloat(point.x) / 1_000 * size.width,
+                y: CGFloat(point.y) / 1_000 * size.height)
+    }
+
+    private func position(_ point: RideActivityRoadPoint, in size: CGSize) -> CGPoint {
         CGPoint(x: CGFloat(point.x) / 1_000 * size.width,
                 y: CGFloat(point.y) / 1_000 * size.height)
     }

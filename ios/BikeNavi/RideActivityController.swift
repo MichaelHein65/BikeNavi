@@ -51,7 +51,7 @@ final class RideActivityController {
             state = .init(instruction: "Route wird angepasst", distanceMeters: 0,
                           remainingMeters: rounded(progress?.remaining ?? 0), symbol: "arrow.triangle.2.circlepath", status: "Neue Route")
         } else if let progress, let maneuver = progress.nextManeuver {
-            state = .init(instruction: maneuver.instruction,
+            state = .init(instruction: String(maneuver.instruction.prefix(220)),
                           distanceMeters: rounded(progress.distanceToManeuver),
                           remainingMeters: rounded(progress.remaining),
                           symbol: maneuver.symbol, status: "Nächster Abbieger")
@@ -72,6 +72,11 @@ final class RideActivityController {
                 state.routePoints = preview.points.map { .init(x: $0.x, y: $0.y, surface: $0.surface) }
                 state.currentPointIndex = preview.currentPointIndex
                 state.maneuverPointIndex = preview.maneuverPointIndex
+                // Eight nearby ways preserve even complex intersections while
+                // keeping the complete ActivityKit state safely below 4 KB.
+                state.sideRoads = preview.roads.prefix(8).map { road in
+                    RideActivityRoad(points: road.points.map { .init(x: $0.x, y: $0.y) }, kind: road.kind)
+                }
             }
         }
         guard state != lastState else { return }

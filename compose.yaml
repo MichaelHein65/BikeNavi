@@ -21,6 +21,7 @@ services:
       DATABASE_URL: postgresql+psycopg://bikenavi:${POSTGRES_PASSWORD:?Bitte .env ausfüllen}@database/bikenavi
       BIKENAVI_TOKEN: ${BIKENAVI_TOKEN:?Bitte .env ausfüllen}
       ORS_API_KEY: ${ORS_API_KEY:-}
+      OVERPASS_URL: ${OVERPASS_URL:-https://overpass-api.de/api/interpreter}
     ports:
       - "127.0.0.1:${BIKENAVI_PORT:-8093}:8000"
     depends_on:

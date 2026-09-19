@@ -117,6 +117,31 @@ def test_route_coordinates_elevation_and_maneuvers(tmp_path):
         assert route["surfaces"][0]["name"] == "Asphalt"
 
 
+def test_route_contains_real_osm_roads_around_turns(tmp_path):
+    overpass = {"elements": [
+        {"type": "way", "id": 10, "tags": {"highway": "residential"}, "geometry": [
+            {"lat": 49.4098, "lon": 8.6800}, {"lat": 49.4100, "lon": 8.6800}, {"lat": 49.4102, "lon": 8.6800}]},
+        {"type": "way", "id": 11, "tags": {"highway": "cycleway"}, "geometry": [
+            {"lat": 49.4100, "lon": 8.6798}, {"lat": 49.4100, "lon": 8.6800}, {"lat": 49.4100, "lon": 8.6802}]}
+    ]}
+
+    def handler(request):
+        if request.url.host == "overpass.test":
+            assert "way%28around" in request.content.decode()
+            return httpx.Response(200, json=overpass)
+        return httpx.Response(200, json=upstream_route())
+
+    app = create_app(f"sqlite:///{tmp_path / 'roads.sqlite'}", TOKEN, "secret-ors",
+                     httpx.MockTransport(handler), overpass_url="https://overpass.test/api")
+    with TestClient(app) as client:
+        response = client.post("/v1/route", headers=AUTH, json=route_request("pavedOnly"))
+        assert response.status_code == 200
+        contexts = response.json()["intersectionContexts"]
+        assert contexts[0]["coordinateIndex"] == 0
+        assert len(contexts[0]["roads"]) == 2
+        assert {road["kind"] for road in contexts[0]["roads"]} == {0, 1}
+
+
 def test_invalid_coordinates_are_rejected_before_provider_call(client):
     body = route_request()
     body["waypoints"][0]["coordinate"]["latitude"] = 100

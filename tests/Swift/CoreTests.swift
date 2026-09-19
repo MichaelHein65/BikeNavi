@@ -139,6 +139,14 @@ final class CoreTests: XCTestCase {
             RouteSurfaceSection(startIndex: 0, endIndex: 1, surface: 8),
             RouteSurfaceSection(startIndex: 1, endIndex: 2, surface: 1)
         ]
+        planned.intersectionContexts = [IntersectionContext(coordinateIndex: 1, roads: [
+            ContextRoad(coordinates: [Coordinate(latitude: 49.01, longitude: 7.9995),
+                                      Coordinate(latitude: 49.01, longitude: 8),
+                                      Coordinate(latitude: 49.01, longitude: 8.0005)], kind: 1),
+            ContextRoad(coordinates: [Coordinate(latitude: 49.0097, longitude: 8),
+                                      Coordinate(latitude: 49.01, longitude: 8),
+                                      Coordinate(latitude: 49.0103, longitude: 8)], kind: 0)
+        ])]
         let progress = RouteProgress(traveled: 850, remaining: 950, distanceFromRoute: 0,
                                      nextManeuver: planned.maneuvers[0], distanceToManeuver: 260)
         let preview = try XCTUnwrap(NavigationPreviewBuilder.make(route: planned, progress: progress,
@@ -149,6 +157,8 @@ final class CoreTests: XCTestCase {
         XCTAssertLessThan(preview.points[maneuverIndex].y, preview.points[preview.currentPointIndex].y)
         XCTAssertGreaterThan(preview.points.last!.x, preview.points[maneuverIndex].x)
         XCTAssertEqual(Set(preview.points.map(\.surface)), Set([1, 8]))
+        XCTAssertEqual(preview.roads.count, 2)
+        XCTAssertTrue(preview.roads.allSatisfy { $0.points.count == 3 })
     }
     func testRecordingRejectsStaleInaccurateAndImpossibleGPSPoints() {
         let first = TrackPoint(coordinate: Coordinate(latitude: 49, longitude: 8), timestamp: 100, accuracy: 5, speed: 4, segment: 0)
