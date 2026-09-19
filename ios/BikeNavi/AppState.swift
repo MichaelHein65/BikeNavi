@@ -110,6 +110,7 @@ final class AppState: ObservableObject {
     private var rerouteTask: Task<Void, Never>?
     private var nameTask: Task<Void, Never>?
     private var requestedStartPlanID: UUID?
+    private var routeWhenReady = false
     private var tracker = RouteTracker()
     private var reroutePolicy = ReroutePolicy()
     private var lastAnnouncement: Int?
@@ -251,12 +252,18 @@ final class AppState: ObservableObject {
         mapFocus = point.coordinate
         invalidateRoute()
         if plan.isAwaitingStart { requestAutomaticStart() }
+        calculateRouteWhenReady()
     }
     func addSavedPlace(_ place: SavedPlace, role: PointRole) {
+        routeWhenReady = true
         addPoint(place.waypoint, role: role)
-        // A deliberate choice from the favourites list deserves an immediate
-        // response instead of waiting for the general editing debounce.
-        guard plan.canCalculateRoute else { return }
+        if plan.isAwaitingStart {
+            notice = "Ziel gewählt. Dein aktueller Standort wird noch als Start ermittelt."
+        }
+    }
+    private func calculateRouteWhenReady() {
+        guard routeWhenReady, plan.canCalculateRoute else { return }
+        routeWhenReady = false
         routeTask?.cancel()
         routeTask = Task { await calculateRoute() }
     }
@@ -318,6 +325,7 @@ final class AppState: ObservableObject {
         routeTask?.cancel()
         nameTask?.cancel()
         requestedStartPlanID = nil
+        routeWhenReady = false
         calculating = false
         plan = TourDocument()
         savePlan()
@@ -327,6 +335,7 @@ final class AppState: ObservableObject {
         routeTask?.cancel()
         calculating = false
         requestedStartPlanID = nil
+        routeWhenReady = false
         plan = document.kind == .ride ? document.asNewPlan() : document
         mapRevision = UUID()
         refreshPlanName()
@@ -529,6 +538,7 @@ final class AppState: ObservableObject {
                 addPoint(Waypoint(name: "Mein Standort", coordinate: coordinate), role: .start)
             } else if plan.completeAutomaticStart(coordinate) {
                 invalidateRoute()
+                calculateRouteWhenReady()
             }
         }
         guard var ride = activeRide, ride.recordingState == .recording else { return }
