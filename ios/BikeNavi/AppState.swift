@@ -412,8 +412,28 @@ final class AppState: ObservableObject {
     }
     /// Opening the driving tab follows the same checks as the start button.
     func openRide() {
+        // The planning tab is the source of truth when it has a ready route.
+        // A paused ride from an earlier session must not unexpectedly replace it.
+        if plan.canCalculateRoute, plan.route != nil,
+           activeRide?.route?.id != plan.route?.id {
+            archivePreviousRideIfNeeded()
+        }
         guard activeRide == nil else { return }
         startRide()
+    }
+    private func archivePreviousRideIfNeeded() {
+        guard var previous = activeRide else { return }
+        previous.recordingState = .finished
+        previous.endedAt = Date().timeIntervalSince1970
+        do {
+            try store.save(previous)
+            activeRide = nil
+            progress = nil
+            location.setRiding(false)
+            UIApplication.shared.isIdleTimerDisabled = false
+            reload()
+            notice = "Die vorherige unterbrochene Fahrt wurde in Touren gespeichert."
+        } catch { errorMessage = error.localizedDescription }
     }
     func togglePause() {
         guard var ride = activeRide else { return }

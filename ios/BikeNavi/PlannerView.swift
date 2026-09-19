@@ -116,6 +116,9 @@ struct PlannerView: View {
                     Button { showProfile = true } label: {
                         Label(state.plan.profile.title, systemImage: "bicycle").font(.subheadline.weight(.semibold))
                     }.buttonStyle(.bordered)
+                    Button { showSavedPlaces = true } label: {
+                        Label("Meine Orte", systemImage: "bookmark.fill").font(.subheadline.weight(.semibold))
+                    }.buttonStyle(.bordered)
                     Text(state.plan.profile.surface == .any ? "Schotter erlaubt" : "Befestigte Wege")
                         .font(.caption).foregroundStyle(Theme.secondaryInk)
                     Spacer(minLength: 0)
@@ -213,7 +216,7 @@ struct SavedPlacesView: View {
                 }
                 if state.savedPlaces.isEmpty {
                     ContentUnavailableView("Noch keine gespeicherten Orte", systemImage: "bookmark",
-                                           description: Text("Tippe auf einen Kartenpunkt und wähle „Ort speichern“ oder speichere einen Suchtreffer über das Lesezeichen."))
+                                           description: Text("Tippe auf einen Kartenpunkt und wähle „Ort speichern“. Alternativ kannst du einen Suchtreffer über das Lesezeichen speichern."))
                         .listRowBackground(Color.clear)
                 } else {
                     Section("Meine Orte") {
