@@ -133,6 +133,23 @@ final class CoreTests: XCTestCase {
         XCTAssertGreaterThan(offRoute.distanceFromRoute, 100)
         XCTAssertEqual(offRoute.traveled, onRoute.traveled)
     }
+    func testNavigationPreviewIsDirectionUpAndKeepsSurfaceColors() throws {
+        var planned = route()
+        planned.surfaceSections = [
+            RouteSurfaceSection(startIndex: 0, endIndex: 1, surface: 8),
+            RouteSurfaceSection(startIndex: 1, endIndex: 2, surface: 1)
+        ]
+        let progress = RouteProgress(traveled: 850, remaining: 950, distanceFromRoute: 0,
+                                     nextManeuver: planned.maneuvers[0], distanceToManeuver: 260)
+        let preview = try XCTUnwrap(NavigationPreviewBuilder.make(route: planned, progress: progress,
+                                                                 headingDegrees: 0))
+        XCTAssertLessThanOrEqual(preview.points.count, 27)
+        XCTAssertTrue(preview.points.allSatisfy { (0...1_000).contains($0.x) && (0...1_000).contains($0.y) })
+        let maneuverIndex = try XCTUnwrap(preview.maneuverPointIndex)
+        XCTAssertLessThan(preview.points[maneuverIndex].y, preview.points[preview.currentPointIndex].y)
+        XCTAssertGreaterThan(preview.points.last!.x, preview.points[maneuverIndex].x)
+        XCTAssertEqual(Set(preview.points.map(\.surface)), Set([1, 8]))
+    }
     func testRecordingRejectsStaleInaccurateAndImpossibleGPSPoints() {
         let first = TrackPoint(coordinate: Coordinate(latitude: 49, longitude: 8), timestamp: 100, accuracy: 5, speed: 4, segment: 0)
         XCTAssertTrue(TrackFilter.accepts(first, after: nil, now: 100))

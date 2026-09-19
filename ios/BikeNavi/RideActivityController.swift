@@ -33,16 +33,17 @@ final class RideActivityController {
         }
     }
 
-    func restore(tourName: String, paused: Bool) {
+    func restore(tourName: String, route: CalculatedRoute?, paused: Bool) {
         activity = Activity<RideActivityAttributes>.activities.first
         guard activity != nil else { return }
-        update(progress: nil, paused: paused, rerouting: false)
+        update(progress: nil, route: route, paused: paused, rerouting: false)
     }
 
-    func update(progress: RouteProgress?, paused: Bool, rerouting: Bool) {
+    func update(progress: RouteProgress?, route: CalculatedRoute?, headingDegrees: Double? = nil,
+                paused: Bool, rerouting: Bool) {
         guard let activity = activity ?? Activity<RideActivityAttributes>.activities.first else { return }
         self.activity = activity
-        let state: RideActivityAttributes.ContentState
+        var state: RideActivityAttributes.ContentState
         if paused {
             state = .init(instruction: "Fahrt pausiert", distanceMeters: 0,
                           remainingMeters: rounded(progress?.remaining ?? 0), symbol: "pause.fill", status: "Pause")
@@ -60,6 +61,18 @@ final class RideActivityController {
         } else {
             state = .init(instruction: "Position auf der Route wird ermittelt", distanceMeters: 0,
                           remainingMeters: 0, symbol: "location.north.fill", status: "Navigation läuft")
+        }
+        if var diagramProgress = progress, let route {
+            // Quantization keeps the diagram stable and avoids unnecessary
+            // ActivityKit updates for every individual GPS meter.
+            diagramProgress.traveled = (diagramProgress.traveled / 15).rounded(.down) * 15
+            let diagramHeading = headingDegrees.map { ($0 / 10).rounded() * 10 }
+            if let preview = NavigationPreviewBuilder.make(route: route, progress: diagramProgress,
+                                                           headingDegrees: diagramHeading) {
+                state.routePoints = preview.points.map { .init(x: $0.x, y: $0.y, surface: $0.surface) }
+                state.currentPointIndex = preview.currentPointIndex
+                state.maneuverPointIndex = preview.maneuverPointIndex
+            }
         }
         guard state != lastState else { return }
         lastState = state

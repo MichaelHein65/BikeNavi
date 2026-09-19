@@ -1,6 +1,17 @@
 import ActivityKit
 import Foundation
 
+struct RideActivityPoint: Codable, Hashable {
+    var x: Int
+    var y: Int
+    var surface: Int
+
+    enum CodingKeys: String, CodingKey {
+        case x, y
+        case surface = "s"
+    }
+}
+
 struct RideActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         var instruction: String
@@ -8,6 +19,9 @@ struct RideActivityAttributes: ActivityAttributes {
         var remainingMeters: Int
         var symbol: String
         var status: String
+        var routePoints: [RideActivityPoint]? = nil
+        var currentPointIndex: Int? = nil
+        var maneuverPointIndex: Int? = nil
     }
 
     var tourName: String

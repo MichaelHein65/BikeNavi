@@ -51,6 +51,110 @@ struct RouteTracker {
     }
 }
 
+struct NavigationPreviewPoint: Equatable {
+    var x: Int
+    var y: Int
+    var surface: Int
+}
+
+struct NavigationPreview: Equatable {
+    var points: [NavigationPreviewPoint]
+    var currentPointIndex: Int
+    var maneuverPointIndex: Int?
+}
+
+/// Produces a compact, direction-up route diagram for glanceable navigation.
+/// Coordinates are normalized to a 1,000 × 1,000 drawing area so the result
+/// can be sent to a Live Activity without map tiles or network access.
+enum NavigationPreviewBuilder {
+    static func make(route: CalculatedRoute, progress: RouteProgress,
+                     headingDegrees: Double? = nil) -> NavigationPreview? {
+        guard route.coordinates.count > 1 else { return nil }
+        var cumulative = [0.0]
+        for index in 1..<route.coordinates.count {
+            cumulative.append(cumulative[index - 1] + route.coordinates[index - 1].distance(to: route.coordinates[index]))
+        }
+        guard let total = cumulative.last, total > 1 else { return nil }
+        let traveled = min(total, max(0, progress.traveled))
+        let start = max(0, traveled - 50)
+        let end = min(total, traveled + 350)
+        guard end - start > 1 else { return nil }
+
+        var distances = (0...24).map { start + (end - start) * Double($0) / 24 }
+        distances.append(traveled)
+        var maneuverDistance: Double?
+        if let index = progress.nextManeuver?.coordinateIndex, cumulative.indices.contains(index) {
+            maneuverDistance = cumulative[index]
+            if let maneuverDistance, (start...end).contains(maneuverDistance) { distances.append(maneuverDistance) }
+        }
+        distances.sort()
+        distances = distances.reduce(into: []) { values, value in
+            if values.last.map({ abs($0 - value) > 0.2 }) ?? true { values.append(value) }
+        }
+
+        let anchor = interpolated(at: traveled, coordinates: route.coordinates, cumulative: cumulative).coordinate
+        let fallbackHeading = routeHeading(at: traveled, coordinates: route.coordinates, cumulative: cumulative)
+        let heading = (headingDegrees?.isFinite == true && headingDegrees! >= 0 ? headingDegrees! : fallbackHeading) * .pi / 180
+        let cosLatitude = cos(anchor.latitude * .pi / 180)
+        let sections = route.coloredSections
+        var samples: [(x: Double, y: Double, surface: Int)] = []
+        for distance in distances {
+            let item = interpolated(at: distance, coordinates: route.coordinates, cumulative: cumulative)
+            let east = (item.coordinate.longitude - anchor.longitude) * cosLatitude * 111_320
+            let north = (item.coordinate.latitude - anchor.latitude) * 111_320
+            let across = east * cos(heading) - north * sin(heading)
+            let forward = east * sin(heading) + north * cos(heading)
+            let segment = min(max(0, item.segmentIndex), route.coordinates.count - 2)
+            let surface = sections.first(where: { segment >= $0.startIndex && segment < $0.endIndex })?.surface ?? 0
+            samples.append((across, -forward, surface))
+        }
+        guard !samples.isEmpty else { return nil }
+        let minY = samples.map(\.y).min() ?? 0
+        let maxY = samples.map(\.y).max() ?? 1
+        let maxX = max(1, samples.map { abs($0.x) }.max() ?? 1)
+        let scale = min(420 / maxX, 820 / max(1, maxY - minY))
+        let points = samples.map {
+            NavigationPreviewPoint(
+                x: min(950, max(50, Int((500 + $0.x * scale).rounded()))),
+                y: min(950, max(50, Int((80 + ($0.y - minY) * scale).rounded()))),
+                surface: $0.surface
+            )
+        }
+        let currentIndex = distances.indices.min(by: {
+            abs(distances[$0] - traveled) < abs(distances[$1] - traveled)
+        }) ?? 0
+        let maneuverIndex = maneuverDistance.flatMap { distance -> Int? in
+            guard (start...end).contains(distance) else { return nil }
+            return distances.indices.min(by: {
+                abs(distances[$0] - distance) < abs(distances[$1] - distance)
+            })
+        }
+        return NavigationPreview(points: points, currentPointIndex: currentIndex, maneuverPointIndex: maneuverIndex)
+    }
+
+    private static func interpolated(at distance: Double, coordinates: [Coordinate],
+                                     cumulative: [Double]) -> (coordinate: Coordinate, segmentIndex: Int) {
+        let value = min(cumulative.last ?? 0, max(0, distance))
+        let upper = cumulative.firstIndex(where: { $0 >= value }) ?? cumulative.count - 1
+        let lower = max(0, upper - 1)
+        guard upper != lower else { return (coordinates[lower], lower) }
+        let length = max(0.001, cumulative[upper] - cumulative[lower])
+        let fraction = (value - cumulative[lower]) / length
+        let a = coordinates[lower], b = coordinates[upper]
+        return (Coordinate(latitude: a.latitude + (b.latitude - a.latitude) * fraction,
+                           longitude: a.longitude + (b.longitude - a.longitude) * fraction,
+                           altitude: nil), lower)
+    }
+
+    private static func routeHeading(at distance: Double, coordinates: [Coordinate], cumulative: [Double]) -> Double {
+        let before = interpolated(at: max(0, distance - 8), coordinates: coordinates, cumulative: cumulative).coordinate
+        let after = interpolated(at: min(cumulative.last ?? distance, distance + 8), coordinates: coordinates, cumulative: cumulative).coordinate
+        let east = (after.longitude - before.longitude) * cos(before.latitude * .pi / 180)
+        let north = after.latitude - before.latitude
+        return atan2(east, north) * 180 / .pi
+    }
+}
+
 /// Avoid reacting to ordinary GPS drift or a brief detour. A new route is
 /// requested only after the rider has been at least 80 m away for 10 seconds;
 /// requests are then limited to one every 90 seconds.

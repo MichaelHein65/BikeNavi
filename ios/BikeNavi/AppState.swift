@@ -131,7 +131,7 @@ final class AppState: ObservableObject {
             activeRide = unfinished
             segment = (unfinished.track.last?.segment ?? 0) + 1
             try? store.save(unfinished)
-            rideActivity.restore(tourName: unfinished.title, paused: true)
+            rideActivity.restore(tourName: unfinished.title, route: unfinished.route, paused: true)
             notice = "Deine letzte Fahrt ist gespeichert. Du kannst sie fortsetzen oder beenden."
         }
         location.onLocation = { [weak self] sample in self?.receive(sample) }
@@ -473,7 +473,7 @@ final class AppState: ObservableObject {
             location.setRiding(ride.recordingState == .recording)
             UIApplication.shared.isIdleTimerDisabled = ride.recordingState == .recording
             if ride.recordingState == .recording { rideActivity.start(tourName: ride.title) }
-            else { rideActivity.update(progress: progress, paused: true, rerouting: false) }
+            else { rideActivity.update(progress: progress, route: ride.route, paused: true, rerouting: false) }
             reload()
         } catch { errorMessage = error.localizedDescription }
     }
@@ -511,7 +511,7 @@ final class AppState: ObservableObject {
     private func reroute(from position: Coordinate, ride: TourDocument, traveled: Double) {
         guard rerouteTask == nil, let api, let destination = ride.destinationPoint else { return }
         rerouting = true
-        rideActivity.update(progress: progress, paused: false, rerouting: true)
+        rideActivity.update(progress: progress, route: ride.route, paused: false, rerouting: true)
         let rideID = ride.id
         var request = ride
         var remaining = remainingWaypoints(for: ride, after: traveled)
@@ -529,7 +529,7 @@ final class AppState: ObservableObject {
                 tracker = RouteTracker()
                 progress = nil
                 rerouting = false
-                rideActivity.update(progress: nil, paused: false, rerouting: false)
+                rideActivity.update(progress: nil, route: route, paused: false, rerouting: false)
                 notice = "Route ab deinem aktuellen Standort angepasst."
                 reload()
                 await sync()
@@ -569,7 +569,9 @@ final class AppState: ObservableObject {
         }
         if let route = ride.route, sample.horizontalAccuracy >= 0, sample.horizontalAccuracy <= 50 {
             progress = tracker.update(position: point.coordinate, timestamp: point.timestamp, route: route)
-            rideActivity.update(progress: progress, paused: false, rerouting: rerouting)
+            let rideHeading = sample.course >= 0 && sample.speed >= 1 ? sample.course : nil
+            rideActivity.update(progress: progress, route: route, headingDegrees: rideHeading,
+                                paused: false, rerouting: rerouting)
             if let progress, let activeRide, api != nil,
                reroutePolicy.observe(distanceFromRoute: progress.distanceFromRoute, timestamp: point.timestamp) {
                 reroute(from: point.coordinate, ride: activeRide, traveled: progress.traveled)
