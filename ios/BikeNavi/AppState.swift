@@ -245,6 +245,14 @@ final class AppState: ObservableObject {
         invalidateRoute()
         if plan.isAwaitingStart { requestAutomaticStart() }
     }
+    func addSavedPlace(_ place: SavedPlace, role: PointRole) {
+        addPoint(place.waypoint, role: role)
+        // A deliberate choice from the favourites list deserves an immediate
+        // response instead of waiting for the general editing debounce.
+        guard plan.canCalculateRoute else { return }
+        routeTask?.cancel()
+        routeTask = Task { await calculateRoute() }
+    }
     func useCurrentLocation() {
         requestedStartPlanID = plan.id
         location.request()

@@ -222,7 +222,7 @@ struct SavedPlacesView: View {
                     Section("Meine Orte") {
                         ForEach(state.savedPlaces) { place in
                             HStack {
-                                Button { state.addPoint(place.waypoint, role: role); dismiss() } label: {
+                                Button { state.addSavedPlace(place, role: role); dismiss() } label: {
                                     Label(place.name, systemImage: "bookmark.fill").foregroundStyle(.primary)
                                 }
                                 Spacer()
@@ -271,7 +271,7 @@ struct SearchView: View {
                     Section("Gespeicherte Orte") {
                         ForEach(state.savedPlaces) { place in
                             HStack {
-                                Button { state.addPoint(place.waypoint, role: role); dismiss() } label: {
+                                Button { state.addSavedPlace(place, role: role); dismiss() } label: {
                                     Label(place.name, systemImage: "bookmark.fill").foregroundStyle(.primary)
                                 }
                                 Spacer()
