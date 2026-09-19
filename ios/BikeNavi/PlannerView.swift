@@ -7,6 +7,7 @@ struct PlannerView: View {
     @State private var showProfile = false
     @State private var showDetails = false
     @State private var showWaypoints = false
+    @State private var showSavedPlaces = false
     @State private var choosingPoint = false
     @State private var saveCandidate: Waypoint?
     @State private var mapError: String?
@@ -41,6 +42,9 @@ struct PlannerView: View {
                         Button { state.useCurrentLocation() } label: {
                             Image(systemName: "location.fill").frame(width: 48, height: 48)
                         }.background(Theme.paper, in: RoundedRectangle(cornerRadius: 18)).accessibilityLabel("Standort als Start verwenden")
+                        Button { showSavedPlaces = true } label: {
+                            Image(systemName: "bookmark.fill").frame(width: 48, height: 48)
+                        }.background(Theme.paper, in: RoundedRectangle(cornerRadius: 18)).accessibilityLabel("Meine gespeicherten Orte")
                     }
                     if let mapError { Text(mapError).font(.caption).foregroundStyle(Theme.ink).padding(10).background(Theme.paper, in: RoundedRectangle(cornerRadius: 12)) }
                 }.padding(18)
@@ -59,6 +63,7 @@ struct PlannerView: View {
             .sheet(isPresented: $showProfile) { ProfileView() }
             .sheet(isPresented: $showDetails) { if let route = state.plan.route { RouteDetailsView(route: route) } }
             .sheet(isPresented: $showWaypoints) { WaypointsView() }
+            .sheet(isPresented: $showSavedPlaces) { SavedPlacesView() }
             .confirmationDialog("Punkt auf der Karte verwenden", isPresented: $choosingPoint, titleVisibility: .visible) {
                 ForEach(PointRole.allCases) { role in
                     Button("Als \(role.title) setzen") {
@@ -189,6 +194,51 @@ struct PlannerView: View {
     private func finishEditingName() {
         editingTourName = false
         state.finishRenamingPlan()
+    }
+}
+
+struct SavedPlacesView: View {
+    @EnvironmentObject var state: AppState
+    @Environment(\.dismiss) private var dismiss
+    @State private var role: PointRole = .destination
+    @State private var editingPlace: SavedPlace?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Picker("Verwenden als", selection: $role) {
+                        ForEach(PointRole.allCases) { Text($0.title).tag($0) }
+                    }.pickerStyle(.segmented)
+                }
+                if state.savedPlaces.isEmpty {
+                    ContentUnavailableView("Noch keine gespeicherten Orte", systemImage: "bookmark",
+                                           description: Text("Tippe auf einen Kartenpunkt und wähle „Ort speichern“ oder speichere einen Suchtreffer über das Lesezeichen."))
+                        .listRowBackground(Color.clear)
+                } else {
+                    Section("Meine Orte") {
+                        ForEach(state.savedPlaces) { place in
+                            HStack {
+                                Button { state.addPoint(place.waypoint, role: role); dismiss() } label: {
+                                    Label(place.name, systemImage: "bookmark.fill").foregroundStyle(.primary)
+                                }
+                                Spacer()
+                                Button { editingPlace = place } label: { Image(systemName: "pencil").foregroundStyle(.secondary) }
+                                    .accessibilityLabel("Gespeicherten Ort umbenennen")
+                                Button { state.deletePlace(place) } label: { Image(systemName: "trash").foregroundStyle(.secondary) }
+                                    .accessibilityLabel("Gespeicherten Ort löschen")
+                            }.padding(.vertical, 4)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Meine Orte")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { dismiss() } } }
+            .sheet(item: $editingPlace) { place in
+                SavedPlaceEditor(candidate: Waypoint(name: place.name, coordinate: place.coordinate), existing: place)
+            }
+        }
     }
 }
 
