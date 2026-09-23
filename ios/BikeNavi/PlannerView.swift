@@ -3,7 +3,7 @@ import Charts
 
 struct PlannerView: View {
     @EnvironmentObject var state: AppState
-    @State private var searchRole: PointRole?
+    @State private var showSearch = false
     @State private var showProfile = false
     @State private var showDetails = false
     @State private var showWaypoints = false
@@ -28,6 +28,7 @@ struct PlannerView: View {
                              selectedMapPlace = $0
                              choosingSavedPlace = true
                          }, onError: { mapError = $0 })
+                    .accessibilityIdentifier("planningMap")
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
@@ -36,11 +37,15 @@ struct PlannerView: View {
                         }.foregroundStyle(Theme.ink)
                             .padding(10).background(Theme.paper, in: RoundedRectangle(cornerRadius: 16))
                         Spacer()
-                        Button { state.newPlan() } label: { Image(systemName: "plus").font(.title3.bold()).frame(width: 44, height: 44) }
-                            .background(Theme.paper, in: Circle()).accessibilityLabel("Neue Tour")
+                        HStack(spacing: 8) {
+                            Button { state.resetPlan() } label: { Image(systemName: "minus").font(.title3.bold()).frame(width: 44, height: 44) }
+                                .background(Theme.paper, in: Circle()).accessibilityLabel("Planung zurücksetzen")
+                            Button { state.newPlan() } label: { Image(systemName: "plus").font(.title3.bold()).frame(width: 44, height: 44) }
+                                .background(Theme.paper, in: Circle()).accessibilityLabel("Neue Tour")
+                        }
                     }
                     HStack(spacing: 10) {
-                        Button { searchRole = .destination } label: {
+                        Button { showSearch = true } label: {
                             HStack { Image(systemName: "magnifyingglass"); Text("Wohin zieht es dich?"); Spacer() }
                                 .font(.subheadline).foregroundStyle(Theme.ink).padding(14).background(Theme.paper, in: RoundedRectangle(cornerRadius: 18))
                         }.accessibilityIdentifier("placeSearch")
@@ -50,6 +55,19 @@ struct PlannerView: View {
                         Button { showSavedPlaces = true } label: {
                             Image(systemName: "bookmark.fill").frame(width: 48, height: 48)
                         }.background(Theme.paper, in: RoundedRectangle(cornerRadius: 18)).accessibilityLabel("Meine gespeicherten Orte")
+                    }
+                    if !detailsExpanded, let error = state.planningError {
+                        Label(error, systemImage: "exclamationmark.triangle")
+                            .font(.caption).padding(12).background(Theme.paper, in: RoundedRectangle(cornerRadius: 12))
+                            .accessibilityIdentifier("planningError")
+                    }
+                    if !detailsExpanded, let message = state.automaticStartMessage ?? (state.calculating ? state.localRoutingStatus : nil) {
+                        HStack(spacing: 10) {
+                            if !state.location.denied { ProgressView() }
+                            Text(message).font(.caption).frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(12).background(Theme.paper, in: RoundedRectangle(cornerRadius: 12))
+                        .accessibilityIdentifier("compactPlanningStatus")
                     }
                     if let mapError { Text(mapError).font(.caption).foregroundStyle(Theme.ink).padding(10).background(Theme.paper, in: RoundedRectangle(cornerRadius: 12)) }
                 }.padding(18)
@@ -64,16 +82,18 @@ struct PlannerView: View {
                     }
                 }
             }
-            .sheet(item: $searchRole) { role in SearchView(role: role) }
+            .sheet(isPresented: $showSearch) { SearchView() }
             .sheet(isPresented: $showProfile) { ProfileView() }
             .sheet(isPresented: $showDetails) { if let route = state.plan.route { RouteDetailsView(route: route) } }
             .sheet(isPresented: $showWaypoints) { WaypointsView() }
             .sheet(isPresented: $showSavedPlaces) { SavedPlacesView() }
             .confirmationDialog("Punkt auf der Karte verwenden", isPresented: $choosingPoint, titleVisibility: .visible) {
-                ForEach(PointRole.allCases) { role in
-                    Button("Als \(role.title) setzen") {
-                        if let coordinate = state.selectedPoint {
-                            state.addPoint(Waypoint(name: "Kartenpunkt", coordinate: coordinate), role: role)
+                ForEach(PointRole.allCases, id: \.self) { role in
+                    if role != .via || state.plan.destinationPoint != nil {
+                        Button("Als \(role.title) verwenden") {
+                            if let coordinate = state.selectedPoint {
+                                state.addPoint(Waypoint(name: "Kartenpunkt", coordinate: coordinate), role: role)
+                            }
                         }
                     }
                 }
@@ -85,9 +105,11 @@ struct PlannerView: View {
             }
             .sheet(item: $saveCandidate) { SavedPlaceEditor(candidate: $0) }
             .confirmationDialog(selectedMapPlace?.name ?? "Gespeicherten Ort verwenden", isPresented: $choosingSavedPlace, titleVisibility: .visible) {
-                ForEach(PointRole.allCases) { role in
-                    Button("Als \(role.title) setzen") {
-                        if let place = selectedMapPlace { state.addSavedPlace(place, role: role) }
+                ForEach(PointRole.allCases, id: \.self) { role in
+                    if role != .via || state.plan.destinationPoint != nil {
+                        Button("Als \(role.title) verwenden") {
+                            if let place = selectedMapPlace { state.addPoint(place.waypoint, role: role) }
+                        }
                     }
                 }
             }
@@ -159,7 +181,7 @@ struct PlannerView: View {
                     HStack {
                         Metric(label: "Strecke", value: Format.distance(route.distance))
                         Metric(label: "Fahrzeit ca.", value: Format.duration(route.duration))
-                        Metric(label: "Anstieg", value: "\(Int(route.ascent)) m")
+                        Metric(label: "Anstieg", value: route.provider.hasPrefix("BikeNavi iPhone") ? "–" : "\(Int(route.ascent)) m")
                     }
                     SurfaceLegend()
                     if route.surfaceSections == nil {
@@ -168,11 +190,20 @@ struct PlannerView: View {
                                 .font(.caption).multilineTextAlignment(.leading)
                         }.disabled(state.calculating)
                     }
-                    if route.intersectionContexts?.isEmpty != false {
+                    if route.intersectionContexts == nil {
                         Button { Task { await state.calculateRoute() } } label: {
                             Text(state.calculating ? "Kreuzungen werden geladen …" : "Kreuzungsdetails fehlen · Route neu berechnen")
                                 .font(.caption).multilineTextAlignment(.leading)
                         }.disabled(state.calculating)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(state.localRoutingStatus).font(.caption).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("localRoutingStatus")
+                        if !state.preparingLocalRouting {
+                            Button(state.localRoutingReady ? "Wegenetz aktualisieren" : "Lokale Rückführung vorbereiten") {
+                                state.prepareLocalRouting(refresh: state.localRoutingReady)
+                            }.font(.caption)
+                        }
                     }
                     HStack {
                         Button { showDetails = true } label: { Image(systemName: "chart.xyaxis.line").frame(width: 44, height: 44) }
@@ -186,9 +217,20 @@ struct PlannerView: View {
                             if state.calculating { ProgressView().tint(.white) }
                             Text(state.calculating ? "Deine Route entsteht …" : "Route berechnen")
                         }.frame(maxWidth: .infinity).padding(.vertical, 8)
-                    }.buttonStyle(.borderedProminent).tint(Theme.forest).foregroundStyle(.white).disabled(!state.plan.canCalculateRoute || state.calculating)
+                    }.buttonStyle(.borderedProminent).tint(Theme.forest).foregroundStyle(.white)
+                        .disabled(!state.plan.canCalculateRoute || state.calculating)
+                        .accessibilityIdentifier("calculateRoute")
+                    if state.calculating {
+                        Text(state.localRoutingStatus).font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let error = state.planningError {
+                        Label(error, systemImage: "exclamationmark.triangle")
+                            .font(.caption).foregroundStyle(Theme.ink)
+                            .accessibilityIdentifier("planningError")
+                    }
                     if state.plan.waypoints.count < 2 && !state.plan.isAwaitingStart {
-                        Text("Tippe auf die Karte oder suche nach einem Ort.").font(.caption).foregroundStyle(Theme.secondaryInk)
+                        Text(state.plan.startPoint == nil ? "Wähle Start und Ziel auf der Karte oder über die Suche." : "Wähle jetzt dein Ziel. Die Route wird automatisch berechnet.")
+                            .font(.caption).foregroundStyle(Theme.secondaryInk)
                     }
                 }
             }
@@ -218,20 +260,51 @@ struct PlannerView: View {
     }
 }
 
+// Explicit button styles keep List from treating all actions as one row action.
+// Both lists share this row so selecting or renaming can never invoke deletion.
+private struct SavedPlaceRow: View {
+    @EnvironmentObject private var state: AppState
+    let place: SavedPlace
+    let onSelect: () -> Void
+    let onRename: () -> Void
+    @State private var confirmingDeletion = false
+
+    var body: some View {
+        HStack {
+            Button(action: onSelect) {
+                Label(place.name, systemImage: "bookmark.fill")
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            Button(action: onRename) {
+                Image(systemName: "pencil").frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("Gespeicherten Ort umbenennen")
+            Button { confirmingDeletion = true } label: {
+                Image(systemName: "trash").frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("Gespeicherten Ort löschen")
+        }
+        .buttonStyle(.borderless)
+        .padding(.vertical, 4)
+        .confirmationDialog("Ort löschen?", isPresented: $confirmingDeletion, titleVisibility: .visible) {
+            Button("Ort löschen", role: .destructive) { state.deletePlace(place) }
+            Button("Abbrechen", role: .cancel) { }
+        } message: {
+            Text("Möchtest du „\(place.name)“ aus deinen gespeicherten Orten löschen?")
+        }
+    }
+}
+
 struct SavedPlacesView: View {
     @EnvironmentObject var state: AppState
     @Environment(\.dismiss) private var dismiss
-    @State private var role: PointRole = .destination
     @State private var editingPlace: SavedPlace?
 
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    Picker("Verwenden als", selection: $role) {
-                        ForEach(PointRole.allCases) { Text($0.title).tag($0) }
-                    }.pickerStyle(.segmented)
-                }
                 if state.savedPlaces.isEmpty {
                     ContentUnavailableView("Noch keine gespeicherten Orte", systemImage: "bookmark",
                                            description: Text("Tippe auf einen Kartenpunkt und wähle „Ort speichern“. Alternativ kannst du einen Suchtreffer über das Lesezeichen speichern."))
@@ -239,16 +312,10 @@ struct SavedPlacesView: View {
                 } else {
                     Section("Meine Orte") {
                         ForEach(state.savedPlaces) { place in
-                            HStack {
-                                Button { state.addSavedPlace(place, role: role); dismiss() } label: {
-                                    Label(place.name, systemImage: "bookmark.fill").foregroundStyle(.primary)
-                                }
-                                Spacer()
-                                Button { editingPlace = place } label: { Image(systemName: "pencil").foregroundStyle(.secondary) }
-                                    .accessibilityLabel("Gespeicherten Ort umbenennen")
-                                Button { state.deletePlace(place) } label: { Image(systemName: "trash").foregroundStyle(.secondary) }
-                                    .accessibilityLabel("Gespeicherten Ort löschen")
-                            }.padding(.vertical, 4)
+                            SavedPlaceRow(place: place, onSelect: {
+                                state.addPlaceToTour(place.waypoint)
+                                dismiss()
+                            }, onRename: { editingPlace = place })
                         }
                     }
                 }
@@ -266,7 +333,6 @@ struct SavedPlacesView: View {
 struct SearchView: View {
     @EnvironmentObject var state: AppState
     @Environment(\.dismiss) var dismiss
-    @State var role: PointRole
     @State private var query = ""
     @State private var results: [Waypoint] = []
     @State private var searching = false
@@ -277,9 +343,6 @@ struct SearchView: View {
         NavigationStack {
             List {
                 Section {
-                    Picker("Verwenden als", selection: $role) {
-                        ForEach(PointRole.allCases) { Text($0.title).tag($0) }
-                    }.pickerStyle(.segmented)
                     HStack {
                         TextField("Ort, Adresse oder Sehenswürdigkeit", text: $query).submitLabel(.search).onSubmit { Task { await search() } }
                         Button { Task { await search() } } label: { Image(systemName: "magnifyingglass") }.disabled(query.count < 3 || searching)
@@ -288,16 +351,10 @@ struct SearchView: View {
                 if !state.savedPlaces.isEmpty {
                     Section("Gespeicherte Orte") {
                         ForEach(state.savedPlaces) { place in
-                            HStack {
-                                Button { state.addSavedPlace(place, role: role); dismiss() } label: {
-                                    Label(place.name, systemImage: "bookmark.fill").foregroundStyle(.primary)
-                                }
-                                Spacer()
-                                Button { editingPlace = place } label: { Image(systemName: "pencil").foregroundStyle(.secondary) }
-                                    .accessibilityLabel("Gespeicherten Ort umbenennen")
-                                Button { state.deletePlace(place) } label: { Image(systemName: "trash").foregroundStyle(.secondary) }
-                                    .accessibilityLabel("Gespeicherten Ort löschen")
-                            }.padding(.vertical, 3)
+                            SavedPlaceRow(place: place, onSelect: {
+                                state.addPlaceToTour(place.waypoint)
+                                dismiss()
+                            }, onRename: { editingPlace = place })
                         }
                     }
                 }
@@ -305,13 +362,14 @@ struct SearchView: View {
                 if let error { Text(error).font(.subheadline).foregroundStyle(.secondary) }
                 ForEach(results) { point in
                     HStack {
-                        Button { state.addPoint(point, role: role); dismiss() } label: {
+                        Button { state.addPlaceToTour(point); dismiss() } label: {
                             Label(point.name, systemImage: "mappin.and.ellipse").foregroundStyle(.primary).padding(.vertical, 5)
                         }
                         Spacer()
                         Button { saveCandidate = point } label: { Image(systemName: "bookmark") }
                             .accessibilityLabel("Ort speichern")
                     }
+                    .buttonStyle(.borderless)
                 }
                 if results.isEmpty && !searching && error == nil {
                     Text("Suche beispielsweise nach einer Burg, einem Café oder einer Adresse.").foregroundStyle(.secondary)
@@ -351,7 +409,7 @@ struct SavedPlaceEditor: View {
         NavigationStack {
             Form {
                 Section("Name") { TextField("Zum Beispiel: Lieblingscafé", text: $name).submitLabel(.done) }
-                Section { Text("Der Ort erscheint anschließend bei der Ortssuche und kann als Start, Zwischenziel oder Ziel gewählt werden.")
+                Section { Text("Der Ort erscheint anschließend bei der Ortssuche und kann direkt zur Tour hinzugefügt werden.")
                     .font(.footnote).foregroundStyle(.secondary) }
             }
             .navigationTitle("Ort speichern")
@@ -388,7 +446,7 @@ struct ProfileView: View {
                         }.foregroundStyle(.primary)
                     }
                 } header: { Text("Deine Wege") } footer: {
-                    Text("Befestigt umfasst auch Pflaster. Bei „nur bekannte befestigte Wege“ werden Routen mit unbekanntem Belag abgelehnt. Eine Garantie für den tatsächlichen Zustand ist damit nicht verbunden.")
+                    Text("Befestigt umfasst auch Pflaster. „Nur bekannte befestigte Wege“ erlaubt insgesamt bis zu 100 m unbefestigte oder unbekannte Abschnitte pro Tour, beispielsweise kurze Schotterverbindungen. Eine Garantie für den tatsächlichen Zustand ist damit nicht verbunden.")
                 }
                 Section { Toggle("Sanfte Steigungen bevorzugen", isOn: $state.plan.profile.gentleHills) }
                 Section("Schnellauswahl") {
@@ -405,7 +463,7 @@ struct ProfileView: View {
 struct WaypointsView: View {
     @EnvironmentObject var state: AppState
     @Environment(\.dismiss) var dismiss
-    @State private var searchRole: PointRole?
+    @State private var showSearch = false
     var body: some View {
         NavigationStack {
             List {
@@ -420,9 +478,7 @@ struct WaypointsView: View {
                         .onMove { state.plan.waypoints.move(fromOffsets: $0, toOffset: $1); state.invalidateRoute() }
                 } header: { Text("Reihenfolge deiner Tour") } footer: { Text("Verschiebe die Punkte, um ihre Reihenfolge zu ändern. Der erste Punkt ist der Start, der letzte das Ziel.") }
                 Section {
-                    Button("Start suchen") { searchRole = .start }
-                    Button("Zwischenziel suchen") { searchRole = .via }
-                    Button("Ziel suchen") { searchRole = .destination }
+                    Button("Ort hinzufügen") { showSearch = true }
                     Button { state.reversePlan() } label: {
                         Label("Tour umkehren", systemImage: "arrow.triangle.2.circlepath")
                     }.disabled(!state.plan.canCalculateRoute)
@@ -432,7 +488,7 @@ struct WaypointsView: View {
                 }
             }.navigationTitle("Deine Wegpunkte").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarLeading) { EditButton() }; ToolbarItem(placement: .confirmationAction) { Button("Fertig") { dismiss() } } }
-                .sheet(item: $searchRole) { SearchView(role: $0) }
+                .sheet(isPresented: $showSearch) { SearchView() }
         }
     }
 }
@@ -445,7 +501,7 @@ struct RouteDetailsView: View {
         NavigationStack {
             List {
                 Section {
-                    HStack { Metric(label: "Strecke", value: Format.distance(route.distance)); Metric(label: "Anstieg", value: "\(Int(route.ascent)) m"); Metric(label: "Abstieg", value: "\(Int(route.descent)) m") }
+                    HStack { Metric(label: "Strecke", value: Format.distance(route.distance)); Metric(label: "Anstieg", value: route.provider.hasPrefix("BikeNavi iPhone") ? "–" : "\(Int(route.ascent)) m"); Metric(label: "Abstieg", value: route.provider.hasPrefix("BikeNavi iPhone") ? "–" : "\(Int(route.descent)) m") }
                         .padding(.vertical, 8)
                     ElevationChart(coordinates: route.coordinates).frame(height: 170)
                 } header: { Text("Höhenprofil") } footer: { Text("Höhen und Fahrzeit sind Schätzwerte aus den verfügbaren Kartendaten.") }

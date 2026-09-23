@@ -3,6 +3,7 @@ from pathlib import Path
 import hashlib
 
 ROOT = Path(__file__).resolve().parents[1]
+VERSION = (ROOT / "VERSION").read_text().strip()
 PROJECT = ROOT / "BikeNavi.xcodeproj"
 PROJECT.mkdir(exist_ok=True)
 objects = []
@@ -66,15 +67,17 @@ settings = '''
     PRODUCT_BUNDLE_IDENTIFIER = de.michaelhein.BikeNavi;
     PRODUCT_NAME = "$(TARGET_NAME)";
     INFOPLIST_FILE = ios/BikeNavi/Info.plist;
-    MARKETING_VERSION = 0.1.0;
-    CURRENT_PROJECT_VERSION = 1;
+    MARKETING_VERSION = __VERSION__;
+    CURRENT_PROJECT_VERSION = 2;
     ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
     CODE_SIGN_STYLE = Automatic;
+    DEVELOPMENT_TEAM = 4JDC67R76Q;
     GENERATE_INFOPLIST_FILE = NO;
     LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
     ENABLE_USER_SCRIPT_SANDBOXING = YES;
     SWIFT_EMIT_LOC_STRINGS = YES;
 '''
+settings = settings.replace("__VERSION__", VERSION)
 configs = []
 for name in ["Debug", "Release"]:
     extra = 'SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = dwarf; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;' if name == "Debug" else 'SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";'
@@ -87,13 +90,14 @@ for name in ["Debug", "Release"]:
         PRODUCT_BUNDLE_IDENTIFIER = de.michaelhein.BikeNavi.LiveActivity;
         PRODUCT_NAME = BikeNaviLiveActivity;
         INFOPLIST_FILE = ios/BikeNaviWidget/Info.plist;
-        MARKETING_VERSION = 0.1.0;
-        CURRENT_PROJECT_VERSION = 1;
+        MARKETING_VERSION = {VERSION};
+        CURRENT_PROJECT_VERSION = 2;
         SWIFT_VERSION = 5.0;
         IPHONEOS_DEPLOYMENT_TARGET = 17.0;
         SDKROOT = iphoneos;
         TARGETED_DEVICE_FAMILY = 1;
         CODE_SIGN_STYLE = Automatic;
+        DEVELOPMENT_TEAM = 4JDC67R76Q;
         GENERATE_INFOPLIST_FILE = NO;
         APPLICATION_EXTENSION_API_ONLY = YES;
         SKIP_INSTALL = YES;

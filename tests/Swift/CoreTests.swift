@@ -4,14 +4,26 @@ import XCTest
 final class CoreTests: XCTestCase {
     func testReroutingWaitsForSustainedSignificantDeviationAndUsesCooldown() {
         var policy = ReroutePolicy()
-        XCTAssertFalse(policy.observe(distanceFromRoute: 79, timestamp: 100))
-        XCTAssertFalse(policy.observe(distanceFromRoute: 90, timestamp: 101))
-        XCTAssertFalse(policy.observe(distanceFromRoute: 90, timestamp: 110))
-        XCTAssertTrue(policy.observe(distanceFromRoute: 90, timestamp: 111))
-        XCTAssertFalse(policy.observe(distanceFromRoute: 120, timestamp: 122))
-        XCTAssertFalse(policy.observe(distanceFromRoute: 120, timestamp: 200))
-        XCTAssertTrue(policy.observe(distanceFromRoute: 120, timestamp: 201))
+        XCTAssertFalse(policy.observe(distanceFromRoute: 34, timestamp: 100))
+        XCTAssertFalse(policy.observe(distanceFromRoute: 45, timestamp: 101))
+        XCTAssertFalse(policy.observe(distanceFromRoute: 45, timestamp: 104))
+        XCTAssertTrue(policy.observe(distanceFromRoute: 45, timestamp: 106))
+        XCTAssertFalse(policy.observe(distanceFromRoute: 60, timestamp: 109))
+        XCTAssertFalse(policy.observe(distanceFromRoute: 60, timestamp: 112))
+        XCTAssertFalse(policy.observe(distanceFromRoute: 60, timestamp: 115))
+        XCTAssertTrue(policy.observe(distanceFromRoute: 60, timestamp: 116))
+        XCTAssertFalse(policy.observe(distanceFromRoute: 60, timestamp: 117, accuracy: 40))
+        XCTAssertFalse(policy.observe(distanceFromRoute: 60, timestamp: 118, now: 130))
     }
+    func testLateOrDistantRerouteResultsAreRejected() {
+        let origin = Coordinate(latitude: 49, longitude: 8)
+        XCTAssertTrue(RerouteResultPolicy.accepts(requestedAt: 100, now: 110, origin: origin, current: origin))
+        XCTAssertFalse(RerouteResultPolicy.accepts(requestedAt: 100, now: 116, origin: origin, current: origin))
+        XCTAssertFalse(RerouteResultPolicy.accepts(requestedAt: 100, now: 99, origin: origin, current: origin))
+        XCTAssertFalse(RerouteResultPolicy.accepts(requestedAt: 100, now: 110, origin: origin,
+            current: Coordinate(latitude: 49.001, longitude: 8)))
+    }
+
     func store() throws -> LocalStore {
         try LocalStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("test.sqlite"))
     }
@@ -46,6 +58,31 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(restored, [place])
         XCTAssertNotEqual(restored[0].waypoint.id, restored[0].id)
     }
+    func testManySavedPlacesSurviveReopenAndTourChanges() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("places.sqlite")
+        var expected = (0..<1_000).map {
+            SavedPlace(name: "Ort \($0)", coordinate: Coordinate(latitude: 49 + Double($0) / 100_000, longitude: 8))
+        }
+        do {
+            let db = try LocalStore(url: url)
+            for place in expected { try db.save(place) }
+            var tour = TourDocument()
+            tour.waypoints = expected.prefix(3).map(\.waypoint)
+            try db.save(tour)
+            tour.waypoints = []
+            try db.save(tour)
+            expected[500].name = "Umbenannter Ort"
+            try db.save(expected[500])
+            try db.delete(expected.remove(at: 200))
+        }
+        let restored = try LocalStore(url: url).places()
+        XCTAssertEqual(restored.count, 999)
+        XCTAssertEqual(Dictionary(uniqueKeysWithValues: restored.map { ($0.id, $0) }),
+                       Dictionary(uniqueKeysWithValues: expected.map { ($0.id, $0) }))
+    }
+
     func testSavedPlaceCanBeRenamedWithoutChangingItsIdentity() throws {
         let db = try store()
         var place = SavedPlace(name: "Unbenannt", coordinate: Coordinate(latitude: 49.4, longitude: 8.7))
@@ -358,5 +395,36 @@ final class CoreTests: XCTestCase {
         XCTAssertFalse(PlanningLocation.isUsable(timestamp: 100, accuracy: 10, now: 130))
         XCTAssertFalse(PlanningLocation.isUsable(timestamp: 100, accuracy: 1000, now: 105))
         XCTAssertFalse(PlanningLocation.isUsable(timestamp: 100, accuracy: -1, now: 105))
+    }
+}
+
+final class NavigationHeadingTests: XCTestCase {
+    func testMovingUsesTravelDirectionRatherThanPhoneOrientation() {
+        XCTAssertEqual(NavigationHeading.select(course: 90, speed: 5, timestamp: 100, compass: 180, now: 101), 90)
+    }
+
+    func testStationaryAndSlowRiderCanRotatePhoneWithoutNewGPSFix() {
+        for speed in [0.0, 0.5, -1] {
+            XCTAssertEqual(NavigationHeading.select(course: 90, speed: speed, timestamp: 100, compass: 180, now: 101), 180)
+            XCTAssertEqual(NavigationHeading.select(course: 90, speed: speed, timestamp: 100, compass: 270, now: 102), 270)
+        }
+        XCTAssertEqual(NavigationHeading.select(course: 90, speed: 5, timestamp: 100, compass: 270, now: 106), 270)
+    }
+
+    func testMissingOrInvalidCourseFallsBackToCompass() {
+        XCTAssertEqual(NavigationHeading.select(course: nil, speed: nil, timestamp: nil, compass: 0, now: 101), 0)
+        for course in [-1.0, Double.nan, 360] {
+            XCTAssertEqual(NavigationHeading.select(course: course, speed: 5, timestamp: 100, compass: 359, now: 101), 359)
+        }
+        XCTAssertNil(NavigationHeading.select(course: -1, speed: 0, timestamp: 100, compass: nil, now: 101))
+    }
+
+    func testCompassPrefersTrueNorthAndRejectsUnreliableOrStaleReadings() {
+        XCTAssertEqual(NavigationHeading.compass(trueHeading: 0, magneticHeading: 355, accuracy: 5, timestamp: 100, now: 101), 0)
+        XCTAssertEqual(NavigationHeading.compass(trueHeading: -1, magneticHeading: 355, accuracy: 5, timestamp: 100, now: 101), 355)
+        for accuracy in [-1.0, 46, Double.nan] {
+            XCTAssertNil(NavigationHeading.compass(trueHeading: 90, magneticHeading: 85, accuracy: accuracy, timestamp: 100, now: 101))
+        }
+        XCTAssertNil(NavigationHeading.compass(trueHeading: 90, magneticHeading: 85, accuracy: 5, timestamp: 100, now: 106))
     }
 }

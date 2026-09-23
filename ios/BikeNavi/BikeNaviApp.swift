@@ -12,7 +12,14 @@ struct BikeNaviApp: App {
     var body: some Scene {
         WindowGroup {
             switch storeResult {
-            case .success(let store): AppRoot(store: store)
+            case .success(let store):
+                #if DEBUG
+                if ProcessInfo.processInfo.environment["BIKENAVI_LOCAL_ROUTING_CHECK"] == "1" {
+                    LocalRoutingDiagnostics()
+                } else { AppRoot(store: store) }
+                #else
+                AppRoot(store: store)
+                #endif
             case .failure(let error):
                 ContentUnavailableView("Speicher nicht verfügbar", systemImage: "externaldrive.badge.exclamationmark",
                                        description: Text(error.localizedDescription))
@@ -23,6 +30,10 @@ struct BikeNaviApp: App {
 
 struct AppRoot: View {
     @StateObject private var state: AppState
+    @StateObject private var bike = BikeBluetoothService()
+    #if DEBUG
+    @State private var showBikeTest = ProcessInfo.processInfo.environment["BIKENAVI_BIKE_TEST"] == "1"
+    #endif
     @Environment(\.scenePhase) private var phase
     init(store: LocalStore) { _state = StateObject(wrappedValue: AppState(store: store)) }
     var body: some View {
@@ -33,14 +44,29 @@ struct AppRoot: View {
             SettingsView().tabItem { Label("Einstellungen", systemImage: "slider.horizontal.3") }.tag(3)
         }
         .environmentObject(state)
+        .environmentObject(bike)
+        #if DEBUG
+        .sheet(isPresented: $showBikeTest) { NavigationStack { BikeBluetoothTestView() }.environmentObject(bike) }
+        #endif
         .tint(Theme.accent)
         .alert("BikeNavi", isPresented: Binding(get: { state.errorMessage != nil }, set: { if !$0 { state.errorMessage = nil } })) {
             Button("Verstanden", role: .cancel) { state.errorMessage = nil }
         } message: { Text(state.errorMessage ?? "") }
-        .task { await state.sync() }
+        .task {
+            state.restoreLocalRouting()
+            bike.onMeasurement = { [weak state] measurement in state?.recordBikeMeasurement(measurement) }
+            while !Task.isCancelled {
+                await state.sync()
+                do { try await Task.sleep(for: .seconds(60)) } catch { break }
+            }
+        }
         .onChange(of: phase) { _, value in if value == .active { Task { await state.sync() } } }
-        .onChange(of: state.tab) { _, tab in
+        .onChange(of: state.tab, initial: true) { _, tab in
+            bike.monitor(tab == 1, for: .rideScreen)
             if tab == 1 { state.openRide() }
+        }
+        .onChange(of: state.activeRide?.id, initial: true) { _, id in
+            bike.monitor(id != nil, for: .activeRide)
         }
     }
 }

@@ -6,13 +6,14 @@ struct RouteProgress {
     var distanceFromRoute: Double
     var nextManeuver: Maneuver?
     var distanceToManeuver: Double
+    var snappedPosition: Coordinate? = nil
 }
 
 struct RouteTracker {
     private(set) var lastProgress = 0.0
     private(set) var lastTimestamp: Double?
 
-    mutating func update(position: Coordinate, timestamp: Double, route: CalculatedRoute) -> RouteProgress? {
+    mutating func update(position: Coordinate, timestamp: Double, route: CalculatedRoute, heading: Double? = nil, accuracy: Double = 5) -> RouteProgress? {
         guard route.coordinates.count > 1 else { return nil }
         let radians = Double.pi / 180
         let scaleX = cos(position.latitude * radians) * 111_320
@@ -24,8 +25,8 @@ struct RouteTracker {
         let elapsed = max(0, timestamp - (lastTimestamp ?? timestamp))
         // A local window avoids jumping to the return leg of a loop. After a long
         // interruption the window grows to permit recovery without fake progress.
-        let maximumForward = lastTimestamp == nil ? Double.infinity : max(200, elapsed * 20)
-        var best: (distance: Double, progress: Double)?
+        let maximumForward = lastTimestamp == nil ? Double.infinity : min(400, max(200, elapsed * 20))
+        var best: (distance: Double, progress: Double, point: Coordinate, directionMatches: Bool)?
         for i in 0..<(route.coordinates.count - 1) {
             guard cumulative[i + 1] >= max(0, lastProgress - 150),
                   cumulative[i] <= lastProgress + maximumForward else { continue }
@@ -38,16 +39,20 @@ struct RouteTracker {
             let t = min(1, max(0, -(ax * dx + ay * dy) / max(0.0001, dx * dx + dy * dy)))
             let distance = hypot(ax + t * dx, ay + t * dy)
             let progress = cumulative[i] + t * (cumulative[i + 1] - cumulative[i])
-            if best == nil || distance < best!.distance - 1 { best = (distance, progress) }
+            let directionMatches = heading.map { LocalGeometry.angle($0, LocalGeometry.bearing(a, b)) <= 65 } ?? true
+            let projected = Coordinate(latitude: a.latitude + t * (b.latitude-a.latitude), longitude: a.longitude + t * (b.longitude-a.longitude))
+            if best == nil || distance < best!.distance - 1 { best = (distance, progress, projected, directionMatches) }
         }
         guard let best else { return nil }
-        if best.distance < 60 { lastProgress = best.progress; lastTimestamp = timestamp }
+        let magnet = best.distance <= 25 && accuracy >= 0 && accuracy <= 25 && best.directionMatches
+        if magnet { lastProgress = best.progress; lastTimestamp = timestamp }
         let next = route.maneuvers.first { m in
             m.coordinateIndex < cumulative.count && cumulative[m.coordinateIndex] > lastProgress + 12
         }
         return RouteProgress(traveled: lastProgress, remaining: max(0, cumulative.last! - lastProgress),
                              distanceFromRoute: best.distance, nextManeuver: next,
-                             distanceToManeuver: next.map { max(0, cumulative[$0.coordinateIndex] - lastProgress) } ?? 0)
+                             distanceToManeuver: next.map { max(0, cumulative[$0.coordinateIndex] - lastProgress) } ?? 0,
+                             snappedPosition: magnet ? best.point : nil)
     }
 }
 
@@ -186,26 +191,33 @@ enum NavigationPreviewBuilder {
 }
 
 /// Avoid reacting to ordinary GPS drift or a brief detour. A new route is
-/// requested only after the rider has been at least 80 m away for 10 seconds;
-/// requests are then limited to one every 90 seconds.
+/// requested after three accurate samples over five seconds beyond 35 m.
+/// The 25 m magnet leaves a hysteresis band before rerouting.
 struct ReroutePolicy {
     private(set) var offRouteSince: Double?
     private(set) var lastRerouteAt: Double?
-    static let deviation = 80.0
-    static let confirmationDuration = 10.0
-    static let cooldown = 90.0
+    private var lastSample: Double?
+    private var count = 0
+    static let deviation = 35.0
+    static let confirmationDuration = 5.0
+    static let cooldown = 10.0
 
-    mutating func observe(distanceFromRoute: Double, timestamp: Double) -> Bool {
-        guard distanceFromRoute.isFinite, timestamp.isFinite else { return false }
-        guard distanceFromRoute >= Self.deviation else {
-            offRouteSince = nil
+    mutating func observe(distanceFromRoute: Double, timestamp: Double, accuracy: Double = 5, now: Double? = nil) -> Bool {
+        guard distanceFromRoute.isFinite, timestamp.isFinite, accuracy >= 0, accuracy <= 25,
+              abs((now ?? timestamp) - timestamp) < 5,
+              lastSample.map({ timestamp > $0 }) ?? true else { return false }
+        if let lastSample, timestamp - lastSample > 10 { offRouteSince = nil; count = 0 }
+        lastSample = timestamp
+        guard distanceFromRoute >= max(Self.deviation, accuracy * 2) else {
+            offRouteSince = nil; count = 0
             return false
         }
         if offRouteSince == nil { offRouteSince = timestamp }
-        guard timestamp - (offRouteSince ?? timestamp) >= Self.confirmationDuration,
+        count += 1
+        guard count >= 3, timestamp - (offRouteSince ?? timestamp) >= Self.confirmationDuration,
               timestamp - (lastRerouteAt ?? -.infinity) >= Self.cooldown else { return false }
         lastRerouteAt = timestamp
-        offRouteSince = nil
+        offRouteSince = nil; count = 0
         return true
     }
 }
@@ -222,5 +234,33 @@ enum TrackFilter {
         let distance = previous.coordinate.distance(to: point.coordinate)
         // Avoid impossible GPS jumps while leaving ordinary cycling speeds intact.
         return distance / elapsed < 35 && (distance >= 3 || elapsed >= 20)
+    }
+}
+
+
+/// Interim protection for server results until local connector routing is available.
+enum RerouteResultPolicy {
+    static func accepts(requestedAt: Double, now: Double, origin: Coordinate, current: Coordinate) -> Bool {
+        let age = now - requestedAt
+        return age.isFinite && age >= 0 && age <= 15 && origin.distance(to: current) <= 50
+    }
+}
+
+/// Use travel direction while moving and the device compass at walking speed or at rest.
+enum NavigationHeading {
+    static func select(course: Double?, speed: Double?, timestamp: Double?, compass: Double?, now: Double) -> Double? {
+        if let course, let speed, let timestamp, course.isFinite, (0..<360).contains(course),
+           speed.isFinite, speed >= 1, abs(now - timestamp) <= 5 {
+            return course
+        }
+        return compass
+    }
+
+    static func compass(trueHeading: Double, magneticHeading: Double, accuracy: Double,
+                        timestamp: Double, now: Double) -> Double? {
+        guard accuracy.isFinite, (0...45).contains(accuracy), abs(now - timestamp) <= 5 else { return nil }
+        if trueHeading.isFinite, (0..<360).contains(trueHeading) { return trueHeading }
+        if magneticHeading.isFinite, (0..<360).contains(magneticHeading) { return magneticHeading }
+        return nil
     }
 }

@@ -1,6 +1,22 @@
+<p align="center"><img src="ios/BikeNavi/Assets.xcassets/AppIcon.appiconset/AppIcon.png" width="144" alt="BikeNavi-Logo: Fahrrad mit Navigationspfeil"></p>
+
 # BikeNavi
 
+**Version 0.2.0 · iOS-Build 2 · Entwicklungsfassung**
+
+[Änderungen](CHANGELOG.md) · [GitHub-Releases](https://github.com/MichaelHein65/BikeNavi/releases) · [Alle Bildschirme](docs/BILDSCHIRME.md) · [Versionierung](docs/VERSIONIERUNG.md)
+
 Native iPhone-App für Fahrradtouren mit einem privaten Raspberry-Pi-Backend. Produktentscheidungen stehen in [docs/KONZEPT.md](docs/KONZEPT.md), die technische Struktur in [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) und der tatsächliche Entwicklungsstand in [docs/UMSETZUNG.md](docs/UMSETZUNG.md).
+
+## Einblicke in die App
+
+Echte Simulator-Aufnahmen mit öffentlicher Heidelberger Beispielroute. Die Beispielaufzeichnung und ihre Bike-Messwerte sind synthetische Demonstrationsdaten.
+
+| Planen | Fahren | Touren | Einstellungen |
+| --- | --- | --- | --- |
+| <img src="docs/images/01-planen.png" width="220" alt="Planung mit Route und Tourdaten"> | <img src="docs/images/12-fahren.png" width="220" alt="Navigation mit Standort unten und 500 m Vorausschau"> | <img src="docs/images/08-touren.png" width="220" alt="Tourenarchiv"> | <img src="docs/images/11-einstellungen.png" width="220" alt="App-Einstellungen ohne Zugangsdaten"> |
+
+Die [vollständige Galerie](docs/BILDSCHIRME.md) zeigt außerdem Karte, Wegpunkte, Favoriten, Suche, Fahrprofil, Routendetails, Fahrtaufzeichnung, Diagramme, Bike-Verbindung und Pause.
 
 ## Starten
 
@@ -10,7 +26,7 @@ Native iPhone-App für Fahrradtouren mit einem privaten Raspberry-Pi-Backend. Pr
 4. In der App unter **Einstellungen** die eigene Tailscale-HTTPS-Adresse und den BikeNavi-Zugangsschlüssel aus der lokalen `.env` eintragen.
 5. **Speichern und Verbindung prüfen** antippen. Danach Start und Ziel auf der Karte setzen oder über die Suche auswählen.
 
-Der openrouteservice-Schlüssel gehört ausschließlich in `ORS_API_KEY` der `.env` auf dem Backend, nicht in die iPhone-App.
+Die gesamte Routenplanung und Rückführung berechnet das iPhone. Der Pi liefert und speichert Wegedaten, Touren und Aufzeichnungen. Bereits geladene Gebiete können ohne Pi geplant werden. Für ein neues Gebiet werden zuerst Wegedaten geladen; dieser erste Download kann dauern. Ein ORS-Schlüssel ist für die neue iPhone-Planung nicht mehr erforderlich; die alten Server-Endpunkte bleiben für ältere App-Versionen verfügbar.
 
 Wird zuerst ein Ziel gewählt, übernimmt die App automatisch den aktuellen Standort als Start. Solange ein frisches GPS-Signal fehlt, bleibt das Ziel gespeichert; die Route wird nach Eingang des Standorts berechnet. Ein ausdrücklich gewählter Start bleibt unverändert. Ohne Standortfreigabe kann der Start weiterhin auf der Karte gewählt werden.
 
@@ -20,9 +36,9 @@ Den unteren Datenbereich nach unten wischen, um nur den Tourtitel stehen zu lass
 
 In **Deine Wegpunkte** steht **Tour umkehren** bereit. Start, Ziel und alle Zwischenziele werden dabei in umgekehrter Reihenfolge übernommen; anschließend wird die Route neu berechnet.
 
-Orte lassen sich beim Kartenpunkt oder bei einem Suchtreffer als Favorit speichern. Beim Speichern kann ein frei gewählter Name wie „Zuhause“ oder „Arbeit“ vergeben werden. Das Lesezeichen oben rechts öffnet **Meine Orte**: Dort wird der Einsatzzweck Start, Zwischenziel oder Ziel gewählt; Orte lassen sich zudem umbenennen oder löschen. Favoriten erscheinen außerdem als Lesezeichen auf der Planungskarte und können dort direkt gewählt werden. Liegt ein Routenendpunkt höchstens 100 m von einem Favoriten entfernt, verwendet der automatische kurze Tourname dessen Namen.
+Orte lassen sich beim Kartenpunkt oder bei einem Suchtreffer als Favorit speichern. Beim Speichern kann ein frei gewählter Name wie „Zuhause“ oder „Arbeit“ vergeben werden. Das Lesezeichen oben rechts öffnet **Meine Orte**: Ein Ort wird dort direkt zur Tour hinzugefügt und kann zudem umbenannt oder gelöscht werden. Der erste hinzugefügte Ort wird zum Ziel; weitere Orte werden davor in die Tour eingefügt. Favoriten erscheinen außerdem als Lesezeichen auf der Planungskarte und können dort direkt gewählt werden. Liegt ein Routenendpunkt höchstens 100 m von einem Favoriten entfernt, verwendet der automatische kurze Tourname dessen Namen.
 
-In der Fahrtansicht startet der Tab **Fahren** eine berechnete Planung. Die Karte zeigt die Belagsfarben, folgt der Fahrtrichtung und weist auf den nächsten Abbieger hin. Eine Live-Aktivität zeigt auf dem Sperrbildschirm eine fahrtrichtungsorientierte Routengrafik von ungefähr 50 m hinter bis 350 m vor der Position. Aktuelle Position, Abbiegestelle, echte OSM-Nebenstraßen der nächsten Kreuzung und Belagsfarben bleiben zusammen mit Hinweis, Entfernung und Reststrecke auf einen Blick sichtbar; die Dynamic Island verwendet eine kompaktere Fassung. Die Kreuzungsdaten werden beim Planen über den Pi geladen und zusammen mit der Route gespeichert, sodass sie während der Fahrt offline bereitstehen. Die Anzeige bildet auch Pausen und Neuberechnungen ab und endet zusammen mit der Fahrt. Weicht die Fahrt mindestens 80 m für zehn Sekunden von der Route ab, berechnet die App über den Pi eine neue Verbindung; noch offene Zwischenziele bleiben erhalten. Weitere automatische Berechnungen warten mindestens 90 Sekunden.
+In der Fahrtansicht startet der Tab **Fahren** eine berechnete Planung. Die Karte zeigt die Belagsfarben, hält deinen Standort im unteren Fünftel und zeigt 500 m voraus in maximal möglicher Schrägansicht. Während der Fahrt folgt sie dem GPS-Kurs, im Stand und bei langsamer Bewegung der Kompassrichtung des iPhones. Nach Verschieben, Drehen oder Zoomen stellt sie diese Ansicht nach zehn Sekunden wieder her. Der nächste Abbieger steht darüber. Eine Live-Aktivität zeigt auf dem Sperrbildschirm eine fahrtrichtungsorientierte Routengrafik von ungefähr 50 m hinter bis 350 m vor der Position. Aktuelle Position, Abbiegestelle, echte OSM-Nebenstraßen der nächsten Kreuzung und Belagsfarben bleiben zusammen mit Hinweis, Entfernung und Reststrecke auf einen Blick sichtbar; die Dynamic Island verwendet eine kompaktere Fassung. Die Kreuzungsdaten werden beim Planen aus dem lokalen Wegenetz gewonnen und zusammen mit der Route gespeichert. Die Anzeige bildet auch Pausen und Neuberechnungen ab und endet zusammen mit der Fahrt. Die Planung lädt bei Bedarf ein lokales Wegenetz für das Gebiet zwischen den Wegpunkten. Sobald die lokale Planung fertig ist, berechnet das iPhone bei bestätigter Abweichung kurze Anschlüsse zurück zur Tour ohne Pi oder Internet. Zwischenziele und die ursprüngliche Tour bleiben erhalten. Ein Magnet zieht die Navigationsanzeige bei kleinen Abweichungen bis 25 m auf die Route, wenn Genauigkeit und Fahrtrichtung passen. Die Aufzeichnung bleibt unverändert. Der Wiedereinstieg berücksichtigt Anschluss plus verbleibende Tour bis zum Ziel, ohne offene Zwischenziele zu überspringen. Drei genaue Messungen über mindestens fünf Sekunden bestätigen eine Abweichung ab etwa 35 m; die lokale Suche ist auf zwei Sekunden begrenzt. Einzelheiten und Grenzen stehen in [LOKALE_NEUBERECHNUNG.md](docs/LOKALE_NEUBERECHNUNG.md).
 
 Die geplante Linie zeigt den Untergrund: Blau = befestigt (z. B. Asphalt/Beton), Violett = Pflaster/Rasengitter, Ocker = Schotter, Braun = unbefestigt (z. B. Erde/Sand/Gras), Türkis = sonstige Beläge (z. B. Holz/Metall), Grau = unbekannt. Alte Routen mit ausschließlich zusammengefassten Belagsdaten bleiben grau, bis **Belagsfarben fehlen · Route neu berechnen** gewählt wird. Die ursprünglichen Indizes kommen aus [ORS Extra Info](https://giscience.github.io/openrouteservice/api-reference/endpoints/directions/extra-info/); Prozentanteile allein werden nicht auf die Karte umgerechnet.
 

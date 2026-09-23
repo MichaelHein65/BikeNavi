@@ -66,6 +66,7 @@ class Route(Model):
     maneuvers: list[Maneuver] = Field(default_factory=list, max_length=10_000)
     surfaces: list[Surface] = Field(default_factory=list)
     surfaceSections: list[SurfaceSection] | None = Field(default=None, max_length=100_000)
+    waypointIndices: list[int] | None = Field(default=None, max_length=50)
     intersectionContexts: list[IntersectionContext] | None = Field(default=None, max_length=10_000)
     warnings: list[str] = Field(default_factory=list)
     provider: str = "openrouteservice"
@@ -75,6 +76,9 @@ class Route(Model):
     def check_indices(self):
         if any(m.coordinateIndex >= len(self.coordinates) for m in self.maneuvers):
             raise ValueError("Abbiegehinweis liegt außerhalb der Route")
+        if self.waypointIndices is not None and (self.waypointIndices != sorted(self.waypointIndices)
+                or any(i < 0 or i >= len(self.coordinates) for i in self.waypointIndices)):
+            raise ValueError("Zwischenziel liegt außerhalb der Route")
         previous_end = 0
         for section in self.surfaceSections or []:
             if not previous_end <= section.startIndex < section.endIndex < len(self.coordinates):
@@ -93,7 +97,17 @@ class TrackPoint(Model):
     segment: int = Field(ge=0)
 
 
+class LocalNavigationState(Model):
+    connector: Route | None = None
+    rejoinIndex: int | None = Field(default=None, ge=0)
+    originalProgress: float = Field(default=0, ge=0)
+    usedUnpaved: float = Field(default=0, ge=0)
+    routeProgress: float = Field(default=0, ge=0)
+
+
 class Document(Model):
+    localNavigation: LocalNavigationState | None = None
+    sourcePlanID: UUID | None = None
     id: UUID
     kind: Literal["plan", "ride"]
     title: str = Field(min_length=1, max_length=200)
@@ -110,6 +124,14 @@ class Document(Model):
     movingDuration: float = Field(default=0, ge=0)
     recordingState: Literal["none", "recording", "paused", "finished"] = "none"
 
+    @model_validator(mode="after")
+    def check_local_navigation(self):
+        nav = self.localNavigation
+        if nav and nav.connector is not None:
+            if self.kind != "ride" or self.route is None or nav.rejoinIndex is None or nav.rejoinIndex >= len(self.route.coordinates):
+                raise ValueError("Ungültiger lokaler Anschluss an die Tour")
+        return self
+
 
 class Mutation(Model):
     mutationID: UUID
@@ -121,3 +143,28 @@ class Mutation(Model):
 class RouteRequest(Model):
     waypoints: list[Waypoint] = Field(min_length=2, max_length=50)
     profile: Profile
+
+
+class BikeMeasurement(Model):
+    bikeID: UUID
+    timestamp: float = Field(ge=0)
+    batteryPercent: int | None = Field(default=None, ge=0, le=100)
+    riderPowerWatts: int | None = Field(default=None, ge=0)
+    motorPowerWatts: int | None = Field(default=None, ge=0)
+    assistMode: int | None = Field(default=None, ge=0)
+    cadenceRPM: int | None = Field(default=None, ge=0)
+    speedKPH: float | None = Field(default=None, ge=0)
+    chargerConnected: bool | None = None
+
+
+class RecordedBikeSample(Model):
+    id: UUID
+    rideID: UUID
+    sourcePlanID: UUID
+    segment: int = Field(ge=0)
+    position: TrackPoint | None = None
+    measurement: BikeMeasurement
+
+
+class BikeSampleBatch(Model):
+    samples: list[RecordedBikeSample] = Field(min_length=1, max_length=500)

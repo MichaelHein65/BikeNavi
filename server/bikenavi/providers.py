@@ -13,6 +13,7 @@ SURFACES = {0: "Unbekannt", 1: "Befestigt", 2: "Unbefestigt", 3: "Asphalt", 4: "
             13: "Eis / Schnee", 14: "Pflaster", 15: "Sand", 16: "Holzschnitzel",
             17: "Gras", 18: "Rasengitter"}
 PAVED = {1, 3, 4, 5, 6, 14}
+PAVED_ONLY_TOLERANCE_M = 100
 
 
 def _distance_m(a: dict, b: dict) -> float:
@@ -103,6 +104,7 @@ def parse_route(body: dict) -> dict:
                 "surfaces": [{"name": SURFACES.get(s["value"], "Unbekannt"),
                               "distance": s["distance"], "percentage": s["amount"]} for s in surface],
                 "surfaceSections": sections,
+                "waypointIndices": props.get("way_points"),
                 "warnings": [], "provider": "openrouteservice", "calculatedAt": time.time()}
     except (KeyError, IndexError, TypeError, ValueError) as error:
         raise HTTPException(502, "Der Routingdienst hat eine unvollständige Route geliefert.") from error
@@ -162,13 +164,17 @@ class ORS:
             route = parse_route(data)
             surface = data["features"][0]["properties"].get("extras", {}).get("surface", {}).get("summary", [])
             known_paved = sum(s["distance"] for s in surface if s["value"] in PAVED)
-            undesirable = max(0, route["distance"] - known_paved)
-            if profile.surface == "pavedOnly" and (not surface or undesirable > 1 or
-                    any(s["value"] not in PAVED and s["distance"] > 0 for s in surface)):
+            # Apply one budget to the whole route, including all legs and any
+            # distance not covered by known paved surface information.
+            undesirable = max(0, route["distance"] - known_paved,
+                              sum(s["distance"] for s in surface if s["value"] not in PAVED))
+            if profile.surface == "pavedOnly" and (not surface or undesirable > PAVED_ONLY_TOLERANCE_M):
                 continue
+            if profile.surface == "pavedOnly" and undesirable > 0:
+                route["warnings"].append(f"Befestigte Wege mit Toleranz: insgesamt bis zu {math.ceil(undesirable)} m unbefestigte oder unbekannte Abschnitte (maximal 100 m pro Route).")
             results.append((route["distance"] + (undesirable * 8 if profile.surface != "any" else 0), route))
         if not results:
-            raise HTTPException(422, "Keine durchgehend als befestigt bekannte Route gefunden. Die Vorgabe wurde nicht gelockert. Du kannst Zwischenziele ändern oder unbekannte / unbefestigte Abschnitte erlauben.")
+            raise HTTPException(422, "Keine passende Route gefunden. Bei „Nur bekannte befestigte Wege“ sind insgesamt höchstens 100 m unbefestigte oder unbekannte Abschnitte erlaubt. Ändere die Zwischenziele oder wähle „Befestigte Wege bevorzugen“.")
         route = min(results, key=lambda pair: pair[0])[1]
         if profile.surface == "preferPaved":
             route["warnings"].append("Befestigte Wege bevorzugt: Vergleich der verfügbaren Fahrrad- und Rennradrouten. Schotter oder unbekannte Abschnitte können enthalten sein.")

@@ -1,14 +1,15 @@
 # Architektur
 
-BikeNavi besteht aus einer nativen iPhone-App und einem privaten Backend auf einem Raspberry Pi. Das iPhone bleibt während einer Fahrt handlungsfähig: Es hält Planung, Route und Aufzeichnung lokal vor. Der Pi berechnet neue Routen, führt die Ortssuche aus und hält das zentrale Tourenarchiv.
+BikeNavi besteht aus einer nativen iPhone-App und einem privaten Backend auf einem Raspberry Pi. Das iPhone bleibt während einer Fahrt handlungsfähig: Es hält Planung, Route und Aufzeichnung lokal vor. Das iPhone berechnet Planung und Rückführung selbst. Der Pi liefert Wegedaten, führt die Ortssuche aus und hält das zentrale Tourenarchiv.
 
 ```mermaid
 flowchart LR
     PHONE[iPhone-App\nSwiftUI · MapLibre · Core Location] --> LOCAL[SQLite\nPläne · Fahrten · Orte]
     PHONE <-->|HTTPS über Tailscale| API[FastAPI auf dem Pi]
     API --> ARCHIVE[PostgreSQL\nversioniertes Tourenarchiv]
-    API --> ORS[openrouteservice\nRouting · Suche · Ortsnamen]
-    API --> OSM[OSM Overpass\nKreuzungen · Nebenstraßen]
+    API --> ORS[Ortsuche · Ortsnamen]
+    PHONE --> ROUTER[Lokaler Graph\nA* Planung · Dijkstra Rückführung]
+    API --> OSM[OSM Overpass\nFahrrad-Wegedaten]
     PHONE --> MAP[OpenFreeMap / OSM-Karte]
 ```
 
@@ -23,12 +24,14 @@ flowchart LR
 | `Models.swift` | Planungen, Fahrten, Wegpunkte, Favoriten, Routen und Profile |
 | `LocalStore.swift` | Dauerhafte SQLite-Speicherung auf dem iPhone |
 | `APIClient.swift` | Authentifizierte HTTPS-Aufrufe an den Pi |
-| `Navigation.swift` | Fortschritt auf der Route, GPS-Filter und Regel für Neuberechnung |
+| `Navigation.swift` | Routenprojektion/Magnet, Fortschritt, GPS-Filter und Regel für Neuberechnung |
+| `LocalRouter.swift` | Lokale Planung und Anschluss plus verbleibende Route |
+| `OfflineRoutingStore.swift` | Versionierte Wegedaten, Download, Graph-Wiederverwendung |
 | `GPX.swift` | Export abgeschlossener Fahrten |
 
-MapLibre zeichnet die Karten, Wegpunkte, Aufzeichnung und Routenabschnitte. Belagsinformationen sind an Geometrie-Indizes gebunden. Fehlen diese Indizes bei einer älteren Route, bleibt ihre Linie grau statt Beläge zu erraten. Der Pi ergänzt Abbiegestellen einmalig um nahe OSM-Straßen aus Overpass. Die App speichert diese Kreuzungsgeometrie in der Route und zeichnet sie ohne Karten- oder Netzwerkzugriff in der Live-Aktivität.
+MapLibre zeichnet die Karten, Wegpunkte, Aufzeichnung und Routenabschnitte. Belagsinformationen sind an Geometrie-Indizes gebunden. Fehlen diese Indizes bei einer älteren Route, bleibt ihre Linie grau statt Beläge zu erraten. Neue lokale Planungen gewinnen Kreuzungsarme aus dem gespeicherten OSM-Graphen. Die App speichert diese Kreuzungsgeometrie in der Route und zeichnet sie ohne Karten- oder Netzwerkzugriff in der Live-Aktivität.
 
-Die Fahrtansicht folgt der Fahrtrichtung bei einer Zoomstufe für ungefähr 300 m Vorausschau. Eine Abweichung löst nur bei mindestens 80 m Abstand über zehn Sekunden eine neue Anfrage aus. Danach schützt eine Wartezeit von 90 Sekunden vor wiederholten Anfragen. Die neue Route beginnt am aktuellen Standort und enthält verbleibende Zwischenziele sowie das Ziel.
+Die Fahrtansicht hält den Standort bei 80 % der Kartenhöhe und kalibriert den Maßstab auf 500 m bis zum oberen Rand. Die Kamera fordert die maximale Neigung von 60° an; MapLibre begrenzt sie zusätzlich für den versetzten Mittelpunkt. Bei Bewegung verwendet die Karte den aktuellen GPS-Kurs, im Stand oder bei langsamer Fahrt den Kompass. Manuelle Kartenänderungen pausieren die Nachführung für zehn Sekunden; die Rückkehr benötigt keinen neuen GPS-Punkt. Bis 25 m Abstand rastet die Anzeige bei passender Genauigkeit und Richtung auf der Route ein. Eine bestätigte Abweichung ab 35 m über fünf Sekunden und mindestens drei genaue Messungen startet die lokale Anschlussberechnung. Sie minimiert Anschluss plus verbleibenden Originalweg, wahrt offene Zwischenziele und hat ein Suchbudget von zwei Sekunden. Nach zehn Sekunden darf erneut gerechnet werden. Details und Grenzen: [LOKALE_NEUBERECHNUNG.md](LOKALE_NEUBERECHNUNG.md).
 
 ## Pi-Backend
 
@@ -38,7 +41,8 @@ Die Fahrtansicht folgt der Fahrtrichtung bei einer Zoomstufe für ungefähr 300 
 | --- | --- |
 | `GET /health` | Gesundheitsprüfung ohne Zugangsdaten |
 | `GET /v1/status` | Routing- und Serverstatus |
-| `POST /v1/route` | Routenberechnung mit Profil, Höhen- und Belagsdaten |
+| `POST /v1/route` | Legacy-Routing für ältere Apps; von der aktuellen App nicht mehr verwendet |
+| `GET /v1/offline-tiles/{x}/{y}` | Gespeicherte OSM-Fahrradgraphen für die lokale Suche |
 | `GET /v1/search` | Orts-, Adress- und POI-Suche |
 | `GET /v1/place-name` | Name für einen Kartenpunkt |
 | `POST /v1/mutations` | Versioniertes Speichern einer Planung oder Fahrt |

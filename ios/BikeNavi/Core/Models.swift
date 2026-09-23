@@ -162,6 +162,7 @@ struct CalculatedRoute: Codable, Identifiable, Equatable {
     // Older saved routes contain only totals, which cannot locate a surface on the map.
     var surfaceSections: [RouteSurfaceSection]?
     var intersectionContexts: [IntersectionContext]?
+    var waypointIndices: [Int]?
 
     var coloredSections: [RouteSurfaceSection] {
         guard coordinates.count > 1 else { return [] }
@@ -204,6 +205,8 @@ enum PlanningLocation {
 
 struct TourDocument: Codable, Identifiable, Equatable {
     var id = UUID()
+    var sourcePlanID: UUID?
+    var localNavigation: LocalNavigationState?
     var kind: DocumentKind = .plan
     var title = "Meine nächste Tour"
     // Missing in older documents; their non-default titles remain user-owned.
@@ -301,6 +304,8 @@ struct TourDocument: Codable, Identifiable, Equatable {
         var result = self
         result.id = UUID()
         result.kind = .plan
+        result.sourcePlanID = nil
+        result.localNavigation = nil
         result.title += " · Kopie"
         result.usesAutomaticTitle = false
         result.createdAt = Date().timeIntervalSince1970

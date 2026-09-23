@@ -41,7 +41,7 @@ def upstream_route(surface=3, distance=100):
 
 
 def test_authentication_and_no_secret_exposure(client):
-    assert client.get("/health").json() == {"status": "ok", "version": "0.1.0"}
+    assert client.get("/health").json() == {"status": "ok", "version": "0.2.0"}
     for path in ["/v1/status", "/v1/changes"]:
         assert client.get(path).status_code == 401
     assert client.post("/v1/mutations", json=mutation()).status_code == 401
@@ -97,11 +97,35 @@ def test_missing_key_is_actionable_and_does_not_fake_routes(client):
 
 @pytest.mark.parametrize("surface", [0, 2, 8, 10, 11, 15])
 def test_strict_paved_rejects_unknown_and_unpaved(tmp_path, surface):
-    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=upstream_route(surface)))
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=upstream_route(surface, distance=100.1)))
     with TestClient(create_app(f"sqlite:///{tmp_path / 'paved.sqlite'}", TOKEN, "secret-ors", transport)) as client:
         response = client.post("/v1/route", headers=AUTH, json=route_request("pavedOnly"))
         assert response.status_code == 422
-        assert "nicht gelockert" in response.text
+        assert "100 m" in response.text
+
+
+@pytest.mark.parametrize("distances, expected", [([0], 200), ([99.9], 200), ([100], 200),
+                                               ([100.1], 422), ([40, 60], 200), ([60, 60], 422)])
+def test_paved_tolerance_is_100m_total_not_per_section(tmp_path, distances, expected):
+    raw = upstream_route(distance=1000)
+    summary = [{"value": 3, "distance": 1000 - sum(distances), "amount": 80}]
+    summary += [{"value": 8 + index, "distance": distance, "amount": 10} for index, distance in enumerate(distances)]
+    raw["features"][0]["properties"]["extras"]["surface"]["summary"] = summary
+    with TestClient(create_app(f"sqlite:///{tmp_path / 'tolerance.sqlite'}", TOKEN, "secret-ors",
+                              httpx.MockTransport(lambda request: httpx.Response(200, json=raw)))) as client:
+        response = client.post("/v1/route", headers=AUTH, json=route_request("pavedOnly"))
+        assert response.status_code == expected
+        if expected == 200:
+            assert bool(response.json()["warnings"]) == (sum(distances) > 0)
+
+
+@pytest.mark.parametrize("missing, expected", [(100, 200), (101, 422)])
+def test_paved_tolerance_counts_unreported_surface_distance(tmp_path, missing, expected):
+    raw = upstream_route(distance=1000)
+    raw["features"][0]["properties"]["extras"]["surface"]["summary"][0]["distance"] = 1000 - missing
+    with TestClient(create_app(f"sqlite:///{tmp_path / 'missing.sqlite'}", TOKEN, "secret-ors",
+                              httpx.MockTransport(lambda request: httpx.Response(200, json=raw)))) as client:
+        assert client.post("/v1/route", headers=AUTH, json=route_request("pavedOnly")).status_code == expected
 
 
 def test_route_coordinates_elevation_and_maneuvers(tmp_path):
@@ -207,8 +231,11 @@ def test_old_receipt_still_accepts_retry_without_naming_field(client, with_route
     legacy_payload = Mutation.model_validate(change).model_dump(mode="json")
     legacy_payload["document"].pop("usesAutomaticTitle")
     legacy_payload["document"].pop("awaitingStart")
+    legacy_payload["document"].pop("sourcePlanID")
+    legacy_payload["document"].pop("localNavigation")
     if with_route:
         legacy_payload["document"]["route"].pop("surfaceSections")
+        legacy_payload["document"]["route"].pop("waypointIndices")
     digest = hashlib.sha256(json.dumps(legacy_payload, sort_keys=True).encode()).hexdigest()
     envelope = {"document": legacy_payload["document"], "revision": 1, "deleted": False}
     with client.app.state.storage.sessions.begin() as session:
@@ -260,3 +287,49 @@ def test_destination_without_start_survives_archive_roundtrip(client):
         **destination,
         "coordinate": {**destination["coordinate"], "altitude": None},
     }
+
+
+def test_bike_recordings_separate_rides_retry_and_atomic_conflict(client):
+    plan_id, bike_id = str(uuid4()), str(uuid4())
+    rides = []
+    for _ in range(2):
+        change = mutation()
+        change['document'].update(kind='ride', sourcePlanID=plan_id)
+        assert client.post('/v1/mutations', json=change, headers=AUTH).status_code == 200
+        rides.append(change['document']['id'])
+    sample = {'id': str(uuid4()), 'rideID': rides[0], 'sourcePlanID': plan_id, 'segment': 0,
+              'measurement': {'bikeID': bike_id, 'timestamp': 100, 'batteryPercent': 89, 'riderPowerWatts': 0}}
+    body = {'samples': [sample]}
+    assert client.post('/v1/bike-samples', json=body).status_code == 401
+    for _ in range(2):
+        response = client.post('/v1/bike-samples', json=body, headers=AUTH)
+        assert response.status_code == 200
+        assert response.json()['accepted'] == [sample['id']]
+    page = client.get(f'/v1/rides/{rides[0]}/bike-samples', headers=AUTH).json()
+    assert page['samples'] == [sample]
+    other = deepcopy(sample); other.update(id=str(uuid4()), rideID=rides[1])
+    assert client.post('/v1/bike-samples', json={'samples': [other]}, headers=AUTH).status_code == 200
+    assert client.get(f'/v1/rides/{rides[1]}/bike-samples', headers=AUTH).json()['samples'] == [other]
+    changed = deepcopy(sample); changed['measurement']['batteryPercent'] = 88
+    new = deepcopy(sample); new['id'] = str(uuid4())
+    assert client.post('/v1/bike-samples', json={'samples': [new, changed]}, headers=AUTH).status_code == 409
+    assert client.get(f'/v1/rides/{rides[0]}/bike-samples?after={page["cursor"]}', headers=AUTH).json()['samples'] == []
+    assert client.post('/v1/bike-samples', json={'samples': [new]}, headers=AUTH).status_code == 200
+    assert len(client.get(f'/v1/rides/{rides[0]}/bike-samples?after={page["cursor"]}', headers=AUTH).json()['samples']) == 1
+    new['id'] = str(uuid4()); new['rideID'] = str(uuid4())
+    assert client.post('/v1/bike-samples', json={'samples': [new]}, headers=AUTH).status_code == 409
+
+
+def test_discarding_ride_removes_bike_samples_and_prevents_late_upload(client):
+    change = mutation()
+    change['document']['kind'] = 'ride'
+    ride_id = change['document']['id']
+    assert client.post('/v1/mutations', json=change, headers=AUTH).status_code == 200
+    sample = {'id': str(uuid4()), 'rideID': ride_id, 'sourcePlanID': str(uuid4()), 'segment': 0,
+              'measurement': {'bikeID': str(uuid4()), 'timestamp': 100, 'batteryPercent': 89}}
+    assert client.post('/v1/bike-samples', json={'samples': [sample]}, headers=AUTH).status_code == 200
+    deletion = deepcopy(change)
+    deletion.update(mutationID=str(uuid4()), baseRevision=1, deleted=True)
+    assert client.post('/v1/mutations', json=deletion, headers=AUTH).status_code == 200
+    assert client.get(f'/v1/rides/{ride_id}/bike-samples', headers=AUTH).json()['samples'] == []
+    assert client.post('/v1/bike-samples', json={'samples': [sample]}, headers=AUTH).status_code == 409

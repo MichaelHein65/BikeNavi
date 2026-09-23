@@ -5,6 +5,7 @@ Stand: 18. September 2026. Arbeitsstand für die Konzeptphase.
 ## 1. Bestätigte Anforderungen
 
 - Native Nutzung auf dem iPhone, Fahrtansicht im Hochformat.
+- Vorhandenes Bike-Display: Bosch Kiox 500 am smarten System. Die direkte Bluetooth-Anbindung des iPhones soll zunächst den Akkustand in BikeNavi liefern; Fahrmodus sowie Motor- und Fahrerleistung sind optionale Zusatzwerte. Der Verbindungstest folgt, sobald Michael wieder beim Bike ist. Umfang, bekannte Datenfelder und offene Fragen stehen in der [Machbarkeitsprüfung](KIOX500.md). Navigationshinweise auf dem Kiox werden vorerst nicht weiterverfolgt.
 - Frei verfügbare Navigationsdaten als Grundlage.
 - Planung direkt auf der Karte: Start am aktuellen Standort oder frei wählbar; Ziel und Zwischenziele über Karte oder Textsuche. Die Route erscheint unmittelbar nach der Berechnung.
 - Wegbeschaffenheit und Höhenprofil anzeigen, soweit Daten vorhanden sind.

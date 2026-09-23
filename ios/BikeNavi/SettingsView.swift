@@ -25,6 +25,11 @@ struct SettingsView: View {
                 } header: { Text("Karten") } footer: {
                     Text("Zum Einstieg werden Online-Karten von OpenFreeMap verwendet. Offline-Downloads erst aktivieren, wenn unser eigener Kartenserver samt Stil und Ressourcen bereitsteht.")
                 }
+                Section("Dein Bike") {
+                    NavigationLink { BikeBluetoothTestView() } label: {
+                        Label("Bosch Kiox 500 · Verbindung testen", systemImage: "bicycle")
+                    }
+                }
                 Section("Deine Daten") {
                     LabeledContent("Lokal gespeicherte Touren", value: "\(state.records.filter { !$0.deleted }.count)")
                     LabeledContent("Abgleich ausstehend", value: "\(state.records.filter(\.dirty).count)")
@@ -33,8 +38,9 @@ struct SettingsView: View {
                 Section("Kartengrundlagen") {
                     Link("© OpenStreetMap-Mitwirkende · ODbL", destination: URL(string: "https://www.openstreetmap.org/copyright")!)
                     Link("OpenFreeMap / OpenMapTiles", destination: URL(string: "https://openfreemap.org")!)
+                    Link("Deutsche Kartenbeschriftungen", destination: URL(string: "https://github.com/kalwinskidawid/openfreemap-translations")!)
                     Link("Routing: openrouteservice / HeiGIT", destination: URL(string: "https://openrouteservice.org")!)
-                    LabeledContent("Version", value: "0.1 · Erste Ausbaustufe")
+                    LabeledContent("Version", value: "\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "–"))")
                 }
             }.navigationTitle("Einstellungen")
         }

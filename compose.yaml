@@ -22,6 +22,9 @@ services:
       BIKENAVI_TOKEN: ${BIKENAVI_TOKEN:?Bitte .env ausfüllen}
       ORS_API_KEY: ${ORS_API_KEY:-}
       OVERPASS_URL: ${OVERPASS_URL:-https://overpass-api.de/api/interpreter}
+    networks:
+      - default
+      - map_egress
     ports:
       - "127.0.0.1:${BIKENAVI_PORT:-8093}:8000"
     depends_on:
@@ -43,3 +46,12 @@ services:
       retries: 3
 volumes:
   database:
+
+networks:
+  map_egress:
+    enable_ipv6: true
+    driver_opts:
+      com.docker.network.bridge.name: bikenavi-v6
+    ipam:
+      config:
+        - subnet: fd53:ba7e:91c4:1::/64

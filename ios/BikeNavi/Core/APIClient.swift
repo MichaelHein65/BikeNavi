@@ -14,7 +14,7 @@ struct APIClient {
     var baseURL: URL
     var token: String
 
-    func request<Response: Decodable>(_ path: String, method: String = "GET", body: Data? = nil) async throws -> Response {
+    func request<Response: Decodable>(_ path: String, method: String = "GET", body: Data? = nil, timeout: TimeInterval = 90) async throws -> Response {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw APIError(status: 0, message: "Die Serveradresse ist ungültig.")
         }
@@ -26,7 +26,7 @@ struct APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body
-        request.timeoutInterval = 90
+        request.timeoutInterval = timeout
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -38,9 +38,9 @@ struct APIClient {
         return try JSONDecoder().decode(Response.self, from: data)
     }
 
-    func route(_ document: TourDocument) async throws -> CalculatedRoute {
+    func route(_ document: TourDocument, timeout: TimeInterval = 90) async throws -> CalculatedRoute {
         try await request("/v1/route", method: "POST", body: JSONEncoder().encode(
-            RouteRequest(waypoints: document.waypoints, profile: document.profile)))
+            RouteRequest(waypoints: document.waypoints, profile: document.profile)), timeout: timeout)
     }
 
     func search(_ text: String, near coordinate: Coordinate?) async throws -> [Waypoint] {

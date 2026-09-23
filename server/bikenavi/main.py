@@ -1,12 +1,15 @@
 import os
 import secrets
+from uuid import UUID
 from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 
-from .models import Mutation, Route, RouteRequest, Waypoint
+from . import __version__
+from .models import BikeSampleBatch, Mutation, Route, RouteRequest, Waypoint
 from .providers import ORS
+from .offline import OfflineTiles
 from .storage import Storage
 
 
@@ -25,10 +28,11 @@ def create_app(database_url: str | None = None, token: str | None = None,
         app.state.storage = Storage(db_url)
         async with httpx.AsyncClient(timeout=35, transport=transport) as client:
             app.state.ors = ORS(key, client, context_url)
+            app.state.offline = OfflineTiles(client, app.state.storage, context_url)
             yield
         app.state.storage.engine.dispose()
 
-    app = FastAPI(title="BikeNavi", version="0.1.0", lifespan=lifespan,
+    app = FastAPI(title="BikeNavi", version=__version__, lifespan=lifespan,
                   docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.middleware("http")
@@ -52,11 +56,11 @@ def create_app(database_url: str | None = None, token: str | None = None,
 
     @app.get("/health")
     def health():
-        return {"status": "ok", "version": "0.1.0"}
+        return {"status": "ok", "version": __version__}
 
     @app.get("/v1/status", dependencies=[Depends(authenticate)])
     def status():
-        return {"routingAvailable": bool(key), "version": "0.1.0"}
+        return {"routingAvailable": bool(key), "version": __version__}
 
     @app.get("/v1/changes", dependencies=[Depends(authenticate)])
     def changes(after: int = Query(default=0, ge=0)):
@@ -66,9 +70,23 @@ def create_app(database_url: str | None = None, token: str | None = None,
     def mutate(mutation: Mutation):
         return app.state.storage.apply(mutation)
 
+    @app.post("/v1/bike-samples", dependencies=[Depends(authenticate)])
+    def bike_samples(body: BikeSampleBatch):
+        return app.state.storage.append_bike_samples(body)
+
+    @app.get("/v1/rides/{ride_id}/bike-samples", dependencies=[Depends(authenticate)])
+    def read_bike_samples(ride_id: UUID, after: int = Query(default=0, ge=0)):
+        return app.state.storage.bike_samples(str(ride_id), after)
+
     @app.post("/v1/route", response_model=Route, dependencies=[Depends(authenticate)])
     async def route(body: RouteRequest):
         return await app.state.ors.route(body)
+
+    @app.get("/v1/offline-tiles/{x}/{y}", dependencies=[Depends(authenticate)])
+    async def offline_tile(x: int, y: int, refresh: bool = False):
+        if not 0 <= x < 7200 or not 0 <= y < 3600:
+            raise HTTPException(422, "Ungültiger Kartenbereich.")
+        return await app.state.offline.tile(x, y, refresh)
 
     @app.get("/v1/search", response_model=list[Waypoint], dependencies=[Depends(authenticate)])
     async def search(q: str = Query(min_length=3, max_length=200),
