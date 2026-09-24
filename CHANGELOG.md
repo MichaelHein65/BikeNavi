@@ -2,6 +2,18 @@
 
 Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release. Versionsnummern folgen `MAJOR.MINOR.PATCH`; vor 1.0 kennzeichnet eine neue Minor-Version einen größeren Entwicklungsschritt. Die iOS-Buildnummer steigt unabhängig davon. Details zum Ablauf: [Versionierung](docs/VERSIONIERUNG.md).
 
+## Unveröffentlicht
+
+### Routing über freigegebene Schranken
+
+- Fehler an der Brücke Tisno/Murter behoben: Die OSM-Schranken an beiden Enden waren trotz `access=yes` gesperrt worden. Bewegliche Schranken mit ausdrücklicher Fahrrad-, Fahrzeug- oder allgemeiner Zugangsfreigabe werden nun nach der bestehenden Zugangshierarchie berücksichtigt. Verbote, verschlossene Schranken und nicht unterstützte bedingte Beschränkungen bleiben wirksam; keine geografische Ausnahme und keine Lockerung der Belagsgrenzen.
+- Kacheln erhalten die zusätzliche Compilerrevision 2. Neuer Server-Cacheschlüssel verhindert die Wiederverwendung alter Ausschlüsse. Die App erneuert alte Gebietsdaten bei der nächsten Vorbereitung/Planung mit API-Client; gespeicherte Offline-Pakete bleiben lesbar. Für die Korrektur im Betrieb müssen Pi und App aktualisiert werden.
+- Reproduzierbare öffentliche OSM-Beispieldaten der Brücke, beider Zufahrten und Schranken hinzugefügt (ODbL, Abruf 24.09.2026). Regression prüft beide Richtungen und alle drei Belagsprofile sowie Zugangshierarchie, Cachemigration und Altbestände.
+- Prüfung am 24.09.2026: 90 Swift-Tests und 45 Backend-Tests erfolgreich; zwei bestehende Deprecation-Warnungen der Backend-Testabhängigkeiten. iOS-Debug-Simulator-Build erfolgreich. Keine sichtbare UI-Änderung; Architektur und Bedienungsdokumentation aktualisiert.
+- Installation und Betrieb: Am 24.09.2026 signierter iPhone-Debug-Build erfolgreich, auf Michaels iPhone 15 Pro installiert und gestartet; Pi aktualisiert. Live-Prüfung von HTTPS, Zugangsschutz, Beispielrouting, Kreuzungsdaten und Speicherung/Synchronisation erfolgreich; technischen Testeintrag wieder entfernt. Ausgelieferte Tisno-Kachel mit Compilerrevision 2, beiden freigegebenen Schranken und asphaltierter Verbindung in beiden Richtungen direkt am Pi geprüft. Kein neuer Release.
+- Rückmeldung am 24.09.2026: Michael bestätigt nach Installation und Pi-Update, dass die Routenplanung an der Tisno-Brücke funktioniert.
+- Grenzen: Keine dokumentierte Testfahrt über die Brücke, keine Auswertung des aktuellen Brückenzustands oder von Öffnungszeiten; Wartezeiten bleiben möglich.
+
 ## 0.2.0 — 23. September 2026
 
 Entwicklungsfassung, iOS-Build 2. Erster zusammenhängend dokumentierter und getaggter Release. Enthält sämtliche bis zu diesem Release noch unversionierten Erweiterungen seit Commit `eda039f`.

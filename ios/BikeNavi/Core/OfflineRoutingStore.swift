@@ -53,7 +53,7 @@ actor OfflineRoutingStore {
             }
             let graph: OfflineGraph
             let entries: Data
-            if let prepared, Set(ids).isSubset(of: prepared.graph.tiles) {
+            if let prepared, (api == nil || prepared.graph.hasCurrentAccessRules), Set(ids).isSubset(of: prepared.graph.tiles) {
                 graph = prepared.graph
                 entries = try JSONEncoder().encode(prepared.entries)
                 await progress(ids.count, ids.count)
@@ -97,7 +97,8 @@ actor OfflineRoutingStore {
                          ids: [OfflineTileID], progress: @Sendable (Int, Int) async -> Void) async throws -> OfflineGraph {
         if refresh { prepared = nil }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        if !refresh, let complete = try? load(route: route), Set(ids).isSubset(of: complete.tiles) {
+        if !refresh, let complete = try? load(route: route),
+           (api == nil || complete.hasCurrentAccessRules), Set(ids).isSubset(of: complete.tiles) {
             await progress(ids.count, ids.count)
             return complete
         }
@@ -108,7 +109,7 @@ actor OfflineRoutingStore {
             var entry = latest(id)
             let cached = try? read(entry)
             let tile: OfflineGraphTile
-            if let cached, !refresh { tile = cached }
+            if let cached, !refresh, api == nil || cached.hasCurrentAccessRules { tile = cached }
             else {
                 guard let api else { throw LocalRoutingError.noData }
                 var downloaded: OfflineGraphTile?

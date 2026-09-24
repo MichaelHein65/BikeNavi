@@ -10,6 +10,12 @@ Datum: 23. September 2026. App und Live-Aktivität: **0.2.0 (2)**. Backend: **0.
 
 `VERSION` ist die Vorgabe für das Xcode-Generierungsskript. `CURRENT_PROJECT_VERSION` im Skript ist die fortlaufende iOS-Buildnummer. Die Einstellungen lesen Version und Buildnummer aus dem tatsächlich gebauten App-Bundle. Der Server führt seine Paketversion in `server/pyproject.toml` und seine API-Version in `server/bikenavi/__init__.py`; beide werden bei einem Release gemeinsam angehoben.
 
+## Entwicklungsstand nach 0.2.0
+
+Am 24. September 2026 wurde die Korrektur für freigegebene Schranken an der Tisno-Brücke als Debug-App auf Michaels iPhone 15 Pro installiert und der Pi aktualisiert. Michael hat die funktionierende Routenplanung anschließend bestätigt. 90 Swift-Tests, 45 Backend-Tests, Simulator- und signierter Gerätebuild sowie die Live-Prüfungen am Pi waren erfolgreich. Details stehen unter „Unveröffentlicht“ im [Änderungsprotokoll](../CHANGELOG.md).
+
+App-/Backend-Version bleiben 0.2.0, iOS-Buildnummer 2. Diese installierte Entwicklungsfassung enthält zusätzliche Änderungen gegenüber dem unveränderten Release-Tag `v0.2.0`. Die Kachel-Compilerrevision 2 ist davon unabhängig. Es wurde kein neuer Git-Tag oder GitHub-Release erstellt.
+
 ## Ablauf für weitere Releases
 
 1. Alle vorgesehenen Änderungen prüfen und in `CHANGELOG.md` mit Datum, Verhalten, Grenzen und Tests dokumentieren.

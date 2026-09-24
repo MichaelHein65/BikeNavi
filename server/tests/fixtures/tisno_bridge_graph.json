@@ -1,0 +1,205 @@
+{
+  "excludedWays": [],
+  "blockedNodes": [],
+  "version": 1,
+  "compilerRevision": 2,
+  "x": 3912,
+  "y": 2675,
+  "generatedAt": 1,
+  "nodes": [
+    {
+      "id": 272268068,
+      "coordinate": {
+        "latitude": 43.7989022,
+        "longitude": 15.6413587
+      }
+    },
+    {
+      "id": 275001044,
+      "coordinate": {
+        "latitude": 43.7989309,
+        "longitude": 15.641403
+      }
+    },
+    {
+      "id": 275001045,
+      "coordinate": {
+        "latitude": 43.7989762,
+        "longitude": 15.6414515
+      }
+    },
+    {
+      "id": 275001047,
+      "coordinate": {
+        "latitude": 43.7993627,
+        "longitude": 15.6417188
+      }
+    },
+    {
+      "id": 275001049,
+      "coordinate": {
+        "latitude": 43.7994102,
+        "longitude": 15.6417668
+      }
+    },
+    {
+      "id": 275001050,
+      "coordinate": {
+        "latitude": 43.7994252,
+        "longitude": 15.6418091
+      }
+    },
+    {
+      "id": 308074346,
+      "coordinate": {
+        "latitude": 43.7992822,
+        "longitude": 15.6416622
+      }
+    },
+    {
+      "id": 4440914221,
+      "coordinate": {
+        "latitude": 43.7991481,
+        "longitude": 15.6415699
+      }
+    },
+    {
+      "id": 9881900090,
+      "coordinate": {
+        "latitude": 43.7993193,
+        "longitude": 15.6416883
+      }
+    }
+  ],
+  "edges": [
+    {
+      "way": 25219856,
+      "surface": 3,
+      "name": "",
+      "from": 308074346,
+      "to": 4440914221,
+      "incline": 0.0
+    },
+    {
+      "way": 25219856,
+      "surface": 3,
+      "name": "",
+      "from": 4440914221,
+      "to": 308074346,
+      "incline": -0.0
+    },
+    {
+      "way": 25219856,
+      "surface": 3,
+      "name": "",
+      "from": 4440914221,
+      "to": 275001045,
+      "incline": 0.0
+    },
+    {
+      "way": 25219856,
+      "surface": 3,
+      "name": "",
+      "from": 275001045,
+      "to": 4440914221,
+      "incline": -0.0
+    },
+    {
+      "way": 146627895,
+      "surface": 3,
+      "name": "",
+      "from": 275001045,
+      "to": 275001044,
+      "incline": 0.0
+    },
+    {
+      "way": 146627895,
+      "surface": 3,
+      "name": "",
+      "from": 275001044,
+      "to": 275001045,
+      "incline": -0.0
+    },
+    {
+      "way": 146627895,
+      "surface": 3,
+      "name": "",
+      "from": 275001044,
+      "to": 272268068,
+      "incline": 0.0
+    },
+    {
+      "way": 146627895,
+      "surface": 3,
+      "name": "",
+      "from": 272268068,
+      "to": 275001044,
+      "incline": -0.0
+    },
+    {
+      "way": 335778167,
+      "surface": 3,
+      "name": "Istočna gomilica",
+      "from": 275001050,
+      "to": 275001049,
+      "incline": 0.0
+    },
+    {
+      "way": 335778167,
+      "surface": 3,
+      "name": "Istočna gomilica",
+      "from": 275001049,
+      "to": 275001050,
+      "incline": -0.0
+    },
+    {
+      "way": 335778167,
+      "surface": 3,
+      "name": "Istočna gomilica",
+      "from": 275001049,
+      "to": 275001047,
+      "incline": 0.0
+    },
+    {
+      "way": 335778167,
+      "surface": 3,
+      "name": "Istočna gomilica",
+      "from": 275001047,
+      "to": 275001049,
+      "incline": -0.0
+    },
+    {
+      "way": 335778167,
+      "surface": 3,
+      "name": "Istočna gomilica",
+      "from": 275001047,
+      "to": 9881900090,
+      "incline": 0.0
+    },
+    {
+      "way": 335778167,
+      "surface": 3,
+      "name": "Istočna gomilica",
+      "from": 9881900090,
+      "to": 275001047,
+      "incline": -0.0
+    },
+    {
+      "way": 335778167,
+      "surface": 3,
+      "name": "Istočna gomilica",
+      "from": 9881900090,
+      "to": 308074346,
+      "incline": 0.0
+    },
+    {
+      "way": 335778167,
+      "surface": 3,
+      "name": "Istočna gomilica",
+      "from": 308074346,
+      "to": 9881900090,
+      "incline": -0.0
+    }
+  ],
+  "restrictions": []
+}

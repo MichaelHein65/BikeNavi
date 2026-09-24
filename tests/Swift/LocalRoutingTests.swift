@@ -2,6 +2,34 @@ import XCTest
 @testable import BikeNaviCore
 
 final class LocalRoutingTests: XCTestCase {
+    func testTisnoBridgeRoutesBothWaysWithEverySurfacePreference() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let data = try Data(contentsOf: root.appendingPathComponent("server/tests/fixtures/tisno_bridge_graph.json"))
+        let tile = try JSONDecoder().decode(OfflineGraphTile.self, from: data)
+        let graph = try OfflineGraph(tiles: [tile])
+        XCTAssertTrue(graph.hasCurrentAccessRules)
+        for reverse in [false, true] {
+            for surface in [SurfacePreference.any, .preferPaved, .pavedOnly] {
+                var document = TourDocument()
+                let ids: [Int64] = reverse ? [275001050, 272268068] : [272268068, 275001050]
+                document.waypoints = try ids.map { Waypoint(name: "Öffentliches OSM-Testziel", coordinate: try XCTUnwrap(graph.nodes[$0])) }
+                document.profile.surface = surface
+                let route = try LocalRouter.plan(graph: graph, document: document)
+                XCTAssertEqual(route.distance, 69.5, accuracy: 1)
+                XCTAssertEqual(LocalRouteMetrics.unpaved(route), 0, accuracy: 0.1)
+                for barrier: Int64 in [275001044, 275001047] {
+                    let point = try XCTUnwrap(graph.nodes[barrier])
+                    XCTAssertTrue(route.coordinates.contains { $0.distance(to: point) < 1 })
+                }
+            }
+        }
+        var legacy = tile
+        legacy.compilerRevision = nil
+        XCTAssertFalse(try OfflineGraph(tiles: [legacy]).hasCurrentAccessRules)
+        XCTAssertFalse(try OfflineGraph(tiles: [tile, legacy]).hasCurrentAccessRules)
+    }
+
     func point(_ x: Double, _ y: Double = 0) -> Coordinate {
         Coordinate(latitude: 49 + y/111_320, longitude: 8 + x/(111_320*cos(49 * .pi/180)))
     }
@@ -453,5 +481,50 @@ final class LocalRoutingTests: XCTestCase {
         var b = a; b.excludedWays = [300]
         let graph = try OfflineGraph(tiles:[a,b])
         XCTAssertFalse(graph.edges.contains(where:{$0.way == 300}))
+    }
+}
+
+private final class AccessRevisionTileProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "access-revision.test" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        let parts = request.url!.pathComponents
+        let x = Int(parts[parts.count - 2])!, y = Int(parts.last!)!
+        let body = """
+        {"version":1,"compilerRevision":2,"x":\(x),"y":\(y),"generatedAt":1,
+         "nodes":[],"edges":[],"restrictions":[],"excludedWays":[],"blockedNodes":[]}
+        """
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 200,
+            httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
+
+extension LocalRoutingTests {
+    func testOnlinePreparationMigratesLegacyManifestAndTileReferences() async throws {
+        URLProtocol.registerClass(AccessRevisionTileProtocol.self)
+        defer { URLProtocol.unregisterClass(AccessRevisionTileProtocol.self) }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let (base, route, _) = try fixture()
+        for id in try OfflineTileID.corridor(route.coordinates) {
+            var tile = base; tile.x = id.x; tile.y = id.y
+            try JSONEncoder().encode(tile).write(to: directory.appendingPathComponent(id.key + ".json"))
+        }
+        let store = OfflineRoutingStore(directory: directory)
+        let old = try await store.prepare(route: route, api: nil) { _, _ in }
+        XCTAssertFalse(old.hasCurrentAccessRules)
+        let api = APIClient(baseURL: URL(string: "https://access-revision.test")!, token: "test")
+        let updated = try await store.prepare(route: route, api: api) { _, _ in }
+        XCTAssertTrue(updated.hasCurrentAccessRules)
+        let reopened = OfflineRoutingStore(directory: directory)
+        let loaded = try await reopened.load(route: route)
+        XCTAssertTrue(loaded.hasCurrentAccessRules)
+        var another = route; another.id = UUID()
+        let reused = try await reopened.prepare(route: another, api: nil) { _, _ in }
+        XCTAssertTrue(reused.hasCurrentAccessRules)
     }
 }

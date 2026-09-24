@@ -16,6 +16,7 @@ DEFAULT_OVERPASS = "https://overpass-api.de/api/interpreter"
 FALLBACK_OVERPASS = "https://overpass.private.coffee/api/interpreter"
 
 VERSION = 1
+COMPILER_REVISION = 2
 TILE_DEGREES = 0.05
 ALLOWED = {"yes", "designated", "official", "permissive"}
 ROAD_DEFAULTS = {"cycleway", "residential", "living_street", "unclassified", "service",
@@ -26,13 +27,13 @@ SURFACE = {"paved": 1, "asphalt": 3, "concrete": 4, "concrete:plates": 4, "concr
            "dirt": 11, "earth": 11, "ground": 12, "sand": 15, "grass": 17, "unpaved": 2}
 
 
-def access(tags, direction=None):
+def access(tags, direction=None, default=True):
     for key in ("bicycle", "vehicle", "access"):
         directional = tags.get(f"{key}:{direction}") if direction else None
         value = directional if directional is not None else tags.get(key)
         if value is not None:
             return value in ALLOWED
-    return True
+    return default
 
 
 def conditional(tags):
@@ -47,8 +48,12 @@ def compile_tile(elements, x, y, generated_at=None):
     restrictions = []
     for id, node in nodes.items():
         tags = node.get("tags", {})
+        # Operable gates may explicitly permit general/vehicle access without
+        # repeating bicycle=yes (e.g. both gates at the Tisno bridge).
         if (not access(tags) or conditional(tags) or tags.get("locked") == "yes"
                 or (tags.get("barrier") not in (None, "no", "bollard", "entrance")
+                    and not (tags.get("barrier") in {"gate", "lift_gate", "swing_gate"}
+                             and access(tags, default=False))
                     and tags.get("bicycle") not in ALLOWED)):
             blocked_nodes.add(id)
     for relation in elements:
@@ -105,7 +110,7 @@ def compile_tile(elements, x, y, generated_at=None):
     if len(used) > 150_000 or len(edges) > 350_000:
         raise HTTPException(422, "Dieser Kartenbereich ist für die lokale Rückführung zu groß.")
     excluded = blocked_ways | (set(ways) - {e["way"] for e in edges})
-    return {"excludedWays": sorted(excluded), "blockedNodes": sorted(blocked_nodes), "version": VERSION, "x": x, "y": y, "generatedAt": generated_at or time.time(),
+    return {"excludedWays": sorted(excluded), "blockedNodes": sorted(blocked_nodes), "version": VERSION, "compilerRevision": COMPILER_REVISION, "x": x, "y": y, "generatedAt": generated_at or time.time(),
             "nodes": [{"id": id, "coordinate": {"latitude": nodes[id]["lat"], "longitude": nodes[id]["lon"]}} for id in sorted(used)],
             "edges": edges, "restrictions": restrictions}
 
@@ -116,7 +121,7 @@ class OfflineTiles:
         self.lock = asyncio.Lock()  # Respect public Overpass resources; one preparation at a time.
 
     async def tile(self, x, y, refresh=False):
-        key = f"{VERSION}/{x}/{y}"
+        key = f"{VERSION}/{COMPILER_REVISION}/{x}/{y}"
         async with self.lock:
             cached = self.storage.offline_tile(key)
             if cached and not refresh and time.time() - cached["generatedAt"] < 30 * 86400:

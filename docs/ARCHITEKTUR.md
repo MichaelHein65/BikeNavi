@@ -66,3 +66,7 @@ swift test --scratch-path build/SwiftTests
 ```
 
 Für den Pi stehen `scripts/deploy_pi.py`, `scripts/check_pi.py` und `scripts/backup_pi.py` bereit. Die genaue Einrichtung, Umgebungsvariablen und Sicherheitsgrenzen stehen in der [README](../README.md).
+
+### Revision der Zugangsauswertung
+
+Offline-Kacheln behalten Schema-Version 1 und enthalten zusätzlich `compilerRevision: 2`. Der Pi trennt Cacheeinträge nach Schema, Compilerrevision und Gebiet (`1/2/x/y`), damit bis zu 30 Tage alte Ergebnisse der fehlerhaften Schrankenauswertung nicht weiter ausgeliefert werden. Ältere Clients können das zusätzliche Feld ignorieren. Neue Clients lesen fehlende Revisionen als Altbestand und erneuern sie beim Vorbereiten mit API-Client; diese Prüfung umfasst Routenmanifeste, Gebietreferenzen und den vorbereiteten Graphen. Ohne API-Client sowie beim direkten Laden gespeicherter Touren bleiben Altbestände lesbar. Unveränderliche Dateien und atomare Manifeste erhalten bestehende Offline-Pakete bei fehlgeschlagenen Downloads. App und Pi müssen für die automatische Migration aktualisiert werden.

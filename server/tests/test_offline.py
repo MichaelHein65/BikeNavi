@@ -68,7 +68,7 @@ def test_tiles_auth_cache_and_partial_upstream_failure(tmp_path):
         overpass_url='https://osm.test/api')
     with TestClient(failed) as client:
         assert client.get('/v1/offline-tiles/3760/2780',headers=AUTH).status_code == 503
-        assert failed.state.storage.offline_tile('1/3760/2780') is None
+        assert failed.state.storage.offline_tile('1/2/3760/2780') is None
 
 
 def test_public_provider_failure_uses_mirror_and_caches_complete_tile(tmp_path):
@@ -107,4 +107,57 @@ def test_failed_mirrors_preserve_existing_tile_on_refresh(tmp_path):
         failing = True
         assert client.get('/v1/offline-tiles/3781/2798?refresh=true', headers=AUTH).status_code == 503
         assert calls == [DEFAULT_OVERPASS, DEFAULT_OVERPASS, FALLBACK_OVERPASS]
-        assert app.state.storage.offline_tile('1/3781/2798') == original
+        assert app.state.storage.offline_tile('1/2/3781/2798') == original
+
+
+def test_operable_barriers_use_most_specific_explicit_access():
+    for barrier in ('gate', 'lift_gate', 'swing_gate'):
+        for permit in ({'access': 'yes'}, {'vehicle': 'yes'}, {'bicycle': 'yes', 'access': 'private'}):
+            assert len(compile_tile(elements(node_tags={'barrier': barrier, **permit}), 1, 1)['edges']) == 4
+        for deny in ({}, {'access': 'private'}, {'access': 'yes', 'vehicle': 'no'},
+                     {'access': 'yes', 'bicycle': 'no'}, {'access': 'yes', 'bicycle': 'dismount'},
+                     {'access': 'yes', 'locked': 'yes'},
+                     {'access': 'yes', 'access:conditional': 'no @ (Mo-Fr)'}):
+            assert compile_tile(elements(node_tags={'barrier': barrier, **deny}), 1, 1)['edges'] == []
+    # General permission does not make a physical wall passable.
+    assert compile_tile(elements(node_tags={'barrier': 'wall', 'access': 'yes'}), 1, 1)['edges'] == []
+
+
+def test_tisno_bridge_has_continuous_access_in_both_directions():
+    import json
+    from pathlib import Path
+    source = json.loads((Path(__file__).parent / 'fixtures/tisno_bridge_osm.json').read_text())
+    tile = compile_tile(source['elements'], 3912, 2675)
+    expected = json.loads((Path(__file__).parent / 'fixtures/tisno_bridge_graph.json').read_text())
+    assert compile_tile(source['elements'], 3912, 2675, generated_at=1) == expected
+    assert tile['blockedNodes'] == []
+    assert tile['excludedWays'] == []
+    assert tile['compilerRevision'] == 2
+    for start, end in [(272268068, 275001050), (275001050, 272268068)]:
+        visited, pending = set(), [start]
+        while pending:
+            node = pending.pop()
+            if node in visited:
+                continue
+            visited.add(node)
+            pending.extend(e['to'] for e in tile['edges'] if e['from'] == node and e['surface'] == 3)
+        assert end in visited
+
+
+def test_old_compiler_cache_is_not_reused(tmp_path):
+    calls = []
+    def upstream(request):
+        calls.append(request)
+        return httpx.Response(200, json={'elements': elements(node_tags={'barrier': 'lift_gate', 'access': 'yes'})})
+    app = create_app(f'sqlite:///{tmp_path / "migration.sqlite"}', token=TOKEN,
+                     transport=httpx.MockTransport(upstream), overpass_url='https://osm.test/api')
+    with TestClient(app) as client:
+        old = compile_tile(elements(node_tags={'barrier': 'lift_gate'}), 3760, 2780)
+        old.pop('compilerRevision')
+        app.state.storage.save_offline_tile('1/3760/2780', old)
+        response = client.get('/v1/offline-tiles/3760/2780', headers=AUTH)
+        assert response.status_code == 200
+        assert response.json()['compilerRevision'] == 2
+        assert len(response.json()['edges']) == 4
+        assert len(calls) == 1
+        assert app.state.storage.offline_tile('1/3760/2780') == old

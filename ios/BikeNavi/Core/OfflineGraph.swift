@@ -64,6 +64,8 @@ struct OfflineTurnRule: Codable, Hashable {
 }
 struct OfflineGraphTile: Codable {
     var version: Int; var x: Int; var y: Int; var generatedAt: Double
+    var compilerRevision: Int? = nil
+    var hasCurrentAccessRules: Bool { compilerRevision == 2 }
     var excludedWays: [Int64] = []; var blockedNodes: [Int64] = []
     var nodes: [OfflineGraphNode]; var edges: [OfflineGraphEdge]; var restrictions: [OfflineTurnRule]
     func validate(for id: OfflineTileID) throws {
@@ -97,6 +99,7 @@ enum LocalRoutingError: LocalizedError {
 
 /// Immutable after construction, safe to share with a detached routing task.
 final class OfflineGraph: @unchecked Sendable {
+    let hasCurrentAccessRules: Bool
     let nodes: [Int64: Coordinate]
     let edges: [OfflineGraphEdge]
     let outgoing: [Int64: [Int]]
@@ -125,6 +128,7 @@ final class OfflineGraph: @unchecked Sendable {
             rules.formUnion(tile.restrictions)
             guard nodes.count <= 350_000 else { throw LocalRoutingError.tooLarge }
         }
+        self.hasCurrentAccessRules = input.allSatisfy(\.hasCurrentAccessRules)
         self.nodes = nodes
         self.edges = byWay.filter { !excluded.contains($0.key) }.values.flatMap { $0 }.filter { !blocked.contains($0.from) && !blocked.contains($0.to) }.sorted { ($0.from, $0.to, $0.way) < ($1.from, $1.to, $1.way) }
         guard self.edges.count <= 800_000 else { throw LocalRoutingError.tooLarge }
