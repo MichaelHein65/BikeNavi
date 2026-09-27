@@ -206,6 +206,38 @@ class BikeGraph private constructor(
         val (destination, endGap) = nearest(goal)
         if (startGap > 500 || endGap > 500)
             throw RoutingException("Start oder Ziel liegt mehr als 500 m vom Wegenetz entfernt.")
+        if (origin == destination) {
+            // A short trip can have the same nearest vertex at both ends.
+            // Resolve it along a directed OSM edge, preserving its one-way rule.
+            val direct = edges.asSequence().flatMap { (from, outgoing) ->
+                outgoing.asSequence().mapNotNull { edge ->
+                    val a = nodes[from] ?: return@mapNotNull null
+                    val b = nodes[edge.to] ?: return@mapNotNull null
+                    val first = project(start, a, b)
+                    val last = project(goal, a, b)
+                    if (first.second > 250 || last.second > 250 || first.first >= last.first - 1e-6)
+                        return@mapNotNull null
+                    if (profile.surface == "pavedOnly" && edge.surface !in paved &&
+                        edge.length * (last.first - first.first) > maxUnpavedMeters) return@mapNotNull null
+                    val routePoints = ArrayList<Point>()
+                    val sections = ArrayList<String>()
+                    fun append(p: Point, surface: String) {
+                        if (routePoints.lastOrNull()?.distance(p)?.let { it < 0.05 } == true) return
+                        if (routePoints.isNotEmpty()) sections.add(surface)
+                        routePoints.add(p)
+                    }
+                    append(start, "unknown")
+                    append(interpolate(a, b, first.first), "unknown")
+                    append(interpolate(a, b, last.first), edge.surface)
+                    append(goal, "unknown")
+                    if (routePoints.size < 2) null else Route(routePoints,
+                        routePoints.zipWithNext().sumOf { (p, q) -> p.distance(q) },
+                        sections, listOf(Maneuver(routePoints.lastIndex, "Ziel erreicht")))
+                }
+            }.minByOrNull { it.meters }
+            return direct ?: throw RoutingException(
+                "Start und Ziel fallen auf denselben Netzknoten. Wähle präzisere Punkte.")
+        }
         data class State(val node: Long, val previous: Long, val incoming: Long, val unpavedBucket: Int)
         data class Candidate(val state: State, val score: Double)
         val startState = State(origin, -1, -1, 0)
@@ -274,6 +306,16 @@ class BikeGraph private constructor(
         val x = cos(Math.toRadians(a.lat)) * sin(Math.toRadians(b.lat)) -
             sin(Math.toRadians(a.lat)) * cos(Math.toRadians(b.lat)) * cos(delta)
         return (Math.toDegrees(atan2(y, x)) + 360.0) % 360.0
+    }
+    private fun interpolate(a: Point, b: Point, t: Double) =
+        Point(a.lat + (b.lat - a.lat) * t, a.lon + (b.lon - a.lon) * t)
+    private fun project(p: Point, a: Point, b: Point): Pair<Double, Double> {
+        val cosLat = cos(Math.toRadians(p.lat))
+        val dx = (b.lon - a.lon) * cosLat
+        val dy = b.lat - a.lat
+        val t = (((p.lon - a.lon) * cosLat * dx + (p.lat - a.lat) * dy) /
+            max(1e-20, dx * dx + dy * dy)).coerceIn(0.0, 1.0)
+        return t to p.distance(interpolate(a, b, t))
     }
 }
 

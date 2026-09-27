@@ -12,6 +12,12 @@ Datum: 23. September 2026. App und Live-Aktivität: **0.2.0 (2)**. Backend: **0.
 
 ## Entwicklungsstand nach 0.2.0
 
+Die Pi-freie Android-Fassung im Branch `android/standalone` besitzt eine
+**eigene** Android-Versionsfolge. Ihre aktuelle Debug-Fassung lautet
+`0.2.0-beta.1` (`versionCode 2`), eingestellt in `android/app/build.gradle.kts`.
+Sie ist kein GitHub-Release und ändert weder den iOS-Release-Tag `v0.2.0`
+noch die Pi-Version. Das APK wird im Android-Workflow als Artefakt gebaut.
+
 Am 24. September 2026 wurde die Korrektur für freigegebene Schranken an der Tisno-Brücke als Debug-App auf Michaels iPhone 15 Pro installiert und der Pi aktualisiert. Michael hat die funktionierende Routenplanung anschließend bestätigt. 90 Swift-Tests, 45 Backend-Tests, Simulator- und signierter Gerätebuild sowie die Live-Prüfungen am Pi waren erfolgreich. Details stehen unter „Unveröffentlicht“ im [Änderungsprotokoll](../CHANGELOG.md).
 
 App-/Backend-Version bleiben 0.2.0, iOS-Buildnummer 2. Diese installierte Entwicklungsfassung enthält zusätzliche Änderungen gegenüber dem unveränderten Release-Tag `v0.2.0`. Die Kachel-Compilerrevision 2 ist davon unabhängig. Es wurde kein neuer Git-Tag oder GitHub-Release erstellt.

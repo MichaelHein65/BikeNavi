@@ -71,4 +71,19 @@ class RoutingTest {
         assertTrue(g.route(from, to).meters > 0)
         assertTrue(g.route(to, from).meters > 0)
     }
+
+    @Test fun shortTripOnSameOneWayEdgeIsNotZeroLength() {
+        val g = BikeGraph.compile(JSONObject("""{"elements":[
+          {"type":"node","id":1,"lat":49.0,"lon":8.0},
+          {"type":"node","id":2,"lat":49.0,"lon":8.001},
+          {"type":"way","id":10,"nodes":[1,2],"tags":{"highway":"cycleway","oneway":"yes","surface":"asphalt"}}
+        ]}"""))
+        val from = Point(49.0, 8.0001)
+        val to = Point(49.0, 8.0002)
+        val route = g.route(from, to)
+        assertTrue(route.meters > 5)
+        assertEquals(from, route.points.first())
+        assertEquals(to, route.points.last())
+        try { g.route(to, from); fail("Against one-way") } catch (_: RoutingException) { }
+    }
 }
