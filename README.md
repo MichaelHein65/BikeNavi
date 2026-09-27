@@ -2,6 +2,12 @@
 
 # BikeNavi
 
+**Android ohne Pi:** Die eigenständige Android-Grundfassung liegt unter
+[`android/`](android/README.md). Sie berechnet Routen direkt auf dem Telefon
+und holt neue OSM-Wegedaten ohne BikeNavi-Backend von Overpass. Funktionsumfang
+und Grenzen sind in der Android-Anleitung beschrieben. Die nachfolgende
+Einrichtung betrifft weiterhin die iPhone-App und das Pi-Backend.
+
 **Version 0.2.0 · iOS-Build 2 · Entwicklungsfassung**
 
 [Änderungen](CHANGELOG.md) · [GitHub-Releases](https://github.com/MichaelHein65/BikeNavi/releases) · [Alle Bildschirme](docs/BILDSCHIRME.md) · [Versionierung](docs/VERSIONIERUNG.md)

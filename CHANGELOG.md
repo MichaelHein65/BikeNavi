@@ -4,6 +4,19 @@ Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release
 
 ## Unveröffentlicht
 
+### Eigenständige Android-Grundfassung
+
+- Separates Android-Projekt mit nativer Karte, direktem Overpass-Abruf,
+  konservativem Fahrradgraphen und lokaler A*-Routenberechnung hinzugefügt.
+  Kein Pi, keine Serveranmeldung und keine Synchronisation für Android.
+- Lokaler Gebietscache, persistierte Route, GPS-Vordergrunddienst,
+  Tourenarchiv und GPX-Export ergänzt. Android-Bedienung, Online-Anforderungen
+  und funktionale Grenzen dokumentiert.
+- Tests für erlaubte/gesperrte Schranken, Einbahnstraße und
+  Abbiegebeschränkung ergänzt. Android-Build und Gerätetest stehen noch aus,
+  da in der Entwicklungsumgebung weder Android SDK noch Gradle installiert
+  sind. Kein Android-Release und keine Änderung an iOS- oder Pi-Deployment.
+
 ### Routing über freigegebene Schranken
 
 - Fehler an der Brücke Tisno/Murter behoben: Die OSM-Schranken an beiden Enden waren trotz `access=yes` gesperrt worden. Bewegliche Schranken mit ausdrücklicher Fahrrad-, Fahrzeug- oder allgemeiner Zugangsfreigabe werden nun nach der bestehenden Zugangshierarchie berücksichtigt. Verbote, verschlossene Schranken und nicht unterstützte bedingte Beschränkungen bleiben wirksam; keine geografische Ausnahme und keine Lockerung der Belagsgrenzen.

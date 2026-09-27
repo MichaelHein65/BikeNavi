@@ -1,5 +1,17 @@
 # Architektur
 
+## Eigenständige Android-Grundfassung
+
+Das separate Projekt `android/` kommuniziert ausschließlich mit öffentlichen
+OSM-Diensten: osmdroid zeigt Kartenkacheln; `Overpass` holt Wege, Knoten und
+Abbiegeregeln. `BikeGraph` berechnet die Route auf dem Telefon. `LocalData`
+speichert den letzten Graphen, die Route und Fahrten im privaten App-Speicher;
+`RideService` hält die GPS-Aufzeichnung mit einer Vordergrundbenachrichtigung
+aktiv. Es gibt keine Verbindung zur Pi-API, keine Tailscale-Abhängigkeit und
+keine geteilte Datenbank. Siehe [Android-Anleitung](../android/README.md).
+
+Die folgende Beschreibung betrifft die iPhone-App und ihren Pi.
+
 BikeNavi besteht aus einer nativen iPhone-App und einem privaten Backend auf einem Raspberry Pi. Das iPhone bleibt während einer Fahrt handlungsfähig: Es hält Planung, Route und Aufzeichnung lokal vor. Das iPhone berechnet Planung und Rückführung selbst. Der Pi liefert Wegedaten, führt die Ortssuche aus und hält das zentrale Tourenarchiv.
 
 ```mermaid
