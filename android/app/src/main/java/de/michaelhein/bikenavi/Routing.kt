@@ -206,6 +206,8 @@ class BikeGraph private constructor(
         val (destination, endGap) = nearest(goal)
         if (startGap > 500 || endGap > 500)
             throw RoutingException("Start oder Ziel liegt mehr als 500 m vom Wegenetz entfernt.")
+        if (profile.surface == "pavedOnly" && startGap + endGap > maxUnpavedMeters)
+            throw RoutingException("Der ungeprüfte Zugang überschreitet das Belagsbudget.")
         if (origin == destination) {
             // A short trip can have the same nearest vertex at both ends.
             // Resolve it along a directed OSM edge, preserving its one-way rule.
@@ -217,8 +219,10 @@ class BikeGraph private constructor(
                     val last = project(goal, a, b)
                     if (first.second > 250 || last.second > 250 || first.first >= last.first - 1e-6)
                         return@mapNotNull null
-                    if (profile.surface == "pavedOnly" && edge.surface !in paved &&
-                        edge.length * (last.first - first.first) > maxUnpavedMeters) return@mapNotNull null
+                    if (profile.surface == "pavedOnly" &&
+                        first.second + last.second +
+                        (if (edge.surface !in paved) edge.length * (last.first - first.first) else 0.0)
+                            > maxUnpavedMeters) return@mapNotNull null
                     val routePoints = ArrayList<Point>()
                     val sections = ArrayList<String>()
                     fun append(p: Point, surface: String) {

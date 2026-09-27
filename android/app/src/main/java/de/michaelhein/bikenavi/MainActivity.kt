@@ -260,7 +260,12 @@ class MainActivity : Activity(), SensorEventListener {
                     navigationRoute = result
                     tracker = RouteTracker()
                     redraw()
-                    status.text = "Route: %.1f km · lokal gespeichert".format(result.meters / 1000)
+                    val startAccess = result.points.firstOrNull()?.distance(a) ?: 0.0
+                    val endAccess = result.points.lastOrNull()?.distance(b) ?: 0.0
+                    status.text = if (max(startAccess, endAccess) > 25)
+                        "Route: %.1f km · Zugang bis %.0f m ungeprüft; vor Ort prüfen"
+                            .format(result.meters / 1000, max(startAccess, endAccess))
+                    else "Route: %.1f km · lokal gespeichert".format(result.meters / 1000)
                     map.zoomToBoundingBox(org.osmdroid.util.BoundingBox(north, east, south, west), true)
                 }
             } catch (e: Exception) {
