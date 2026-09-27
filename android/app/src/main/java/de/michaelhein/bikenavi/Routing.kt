@@ -18,9 +18,22 @@ data class Point(val lat: Double, val lon: Double) {
     }
 }
 
-data class Edge(val to: Long, val way: Long, val length: Double, val surface: String)
+data class Edge(val to: Long, val way: Long, val length: Double, val surface: String, val incline: Double = 0.0)
 data class Turn(val via: Long, val from: Long, val to: Set<Long>, val only: Boolean)
-data class Route(val points: List<Point>, val meters: Double, val surfaces: List<String>)
+data class Maneuver(val index: Int, val instruction: String)
+data class RidingProfile(
+    val bike: String = "touring",
+    val electric: Boolean = true,
+    val surface: String = "any",
+    val gentleHills: Boolean = false
+)
+data class Route(
+    val points: List<Point>,
+    val meters: Double,
+    val surfaces: List<String>,
+    val maneuvers: List<Maneuver> = emptyList(),
+    val waypointIndices: List<Int> = emptyList()
+)
 
 class RoutingException(message: String) : Exception(message)
 
@@ -133,10 +146,12 @@ class BikeGraph private constructor(
                     if (a == b || a in blockedNodes || b in blockedNodes) continue
                     val length = p.distance(q)
                     val surface = t.optString("surface", "unknown")
+                    val incline = t.optString("incline", "0").removeSuffix("%").toDoubleOrNull()
+                        ?.coerceIn(-40.0, 40.0) ?: 0.0
                     if (one != "-1" && access(t, "forward"))
-                        result.getOrPut(a) { ArrayList() }.add(Edge(b, id, length, surface))
+                        result.getOrPut(a) { ArrayList() }.add(Edge(b, id, length, surface, incline))
                     if (one !in setOf("yes", "1", "true") && access(t, "backward"))
-                        result.getOrPut(b) { ArrayList() }.add(Edge(a, id, length, surface))
+                        result.getOrPut(b) { ArrayList() }.add(Edge(a, id, length, surface, -incline))
                 }
             }
             if (nodes.size > 150_000 || result.values.sumOf { it.size } > 350_000)
@@ -145,7 +160,41 @@ class BikeGraph private constructor(
         }
     }
 
-    fun route(start: Point, goal: Point): Route {
+    private val paved = setOf("paved", "asphalt", "concrete", "concrete:plates",
+        "concrete:lanes", "paving_stones", "sett", "cobblestone", "metal", "wood")
+
+    fun routeThrough(points: List<Point>, profile: RidingProfile = RidingProfile()): Route {
+        require(points.size >= 2)
+        var remainingUnpaved = 100
+        val legs = points.zipWithNext().map { (a, b) ->
+            val leg = route(a, b, profile, remainingUnpaved)
+            if (profile.surface == "pavedOnly") {
+                val consumed = leg.points.zipWithNext().mapIndexed { i, (p, q) ->
+                    if (leg.surfaces.getOrNull(i) in paved) 0 else ceil(p.distance(q)).toInt()
+                }.sum()
+                remainingUnpaved = (remainingUnpaved - consumed).coerceAtLeast(0)
+            }
+            leg
+        }
+        val all = ArrayList<Point>()
+        val surfaces = ArrayList<String>()
+        val instructions = ArrayList<Maneuver>()
+        val stops = ArrayList<Int>()
+        legs.forEachIndexed { index, leg ->
+            val offset = if (index == 0) 0 else all.size - 1
+            if (index == 0) all.addAll(leg.points) else all.addAll(leg.points.drop(1))
+            surfaces.addAll(leg.surfaces)
+            instructions.addAll(leg.maneuvers.filter { it.index < leg.points.size - 1 }
+                .map { it.copy(index = it.index + offset) })
+            stops.add(all.lastIndex)
+            if (index < legs.lastIndex) instructions.add(Maneuver(all.lastIndex, "Zwischenziel erreicht"))
+        }
+        instructions.add(Maneuver(all.lastIndex, "Ziel erreicht"))
+        return Route(all, legs.sumOf { it.meters }, surfaces, instructions, stops)
+    }
+
+    fun route(start: Point, goal: Point, profile: RidingProfile = RidingProfile(),
+              maxUnpavedMeters: Int = 100): Route {
         if (edges.isEmpty()) throw RoutingException("Keine befahrbaren Wege im Gebiet.")
         val reachable = edges.keys + edges.values.flatten().map { it.to }
         fun nearest(p: Point): Pair<Long, Double> = reachable.asSequence()
@@ -155,9 +204,9 @@ class BikeGraph private constructor(
         val (destination, endGap) = nearest(goal)
         if (startGap > 500 || endGap > 500)
             throw RoutingException("Start oder Ziel liegt mehr als 500 m vom Wegenetz entfernt.")
-        data class State(val node: Long, val incoming: Long)
+        data class State(val node: Long, val incoming: Long, val unpavedBucket: Int)
         data class Candidate(val state: State, val score: Double)
-        val startState = State(origin, -1)
+        val startState = State(origin, -1, 0)
         val distance = HashMap<State, Double>()
         val previous = HashMap<State, Pair<State, Edge>>()
         val queue = PriorityQueue<Candidate>(compareBy { it.score })
@@ -172,8 +221,16 @@ class BikeGraph private constructor(
             for (edge in edges[current.node].orEmpty()) {
                 val rules = turns.filter { it.via == current.node && it.from == current.incoming }
                 if (rules.any { if (it.only) edge.way !in it.to else edge.way in it.to }) continue
-                val next = State(edge.to, edge.way)
-                val newCost = spent + edge.length
+                val offRoad = edge.surface !in paved
+                val unpavedBucket = if (profile.surface == "pavedOnly")
+                    current.unpavedBucket + if (offRoad) ceil(edge.length / 10.0).toInt() else 0
+                else 0
+                if (unpavedBucket * 10 > maxUnpavedMeters) continue
+                val next = State(edge.to, edge.way, unpavedBucket)
+                val penalty = (if (profile.surface == "preferPaved" && offRoad) 8.0 else 0.0) +
+                    (if (profile.bike == "road" && offRoad) 3.0 else 0.0) +
+                    (if (profile.gentleHills) max(0.0, edge.incline) / 5.0 else 0.0)
+                val newCost = spent + edge.length * (1.0 + penalty)
                 if (newCost >= (distance[next] ?: Double.POSITIVE_INFINITY)) continue
                 distance[next] = newCost
                 previous[next] = current to edge
@@ -192,7 +249,24 @@ class BikeGraph private constructor(
         }
         path.reverse()
         surfaces.reverse()
-        return Route(path, distance[reached] ?: 0.0, surfaces)
+        val maneuvers = ArrayList<Maneuver>()
+        for (i in 1 until path.size - 1) {
+            val incoming = bearing(path[i - 1], path[i])
+            val outgoing = bearing(path[i], path[i + 1])
+            val angle = (outgoing - incoming + 540.0) % 360.0 - 180.0
+            if (abs(angle) >= 40) maneuvers.add(Maneuver(i,
+                if (abs(angle) >= 150) "Wenden" else if (angle > 0) "Rechts abbiegen" else "Links abbiegen"))
+        }
+        maneuvers.add(Maneuver(path.lastIndex, "Ziel erreicht"))
+        return Route(path, path.zipWithNext().sumOf { (a, b) -> a.distance(b) }, surfaces, maneuvers)
+    }
+
+    private fun bearing(a: Point, b: Point): Double {
+        val delta = Math.toRadians(b.lon - a.lon)
+        val y = sin(delta) * cos(Math.toRadians(b.lat))
+        val x = cos(Math.toRadians(a.lat)) * sin(Math.toRadians(b.lat)) -
+            sin(Math.toRadians(a.lat)) * cos(Math.toRadians(b.lat)) * cos(delta)
+        return (Math.toDegrees(atan2(y, x)) + 360.0) % 360.0
     }
 }
 
