@@ -20,6 +20,7 @@ class RideService : Service(), LocationListener {
     private val binder = RideBinder()
     private lateinit var locationManager: LocationManager
     val track = CopyOnWriteArrayList<RidePoint>()
+    val bikeSamples = CopyOnWriteArrayList<BikeSample>()
     val listeners = CopyOnWriteArrayList<(Point) -> Unit>()
     val locationListeners = CopyOnWriteArrayList<(Location) -> Unit>()
     var last: Point? = null
@@ -45,6 +46,16 @@ class RideService : Service(), LocationListener {
                         if (p.isNull("speed")) null else p.getDouble("speed").toFloat(), p.getInt("segment")))
                 }
                 segment = (track.maxOfOrNull { it.segment } ?: 0) + 1
+                val bike = saved.optJSONArray("bikeSamples") ?: JSONArray()
+                for (i in 0 until bike.length()) {
+                    val sample = bike.getJSONObject(i)
+                    val value = sample.getJSONObject("value")
+                    bikeSamples.add(BikeSample(sample.getLong("time"), sample.getInt("segment"),
+                        BikeMeasurement(value.optInt("battery").takeIf { value.has("battery") },
+                            value.optInt("rider").takeIf { value.has("rider") },
+                            value.optInt("motor").takeIf { value.has("motor") },
+                            value.optInt("mode").takeIf { value.has("mode") })))
+                }
                 paused = true // Explicitly resume after a process restart.
             } catch (_: Exception) { track.clear() }
         }
@@ -64,21 +75,22 @@ class RideService : Service(), LocationListener {
         if (intent?.action == "PAUSE") {
             paused = true
             persist()
+            notifyRide("Fahrt pausiert")
             return START_STICKY
         }
         if (intent?.action == "RESUME") {
             segment++
             paused = false
             recording = true
+            notifyRide("Fahrtaufzeichnung aktiv")
+            return START_STICKY
+        }
+        if (intent?.action == "NAV") {
+            notifyRide(intent.getStringExtra("message") ?: "Navigation aktiv")
             return START_STICKY
         }
         if (recording) return START_STICKY
-        val pending = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val notification = Notification.Builder(this, "rides").setContentTitle("BikeNavi")
-            .setContentText("Fahrtaufzeichnung aktiv").setSmallIcon(android.R.drawable.ic_menu_mylocation)
-            .setContentIntent(pending).build()
-        startForeground(12, notification)
+        startForeground(12, notification("Fahrtaufzeichnung aktiv"))
         recording = true
         paused = false
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
@@ -86,6 +98,16 @@ class RideService : Service(), LocationListener {
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 3f, this)
         }
         return START_STICKY
+    }
+    private fun notification(message: String): Notification {
+        val pending = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        return Notification.Builder(this, "rides").setContentTitle("BikeNavi")
+            .setContentText(message).setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setContentIntent(pending).setOngoing(true).build()
+    }
+    private fun notifyRide(message: String) {
+        getSystemService(NotificationManager::class.java).notify(12, notification(message))
     }
     override fun onLocationChanged(location: Location) {
         if (location.hasAccuracy() && location.accuracy > 75f) return
@@ -101,7 +123,12 @@ class RideService : Service(), LocationListener {
         locationListeners.forEach { it(location) }
     }
     fun discard() { track.clear(); partialFile.delete() }
-    fun complete() { persist(); partialFile.delete(); track.clear() }
+    fun recordBike(value: BikeMeasurement) {
+        if (!recording || paused || value == BikeMeasurement()) return
+        bikeSamples.add(BikeSample(System.currentTimeMillis(), segment, value))
+        if (bikeSamples.size % 5 == 0) persist()
+    }
+    fun complete() { partialFile.delete(); track.clear(); bikeSamples.clear() }
     private fun persist() {
         val samples = JSONArray().also { a -> track.forEach {
             a.put(JSONObject().put("lat", it.point.lat).put("lon", it.point.lon)
@@ -109,7 +136,14 @@ class RideService : Service(), LocationListener {
                 .put("speed", it.speed).put("segment", it.segment))
         } }
         val temp = File(filesDir, "unfinished-ride.tmp")
-        temp.writeText(JSONObject().put("samples", samples).toString())
+        val bike = JSONArray().also { array -> bikeSamples.forEach { s ->
+            array.put(JSONObject().put("time", s.time).put("segment", s.segment)
+                .put("value", JSONObject().put("battery", s.value.battery)
+                    .put("rider", s.value.riderWatts).put("motor", s.value.motorWatts)
+                    .put("mode", s.value.assistMode).put("cadence", s.value.cadence)
+                    .put("speed", s.value.speedKph)))
+        } }
+        temp.writeText(JSONObject().put("samples", samples).put("bikeSamples", bike).toString())
         if (!temp.renameTo(partialFile)) temp.delete()
     }
     override fun onDestroy() {

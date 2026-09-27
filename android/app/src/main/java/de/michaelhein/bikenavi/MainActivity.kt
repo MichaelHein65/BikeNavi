@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.location.Location
 import android.location.LocationManager
+import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.speech.tts.TextToSpeech
@@ -41,8 +42,10 @@ class MainActivity : Activity() {
     private var tracker = RouteTracker()
     private val reroutePolicy = ReroutePolicy()
     private var lastSpoken: String? = null
+    private var lastNotificationSlot = -1L
     private var speech: TextToSpeech? = null
     private var voice = true
+    private lateinit var bike: BikeBluetooth
     private var service: RideService? = null
     private var selectedRide: SavedRide? = null
     private var busy = false
@@ -72,6 +75,14 @@ class MainActivity : Activity() {
             prefs.getBoolean("hills", false))
         voice = prefs.getBoolean("voice", true)
         speech = TextToSpeech(this) { if (it == TextToSpeech.SUCCESS) speech?.language = Locale.GERMAN }
+        bike = BikeBluetooth(this) { runOnUiThread {
+            if (service?.recording == true) {
+                val m = bike.measurement
+                val battery = m.battery?.let { "$it %" } ?: "–"
+                status.contentDescription = "Bike ${bike.status}; Akku $battery"
+            }
+        } }
+        bike.onMeasurement = { sample -> service?.recordBike(sample) }
         Configuration.getInstance().userAgentValue = "BikeNaviAndroid/0.1 (https://github.com/MichaelHein65/BikeNavi)"
         Configuration.getInstance().load(this, getSharedPreferences("osmdroid", MODE_PRIVATE))
         map = MapView(this).apply {
@@ -108,6 +119,16 @@ class MainActivity : Activity() {
         moreButton("Profil") { editProfile() }
         moreButton("Details") { showRouteDetails() }
         panel.addView(more)
+        val extra = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun extraButton(label: String, action: () -> Unit) {
+            extra.addView(Button(this).apply { text = label; textSize = 12f; setOnClickListener { action() } },
+                LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        extraButton("Bike") { showBike() }
+        extraButton("Einstellungen") { showSettings() }
+        extraButton("Karte folgen") { following = !following; show(if (following) "Kartennachführung aktiv" else "Karte frei") }
+        extraButton("Plan speichern") { savePlan() }
+        panel.addView(extra)
         val frame = FrameLayout(this)
         frame.addView(map)
         val attribution = TextView(this).apply {
@@ -133,6 +154,9 @@ class MainActivity : Activity() {
         navigationRoute = route
         redraw()
         requestLocation()
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 44)
     }
 
     private fun select(p: Point) {
@@ -247,6 +271,11 @@ class MainActivity : Activity() {
             speech?.speak(turn, TextToSpeech.QUEUE_FLUSH, null, "turn")
             lastSpoken = progress.next.toString()
         }
+        if (fix.time / 10000 != lastNotificationSlot) {
+            lastNotificationSlot = fix.time / 10000
+            startService(Intent(this, RideService::class.java).setAction("NAV")
+                .putExtra("message", "${turn ?: "Der Route folgen"} · %.1f km".format(progress.remaining / 1000)))
+        }
         if (reroutePolicy.shouldReroute(progress, fix.accuracy, fix.time) && !busy) reconnect(p, progress)
     }
     private fun toggleRide() {
@@ -262,7 +291,7 @@ class MainActivity : Activity() {
                         1, 2 -> {
                             val samples = active.track.toList()
                             if (which == 1 && samples.size >= 2) {
-                                val ride = data.saveRide(samples)
+                                val ride = data.saveRide(samples, active.bikeSamples.toList())
                                 show("${ride.title} gespeichert · %.1f km".format(ride.meters / 1000))
                             } else show(if (which == 2) "Fahrt verworfen." else "Zu wenige GPS-Punkte.")
                             active.complete()
@@ -382,7 +411,7 @@ class MainActivity : Activity() {
             }.show()
     }
     private fun search() {
-        val input = EditText(this).apply { hint = "Ort oder Adresse"; singleLine = true }
+        val input = EditText(this).apply { hint = "Ort oder Adresse"; setSingleLine(true) }
         AlertDialog.Builder(this).setTitle("Ortssuche").setView(input)
             .setPositiveButton("Suchen") { _, _ ->
                 val query = input.text.toString().trim()
@@ -425,6 +454,62 @@ class MainActivity : Activity() {
             .setMessage("Länge: %.1f km\nAbbieger: ${r.maneuvers.size}\nZwischenziele: ${via.size}\n\nBeläge:\n$details"
                 .format(r.meters / 1000))
             .setPositiveButton("Schließen", null).show()
+    }
+
+    private fun showBike() {
+        if (Build.VERSION.SDK_INT >= 31 && (checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED ||
+                checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED)) {
+            requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT), 43)
+            show("Bluetooth-Berechtigung erteilen und Bike nochmals öffnen.")
+            return
+        }
+        val m = bike.measurement
+        val snapshot = "${bike.status}\nAkku: ${m.battery?.toString() ?: "–"} % · Modus: ${m.assistMode ?: "–"}\n" +
+            "Fahrer: ${m.riderWatts ?: "–"} W · Motor: ${m.motorWatts ?: "–"} W\n" +
+            "Kadenz: ${m.cadence ?: "–"} U/min · Tempo: ${m.speedKph ?: "–"} km/h"
+        AlertDialog.Builder(this).setTitle("Bosch Bike · Bluetooth").setMessage(snapshot)
+            .setPositiveButton("Suchen") { _, _ ->
+                bike.search()
+                android.os.Handler(mainLooper).postDelayed({ showBikeCandidates() }, 4500)
+            }
+            .setNeutralButton("Trennen") { _, _ -> bike.stop() }
+            .setNegativeButton("Schließen", null).show()
+    }
+    private fun showBikeCandidates() {
+        val entries = bike.candidates.entries.toList()
+        if (entries.isEmpty()) return show("Noch kein Bosch Bike gefunden. Flow verbinden und erneut suchen.")
+        AlertDialog.Builder(this).setTitle("Bike auswählen")
+            .setItems(entries.map { it.value }.toTypedArray()) { _, index ->
+                bike.connect(entries[index].key)
+                show("Verbinde ${entries[index].value} …")
+            }.setNegativeButton("Schließen", null).show()
+    }
+    private fun showSettings() {
+        val prefs = getSharedPreferences("riding", MODE_PRIVATE)
+        AlertDialog.Builder(this).setTitle("Einstellungen · ohne Pi")
+            .setItems(arrayOf("Ortssuche: Photon-Dienst", "Sprache ${if (voice) "ein" else "aus"}",
+                "Kartencache", "Über BikeNavi")) { _, which ->
+                when (which) {
+                    0 -> {
+                        val input = EditText(this).apply {
+                            setText(prefs.getString("photon", "https://photon.komoot.io"))
+                        }
+                        AlertDialog.Builder(this).setTitle("Photon-HTTPS-Server").setView(input)
+                            .setPositiveButton("Speichern") { _, _ ->
+                                val endpoint = input.text.toString().trim().trimEnd('/')
+                                if (endpoint.startsWith("https://"))
+                                    prefs.edit().putString("photon", endpoint).apply()
+                                else show("Nur HTTPS-Adressen erlaubt.")
+                            }.setNegativeButton("Abbrechen", null).show()
+                    }
+                    1 -> { voice = !voice; saveProfile() }
+                    2 -> show("Kartenkacheln und OSM-Gebiete bleiben im App-Speicher; neue Gebiete benötigen Internet.")
+                    3 -> AlertDialog.Builder(this).setTitle("BikeNavi Android")
+                        .setMessage("Lokale Planung und Touren. Kein Pi, kein Konto, keine Synchronisation. " +
+                            "OSM-Daten © OpenStreetMap contributors; Ortssuche von Photon.")
+                        .setPositiveButton("Schließen", null).show()
+                }
+            }.show()
     }
 
     private fun reconnect(position: Point, progress: RouteProgress) {
@@ -477,17 +562,84 @@ class MainActivity : Activity() {
     }
     private fun showRides() {
         val rides = data.rides().reversed()
-        if (rides.isEmpty()) return show("Noch keine Touren gespeichert.")
-        AlertDialog.Builder(this).setTitle("Touren · GPX exportieren")
-            .setItems(rides.map { "${it.title} · %.1f km".format(it.meters / 1000) }.toTypedArray()) { _, index ->
-                selectedRide = rides[index]
+        val plans = data.plans().reversed()
+        if (rides.isEmpty() && plans.isEmpty()) return show("Noch keine Touren oder Pläne gespeichert.")
+        val labels = plans.map { "Plan · ${it.title} · %.1f km".format(it.route.meters / 1000) } +
+            rides.map { "Fahrt · ${it.title} · %.1f km".format(it.meters / 1000) }
+        AlertDialog.Builder(this).setTitle("Deine Touren")
+            .setItems(labels.toTypedArray()) { _, index ->
+                if (index < plans.size) showPlan(plans[index]) else showRideDetail(rides[index - plans.size])
+            }.setNegativeButton("Schließen", null).show()
+    }
+    private fun savePlan() {
+        val current = route ?: return show("Zuerst Route berechnen.")
+        val stops = listOfNotNull(start) + via + listOfNotNull(goal)
+        if (stops.size < 2) return show("Start und Ziel fehlen.")
+        val input = EditText(this).apply {
+            setText("${data.places().find { it.coordinate.distance(stops.first()) < 100 }?.name ?: "Start"} → " +
+                (data.places().find { it.coordinate.distance(stops.last()) < 100 }?.name ?: "Ziel"))
+        }
+        AlertDialog.Builder(this).setTitle("Plan speichern").setView(input)
+            .setPositiveButton("Speichern") { _, _ ->
+                val name = input.text.toString().trim().take(200)
+                if (name.isNotEmpty()) {
+                    data.savePlan(SavedPlan(UUID.randomUUID().toString(), name, stops, profile, current))
+                    show("Plan „$name“ gespeichert.")
+                }
+            }.setNegativeButton("Abbrechen", null).show()
+    }
+    private fun showPlan(plan: SavedPlan) {
+        AlertDialog.Builder(this).setTitle(plan.title)
+            .setItems(arrayOf("Plan laden", "Löschen")) { _, which ->
+                if (which == 0) {
+                    start = plan.stops.first()
+                    goal = plan.stops.last()
+                    via.clear(); via.addAll(plan.stops.drop(1).dropLast(1))
+                    route = plan.route; navigationRoute = route; profile = plan.profile
+                    tracker = RouteTracker(); redraw()
+                    val p = start!!
+                    map.controller.animateTo(GeoPoint(p.lat, p.lon))
+                    show("Plan geladen · ohne Pi.")
+                } else AlertDialog.Builder(this).setMessage("Plan löschen?")
+                    .setPositiveButton("Löschen") { _, _ -> data.deletePlan(plan.id) }
+                    .setNegativeButton("Abbrechen", null).show()
+            }.show()
+    }
+    private fun showRideDetail(ride: SavedRide) {
+        val duration = if (ride.samples.size > 1)
+            (ride.samples.last().time - ride.samples.first().time) / 60000 else 0
+        val heights = ride.samples.mapNotNull { it.altitude }
+        val ascent = heights.zipWithNext().sumOf { (a, b) -> max(0.0, b - a) }
+        AlertDialog.Builder(this).setTitle(ride.title)
+            .setMessage("Strecke: %.1f km\nDauer: %d min\nAnstieg: %.0f m\nBike-Messungen: %d"
+                .format(ride.meters / 1000, duration, ascent, ride.bikeSamples.size))
+            .setPositiveButton("GPX") { _, _ ->
+                selectedRide = ride
                 val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
                     type = "application/gpx+xml"
-                    putExtra(Intent.EXTRA_TITLE, "BikeNavi-${rides[index].id}.gpx")
+                    putExtra(Intent.EXTRA_TITLE, "BikeNavi-${ride.id}.gpx")
                 }
                 startActivityForResult(intent, 7)
-            }.setNegativeButton("Schließen", null).show()
+            }.setNeutralButton("Auf Karte") { _, _ ->
+                navigationRoute = Route(ride.points, ride.meters, emptyList())
+                redraw()
+                ride.points.firstOrNull()?.let { map.controller.animateTo(GeoPoint(it.lat, it.lon)) }
+            }.setNegativeButton("Mehr") { _, _ ->
+                AlertDialog.Builder(this).setTitle(ride.title)
+                    .setItems(arrayOf("Diagramme", "Fahrt löschen")) { _, which ->
+                        if (which == 0) showRideCharts(ride)
+                        else AlertDialog.Builder(this).setMessage("Fahrt endgültig löschen?")
+                            .setPositiveButton("Löschen") { _, _ -> data.deleteRide(ride.id) }
+                            .setNegativeButton("Abbrechen", null).show()
+                    }.show()
+            }.show()
+    }
+    private fun showRideCharts(ride: SavedRide) {
+        val scroll = HorizontalScrollView(this)
+        scroll.addView(RideCharts(this, ride))
+        AlertDialog.Builder(this).setTitle("Höhe und Leistung")
+            .setView(scroll).setPositiveButton("Schließen", null).show()
     }
     override fun onActivityResult(requestCode: Int, resultCode: Int, result: Intent?) {
         super.onActivityResult(requestCode, resultCode, result)
@@ -508,6 +660,7 @@ class MainActivity : Activity() {
         service?.listeners?.remove(onLocation)
         service?.locationListeners?.remove(onFix)
         if (bound) unbindService(connection)
+        bike.stop()
         speech?.shutdown()
         map.onDetach()
         super.onDestroy()
