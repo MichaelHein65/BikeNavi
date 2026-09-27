@@ -29,8 +29,12 @@ class GraphRepository(context: Context) {
             val steps = ceil(meters / 1500.0).toInt().coerceAtLeast(1)
             for (i in 0..steps) {
                 val f = i.toDouble() / steps
-                val base = tile(Point(a.lat + (b.lat - a.lat) * f, a.lon + (b.lon - a.lon) * f))
-                for (dx in -1..1) for (dy in -1..1) selected.add(Tile(base.x + dx, base.y + dy))
+                val sample = Point(a.lat + (b.lat - a.lat) * f, a.lon + (b.lon - a.lon) * f)
+                for (northing in listOf(-0.01, 0.0, 0.01)) {
+                    for (easting in listOf(-0.01, 0.0, 0.01)) {
+                        selected.add(tile(Point(sample.lat + northing, sample.lon + easting)))
+                    }
+                }
             }
         }
         if (selected.size > 90)
