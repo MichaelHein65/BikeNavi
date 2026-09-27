@@ -1,5 +1,11 @@
 # BikeNavi – Bildschirmgalerie
 
+Diese Galerie und sämtliche Bilder zeigen die iPhone-App. Die eigenständige
+[Android-Fassung](../android/README.md) verwendet eine eigene Oberfläche mit
+Rasterkarte und Dialogen für Suche, Orte, Fahrprofil, Touren und Bike-Daten.
+Android-Bildschirmbilder werden erst nach einem echten Geräte- oder
+Emulatortest ergänzt; die iPhone-Bilder stellen keine Android-Ansichten dar.
+
 Version **0.2.0 (2)** · 23. September 2026 · iPhone-Simulator, helle Darstellung.
 
 Die Bilder zeigen die tatsächlich laufende App. Die Route stammt aus dem öffentlichen Heidelberg-Beispiel von openrouteservice. Die gespeicherte **Beispielaufzeichnung**, ihre Zeit-/GPS-Samples und ihre Bike-Messwerte sind synthetische Demonstrationsdaten. In der Live-Fahrt ist kein echtes Bike verbunden: fehlende Messwerte bleiben leer. Persönliche Touren und Zugangsdaten sind nicht enthalten. Die Serveradresse `beispiel.invalid` ist ein nicht erreichbarer Platzhalter; ein vorbereitetes lokales Wegenetz ist für dieses alte ORS-Beispiel nicht vorhanden.

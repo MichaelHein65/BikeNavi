@@ -1,0 +1,147 @@
+{
+  "source": "OpenStreetMap contributors, ODbL 1.0, https://www.openstreetmap.org/copyright; Overpass snapshot 2026-09-24. Public map test data, no ride recording.",
+  "elements": [
+    {
+      "type": "node",
+      "id": 272268068,
+      "lat": 43.7989022,
+      "lon": 15.6413587
+    },
+    {
+      "type": "node",
+      "id": 275001044,
+      "lat": 43.7989309,
+      "lon": 15.641403,
+      "tags": {
+        "access": "yes",
+        "barrier": "lift_gate",
+        "note": "access if bridge is open",
+        "traffic_signals": "traffic_lights"
+      }
+    },
+    {
+      "type": "node",
+      "id": 275001045,
+      "lat": 43.7989762,
+      "lon": 15.6414515,
+      "tags": {
+        "bridge:support": "pivot_pier"
+      }
+    },
+    {
+      "type": "node",
+      "id": 275001047,
+      "lat": 43.7993627,
+      "lon": 15.6417188,
+      "tags": {
+        "access": "yes",
+        "barrier": "lift_gate",
+        "note": "access if bridge is open",
+        "traffic_signals": "traffic_lights"
+      }
+    },
+    {
+      "type": "node",
+      "id": 275001049,
+      "lat": 43.7994102,
+      "lon": 15.6417668
+    },
+    {
+      "type": "node",
+      "id": 275001050,
+      "lat": 43.7994252,
+      "lon": 15.6418091
+    },
+    {
+      "type": "node",
+      "id": 308074346,
+      "lat": 43.7992822,
+      "lon": 15.6416622,
+      "tags": {
+        "bridge:support": "abutment"
+      }
+    },
+    {
+      "type": "node",
+      "id": 4440914221,
+      "lat": 43.7991481,
+      "lon": 15.6415699,
+      "tags": {
+        "bridge:support": "pier"
+      }
+    },
+    {
+      "type": "node",
+      "id": 9881900090,
+      "lat": 43.7993193,
+      "lon": 15.6416883,
+      "tags": {
+        "crossing": "uncontrolled",
+        "highway": "crossing"
+      }
+    },
+    {
+      "type": "way",
+      "id": 25219856,
+      "nodes": [
+        308074346,
+        4440914221,
+        275001045
+      ],
+      "tags": {
+        "bridge": "movable",
+        "bridge:movable": "bascule",
+        "highway": "primary",
+        "layer": "1",
+        "maxspeed": "50",
+        "maxspeed:type": "HR:urban",
+        "opening_hours": "00:00-09:00; 09:20-18:00; 18:20-24:00",
+        "passage_time": "20 minutes",
+        "ref": "D121",
+        "seamark:bridge:category": "opening",
+        "seamark:type": "bridge",
+        "surface": "asphalt",
+        "website": "https://www.tisno.hr/images/stari%20web/Default7730.html?sifraStranica=107"
+      }
+    },
+    {
+      "type": "way",
+      "id": 146627895,
+      "nodes": [
+        275001045,
+        275001044,
+        272268068
+      ],
+      "tags": {
+        "cycleway:both": "no",
+        "highway": "primary",
+        "lanes": "2",
+        "maxspeed": "50",
+        "maxspeed:type": "HR:urban",
+        "ref": "D121",
+        "surface": "asphalt"
+      }
+    },
+    {
+      "type": "way",
+      "id": 335778167,
+      "nodes": [
+        275001050,
+        275001049,
+        275001047,
+        9881900090,
+        308074346
+      ],
+      "tags": {
+        "cycleway:both": "no",
+        "highway": "primary",
+        "lanes": "2",
+        "maxspeed": "50",
+        "maxspeed:type": "HR:urban",
+        "name": "Istočna gomilica",
+        "ref": "D121",
+        "surface": "asphalt"
+      }
+    }
+  ]
+}

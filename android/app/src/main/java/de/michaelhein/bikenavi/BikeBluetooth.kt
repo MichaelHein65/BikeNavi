@@ -13,7 +13,7 @@ import java.util.UUID
 
 /** Read-only Bosch BLE diagnostics. No writes or motor-control commands. */
 class BikeBluetooth(private val context: Context, private val onChange: () -> Unit) {
-    private val adapter = context.getSystemService(BluetoothManager::class.java).adapter
+    private val adapter: BluetoothAdapter? = context.getSystemService(BluetoothManager::class.java)?.adapter
     private val handler = Handler(Looper.getMainLooper())
     private val suffix = "-eaa2-11e9-81b4-2a2ae2dbcce4"
     private val live = UUID.fromString("0000eb21$suffix")
@@ -31,6 +31,7 @@ class BikeBluetooth(private val context: Context, private val onChange: () -> Un
     var onMeasurement: ((BikeMeasurement) -> Unit)? = null
     private var gatt: BluetoothGatt? = null
     private var scanning = false
+    private val pendingNotifications = ArrayDeque<BluetoothGattCharacteristic>()
     private val scan = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             val name = try { result.scanRecord?.deviceName ?: result.device.name ?: "" }
@@ -72,27 +73,15 @@ class BikeBluetooth(private val context: Context, private val onChange: () -> Un
                 status = "Bike-Datenkanal gefunden"
                 notify.forEach { characteristic ->
                     if (characteristic.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0) {
-                        gatt.setCharacteristicNotification(characteristic, true)
-                        val descriptor = characteristic.getDescriptor(UUID.fromString(
-                            "00002902-0000-1000-8000-00805f9b34fb"))
-                        if (descriptor != null) {
-                            // CCC descriptor enables read-only notifications, not bike control.
-                            if (Build.VERSION.SDK_INT >= 33)
-                                gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-                            else {
-                                @Suppress("DEPRECATION")
-                                descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                                @Suppress("DEPRECATION")
-                                gatt.writeDescriptor(descriptor)
-                            }
-                        }
+                        pendingNotifications.addLast(characteristic)
                     }
-                    if (characteristic.uuid == live &&
-                        characteristic.properties and BluetoothGattCharacteristic.PROPERTY_READ != 0)
-                        gatt.readCharacteristic(characteristic)
                 }
+                enableNext(gatt)
             }
             handler.post(onChange)
+        }
+        override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
+            enableNext(gatt)
         }
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic,
                                              value: ByteArray) = receive(characteristic.uuid, value)
@@ -104,6 +93,30 @@ class BikeBluetooth(private val context: Context, private val onChange: () -> Un
         override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic,
                                           value: ByteArray, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) receive(characteristic.uuid, value)
+        }
+    }
+    private fun enableNext(gatt: BluetoothGatt) {
+        if (!allowed()) return
+        while (pendingNotifications.isNotEmpty()) {
+            val characteristic = pendingNotifications.removeFirst()
+            if (!gatt.setCharacteristicNotification(characteristic, true)) continue
+            val descriptor = characteristic.getDescriptor(UUID.fromString(
+                "00002902-0000-1000-8000-00805f9b34fb")) ?: continue
+            // CCC descriptor enables notifications; it does not control the bicycle.
+            val started = if (Build.VERSION.SDK_INT >= 33)
+                gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) ==
+                    BluetoothStatusCodes.SUCCESS
+            else {
+                @Suppress("DEPRECATION")
+                descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                @Suppress("DEPRECATION")
+                gatt.writeDescriptor(descriptor)
+            }
+            if (started) return
+        }
+        gatt.services.flatMap { it.characteristics }.firstOrNull { it.uuid == live &&
+            it.properties and BluetoothGattCharacteristic.PROPERTY_READ != 0 }?.let {
+            gatt.readCharacteristic(it)
         }
     }
     private fun receive(uuid: UUID, bytes: ByteArray) {
@@ -128,6 +141,9 @@ class BikeBluetooth(private val context: Context, private val onChange: () -> Un
     }
     fun search() {
         if (!allowed()) { status = "Bluetooth-Berechtigung fehlt"; onChange(); return }
+        if (adapter == null || !adapter.isEnabled) {
+            status = "Bluetooth nicht verfügbar oder ausgeschaltet"; onChange(); return
+        }
         candidates.clear()
         status = "Suche Bosch Bike …"
         try {
@@ -141,9 +157,10 @@ class BikeBluetooth(private val context: Context, private val onChange: () -> Un
         if (!allowed()) return
         stopScan()
         gatt?.close()
+        pendingNotifications.clear()
         try {
             status = "Verbinde Bike …"
-            gatt = adapter.getRemoteDevice(address).connectGatt(context, false, callback)
+            gatt = adapter?.getRemoteDevice(address)?.connectGatt(context, false, callback)
             context.getSharedPreferences("riding", Context.MODE_PRIVATE).edit()
                 .putString("bikeAddress", address).apply()
         } catch (_: Exception) { status = "Bike-Verbindung fehlgeschlagen" }
@@ -152,7 +169,7 @@ class BikeBluetooth(private val context: Context, private val onChange: () -> Un
     fun stop() { stopScan(); if (allowed()) gatt?.disconnect(); gatt?.close(); gatt = null }
     private fun stopScan() {
         if (!scanning) return
-        try { if (allowed()) adapter.bluetoothLeScanner?.stopScan(scan) } catch (_: Exception) { }
+        try { if (allowed()) adapter?.bluetoothLeScanner?.stopScan(scan) } catch (_: Exception) { }
         scanning = false
     }
     private fun allowed() = if (Build.VERSION.SDK_INT >= 31)

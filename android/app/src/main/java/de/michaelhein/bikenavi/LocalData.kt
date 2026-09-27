@@ -27,6 +27,7 @@ class LocalData(private val context: Context) {
     private val routeFile = File(context.filesDir, "active-route.json")
     private val placesFile = File(context.filesDir, "places.json")
     private val plansFile = File(context.filesDir, "plans.json")
+    private val currentPlanFile = File(context.filesDir, "current-plan.json")
 
     fun region(start: Point, end: Point): JSONObject? {
         if (!regionFile.exists()) return null
@@ -72,19 +73,33 @@ class LocalData(private val context: Context) {
             }
         } catch (_: Exception) { emptyList() }
     }
+    fun currentPlan(): SavedPlan? = try {
+        val item = JSONObject(currentPlanFile.readText())
+        val p = item.getJSONObject("profile")
+        SavedPlan("current", item.optString("title", "Aktuelle Planung"),
+            points(item.getJSONArray("stops")),
+            RidingProfile(p.optString("bike", "touring"), p.optBoolean("electric", true),
+                p.optString("surface", "any"), p.optBoolean("hills")),
+            parseRoute(item.getJSONObject("route")))
+    } catch (_: Exception) { null }
+    fun saveCurrentPlan(plan: SavedPlan) {
+        atomic(currentPlanFile, planJson(plan).toString())
+    }
+    fun clearCurrentPlan() { currentPlanFile.delete(); routeFile.delete() }
     fun savePlan(plan: SavedPlan) { writePlans(plans().filterNot { it.id == plan.id } + plan) }
     fun deletePlan(id: String) { writePlans(plans().filterNot { it.id == id }) }
     fun deleteRide(id: String) { writeRides(rides().filterNot { it.id == id }) }
     private fun writePlans(items: List<SavedPlan>) {
         atomic(plansFile, JSONArray().also { a -> items.forEach { item ->
-            a.put(JSONObject().put("id", item.id).put("title", item.title)
-                .put("stops", jsonPoints(item.stops))
-                .put("profile", JSONObject().put("bike", item.profile.bike)
-                    .put("electric", item.profile.electric).put("surface", item.profile.surface)
-                    .put("hills", item.profile.gentleHills))
-                .put("route", routeJson(item.route)))
+            a.put(planJson(item))
         } }.toString())
     }
+    private fun planJson(item: SavedPlan) = JSONObject().put("id", item.id).put("title", item.title)
+        .put("stops", jsonPoints(item.stops))
+        .put("profile", JSONObject().put("bike", item.profile.bike)
+            .put("electric", item.profile.electric).put("surface", item.profile.surface)
+            .put("hills", item.profile.gentleHills))
+        .put("route", routeJson(item.route))
 
     fun rides(): List<SavedRide> {
         if (!ridesFile.exists()) return emptyList()

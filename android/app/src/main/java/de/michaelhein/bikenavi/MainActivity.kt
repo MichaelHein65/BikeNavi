@@ -6,7 +6,13 @@ import android.app.AlertDialog
 import android.content.*
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.hardware.GeomagneticField
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
@@ -27,7 +33,7 @@ import kotlin.math.*
 import java.util.Locale
 import java.util.UUID
 
-class MainActivity : Activity() {
+class MainActivity : Activity(), SensorEventListener {
     private lateinit var map: MapView
     private lateinit var status: TextView
     private lateinit var data: LocalData
@@ -50,6 +56,8 @@ class MainActivity : Activity() {
     private var selectedRide: SavedRide? = null
     private var busy = false
     private var following = true
+    private var sensorHeading: Float? = null
+    private lateinit var sensors: SensorManager
     private var bound = false
     private val onLocation: (Point) -> Unit = { point -> runOnUiThread { updatePosition(point) } }
     private val onFix: (Location) -> Unit = { fix -> runOnUiThread { updateNavigation(fix) } }
@@ -68,6 +76,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         data = LocalData(this)
+        sensors = getSystemService(SENSOR_SERVICE) as SensorManager
         graphRepository = GraphRepository(this)
         val prefs = getSharedPreferences("riding", MODE_PRIVATE)
         profile = RidingProfile(prefs.getString("bike", "touring") ?: "touring",
@@ -82,7 +91,6 @@ class MainActivity : Activity() {
                 status.contentDescription = "Bike ${bike.status}; Akku $battery"
             }
         } }
-        bike.onMeasurement = { sample -> service?.recordBike(sample) }
         Configuration.getInstance().userAgentValue = "BikeNaviAndroid/0.1 (https://github.com/MichaelHein65/BikeNavi)"
         Configuration.getInstance().load(this, getSharedPreferences("osmdroid", MODE_PRIVATE))
         map = MapView(this).apply {
@@ -150,10 +158,18 @@ class MainActivity : Activity() {
                 return true
             }
         }))
-        route = data.activeRoute()
+        val current = data.currentPlan()
+        if (current != null && current.stops.size >= 2) {
+            start = current.stops.first()
+            goal = current.stops.last()
+            via.addAll(current.stops.drop(1).dropLast(1))
+            route = current.route
+            profile = current.profile
+        } else route = data.activeRoute()
         navigationRoute = route
         redraw()
         requestLocation()
+        if (!bound) bound = bindService(Intent(this, RideService::class.java), connection, 0)
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 44)
@@ -190,13 +206,33 @@ class MainActivity : Activity() {
         via.forEachIndexed { i, p -> marker(p, "Zwischenziel ${i + 1}") }
         goal?.let { marker(it, "Ziel") }
         (navigationRoute ?: route)?.let { r ->
-            map.overlays.add(Polyline().apply {
+            if (r.surfaces.size == r.points.size - 1) {
+                var from = 0
+                while (from < r.surfaces.size) {
+                    var to = from + 1
+                    while (to < r.surfaces.size && r.surfaces[to] == r.surfaces[from]) to++
+                    map.overlays.add(Polyline().apply {
+                        setPoints(r.points.subList(from, to + 1).map { GeoPoint(it.lat, it.lon) })
+                        outlinePaint.color = surfaceColor(r.surfaces[from])
+                        outlinePaint.strokeWidth = 12f
+                    })
+                    from = to
+                }
+            } else map.overlays.add(Polyline().apply {
                 setPoints(r.points.map { GeoPoint(it.lat, it.lon) })
-                outlinePaint.color = Color.rgb(30, 93, 207)
+                outlinePaint.color = Color.GRAY
                 outlinePaint.strokeWidth = 12f
             })
         }
         map.invalidate()
+    }
+    private fun surfaceColor(s: String) = when (s) {
+        "paved", "asphalt", "concrete", "concrete:plates", "concrete:lanes" -> Color.rgb(34, 100, 215)
+        "paving_stones", "sett", "cobblestone" -> Color.rgb(127, 65, 170)
+        "compacted", "fine_gravel", "gravel", "pebblestone" -> Color.rgb(177, 130, 30)
+        "dirt", "earth", "ground", "sand", "grass", "unpaved" -> Color.rgb(143, 85, 46)
+        "metal", "wood" -> Color.rgb(30, 160, 165)
+        else -> Color.GRAY
     }
 
     private fun calculate() {
@@ -217,6 +253,7 @@ class MainActivity : Activity() {
                 }
                 val result = newGraph.routeThrough(stops, profile)
                 data.saveRoute(result)
+                data.saveCurrentPlan(SavedPlan("current", "Aktuelle Planung", stops, profile, result))
                 runOnUiThread {
                     graph = newGraph
                     route = result
@@ -248,22 +285,51 @@ class MainActivity : Activity() {
         val manager = getSystemService(LOCATION_SERVICE) as LocationManager
         val location = manager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
             ?: manager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-        if (location != null) {
+        if (location != null && System.currentTimeMillis() - location.time < 15_000 &&
+            (!location.hasAccuracy() || location.accuracy <= 75)) {
             val p = Point(location.latitude, location.longitude)
             map.controller.animateTo(GeoPoint(p.lat, p.lon))
             map.controller.setZoom(16.0)
             if (start == null) { start = p; redraw() }
-        } else show("Noch kein Standort verfügbar. GPS einschalten oder Start auf der Karte setzen.")
+        } else {
+            show("Aktueller GPS-Standort wird ermittelt …")
+            try {
+                manager.requestSingleUpdate(LocationManager.GPS_PROVIDER, object : LocationListener {
+                    override fun onLocationChanged(fix: Location) {
+                        if (isFinishing || fix.hasAccuracy() && fix.accuracy > 75) return
+                        val p = Point(fix.latitude, fix.longitude)
+                        map.controller.animateTo(GeoPoint(p.lat, p.lon))
+                        map.controller.setZoom(16.0)
+                        if (start == null) { start = p; redraw() }
+                        show("Standort gefunden.")
+                    }
+                }, mainLooper)
+            } catch (_: Exception) { show("GPS nicht verfügbar. Start auf der Karte wählen.") }
+        }
     }
     private fun updatePosition(p: Point) {
-        if (following) map.controller.animateTo(GeoPoint(p.lat, p.lon))
+        if (following && service?.recording != true) map.controller.animateTo(GeoPoint(p.lat, p.lon))
     }
     private fun updateNavigation(fix: Location) {
         if (service?.recording != true || service?.paused == true) return
         val current = navigationRoute ?: return
         val p = Point(fix.latitude, fix.longitude)
-        val progress = tracker.update(current, p, fix.accuracy,
-            fix.bearing.takeIf { fix.hasBearing() }, fix.time) ?: return
+        val heading = if (fix.hasSpeed() && fix.speed >= 1f && fix.hasBearing()) fix.bearing
+            else sensorHeading ?: fix.bearing.takeIf { fix.hasBearing() }
+        val progress = tracker.update(current, p, fix.accuracy, heading, fix.time) ?: return
+        if (following && heading != null) {
+            map.setMapOrientation(-heading)
+            val angle = Math.toRadians(heading.toDouble())
+            val ahead = 180.0
+            val center = Point(p.lat + cos(angle) * ahead / 111320.0,
+                p.lon + sin(angle) * ahead / (111320.0 * cos(Math.toRadians(p.lat))))
+            map.controller.animateTo(GeoPoint(center.lat, center.lon))
+            if (map.height > 0) {
+                val zoom = kotlin.math.log2(156543.0 * cos(Math.toRadians(p.lat)) *
+                    map.height * 0.8 / 500).coerceIn(14.0, 19.0)
+                map.controller.setZoom(zoom)
+            }
+        }
         val turn = progress.next?.let { "${it.instruction} in ${progress.toTurn.toInt()} m" }
         status.text = if (progress.offRoute > 35) "Abweichung ${progress.offRoute.toInt()} m · Anschluss wird geprüft"
             else "${turn ?: "Der Route folgen"} · noch %.1f km".format(progress.remaining / 1000)
@@ -306,6 +372,7 @@ class MainActivity : Activity() {
                 requestLocation()
                 return
             }
+            bike.stop()
             startForegroundService(Intent(this, RideService::class.java))
             if (!bound) {
                 bound = bindService(Intent(this, RideService::class.java), connection, BIND_AUTO_CREATE)
@@ -327,7 +394,10 @@ class MainActivity : Activity() {
                         route = null; navigationRoute = null; redraw()
                         if (start != null && goal != null) calculate()
                     }
-                    entries.size + 1 -> { start = null; goal = null; via.clear(); route = null; navigationRoute = null; redraw() }
+                    entries.size + 1 -> {
+                        start = null; goal = null; via.clear(); route = null; navigationRoute = null
+                        data.clearCurrentPlan(); redraw()
+                    }
                     else -> if (index in 1..via.size) AlertDialog.Builder(this)
                         .setMessage("Zwischenziel entfernen?")
                         .setPositiveButton("Entfernen") { _, _ -> via.removeAt(index - 1); route = null; redraw() }
@@ -447,9 +517,13 @@ class MainActivity : Activity() {
 
     private fun showRouteDetails() {
         val r = route ?: return show("Noch keine Route berechnet.")
-        val surfaces = r.surfaces.groupingBy { it }.eachCount()
+        val surfaces = HashMap<String, Double>()
+        r.points.zipWithNext().forEachIndexed { i, (a, b) ->
+            val name = r.surfaces.getOrNull(i) ?: "unbekannt"
+            surfaces[name] = (surfaces[name] ?: 0.0) + a.distance(b)
+        }
         val details = surfaces.entries.sortedByDescending { it.value }
-            .joinToString("\n") { "${it.key}: ${it.value} Abschnitte" }
+            .joinToString("\n") { "${it.key}: %.1f km".format(it.value / 1000) }
         AlertDialog.Builder(this).setTitle("Routendetails")
             .setMessage("Länge: %.1f km\nAbbieger: ${r.maneuvers.size}\nZwischenziele: ${via.size}\n\nBeläge:\n$details"
                 .format(r.meters / 1000))
@@ -463,24 +537,26 @@ class MainActivity : Activity() {
             show("Bluetooth-Berechtigung erteilen und Bike nochmals öffnen.")
             return
         }
-        val m = bike.measurement
-        val snapshot = "${bike.status}\nAkku: ${m.battery?.toString() ?: "–"} % · Modus: ${m.assistMode ?: "–"}\n" +
+        val current = service?.bike ?: bike
+        val m = current.measurement
+        val snapshot = "${current.status}\nAkku: ${m.battery?.toString() ?: "–"} % · Modus: ${m.assistMode ?: "–"}\n" +
             "Fahrer: ${m.riderWatts ?: "–"} W · Motor: ${m.motorWatts ?: "–"} W\n" +
             "Kadenz: ${m.cadence ?: "–"} U/min · Tempo: ${m.speedKph ?: "–"} km/h"
         AlertDialog.Builder(this).setTitle("Bosch Bike · Bluetooth").setMessage(snapshot)
             .setPositiveButton("Suchen") { _, _ ->
-                bike.search()
+                current.search()
                 android.os.Handler(mainLooper).postDelayed({ showBikeCandidates() }, 4500)
             }
-            .setNeutralButton("Trennen") { _, _ -> bike.stop() }
+            .setNeutralButton("Trennen") { _, _ -> current.stop() }
             .setNegativeButton("Schließen", null).show()
     }
     private fun showBikeCandidates() {
-        val entries = bike.candidates.entries.toList()
+        val current = service?.bike ?: bike
+        val entries = current.candidates.entries.toList()
         if (entries.isEmpty()) return show("Noch kein Bosch Bike gefunden. Flow verbinden und erneut suchen.")
         AlertDialog.Builder(this).setTitle("Bike auswählen")
             .setItems(entries.map { it.value }.toTypedArray()) { _, index ->
-                bike.connect(entries[index].key)
+                current.connect(entries[index].key)
                 show("Verbinde ${entries[index].value} …")
             }.setNegativeButton("Schließen", null).show()
     }
@@ -596,6 +672,7 @@ class MainActivity : Activity() {
                     goal = plan.stops.last()
                     via.clear(); via.addAll(plan.stops.drop(1).dropLast(1))
                     route = plan.route; navigationRoute = route; profile = plan.profile
+                    data.saveCurrentPlan(plan)
                     tracker = RouteTracker(); redraw()
                     val p = start!!
                     map.controller.animateTo(GeoPoint(p.lat, p.lon))
@@ -654,8 +731,30 @@ class MainActivity : Activity() {
         }
     }
     private fun show(message: String) { status.text = message }
-    override fun onResume() { super.onResume(); map.onResume() }
-    override fun onPause() { map.onPause(); super.onPause() }
+    override fun onResume() {
+        super.onResume()
+        map.onResume()
+        sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)?.let {
+            sensors.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+        }
+    }
+    override fun onPause() {
+        sensors.unregisterListener(this)
+        map.onPause()
+        super.onPause()
+    }
+    override fun onSensorChanged(event: SensorEvent) {
+        if (event.sensor.type != Sensor.TYPE_ROTATION_VECTOR) return
+        val rotation = FloatArray(9)
+        SensorManager.getRotationMatrixFromVector(rotation, event.values)
+        val magnetic = (Math.toDegrees(SensorManager.getOrientation(rotation, FloatArray(3))[0].toDouble())
+            .toFloat() + 360f) % 360f
+        val p = service?.last
+        val declination = p?.let { GeomagneticField(it.lat.toFloat(), it.lon.toFloat(), 0f,
+            System.currentTimeMillis()).declination } ?: 0f
+        sensorHeading = (magnetic + declination + 360f) % 360f
+    }
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) { }
     override fun onDestroy() {
         service?.listeners?.remove(onLocation)
         service?.locationListeners?.remove(onFix)

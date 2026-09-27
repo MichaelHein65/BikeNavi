@@ -4,11 +4,13 @@
 
 Das separate Projekt `android/` kommuniziert ausschließlich mit öffentlichen
 OSM-Diensten: osmdroid zeigt Kartenkacheln; `Overpass` holt Wege, Knoten und
-Abbiegeregeln. `BikeGraph` berechnet die Route auf dem Telefon. `LocalData`
-speichert den letzten Graphen, die Route und Fahrten im privaten App-Speicher;
-`RideService` hält die GPS-Aufzeichnung mit einer Vordergrundbenachrichtigung
-aktiv. Es gibt keine Verbindung zur Pi-API, keine Tailscale-Abhängigkeit und
-keine geteilte Datenbank. Siehe [Android-Anleitung](../android/README.md).
+Abbiegeregeln; manuelle Ortssuche läuft über einen einstellbaren Photon-Dienst.
+`GraphRepository` hält mehrere lokale OSM-Gebiete, `BikeGraph` berechnet die
+Tour auf dem Telefon. `LocalData` speichert Planung, Favoriten, Route und
+Fahrten im privaten App-Speicher; `RideService` hält die GPS-Aufzeichnung und
+den lesenden Bosch-Bluetooth-Dienst mit einer Vordergrundbenachrichtigung aktiv.
+Es gibt keine Verbindung zur Pi-API, keine Tailscale-Abhängigkeit und keine
+geteilte Datenbank. Siehe [Android-Anleitung](../android/README.md).
 
 Die folgende Beschreibung betrifft die iPhone-App und ihren Pi.
 

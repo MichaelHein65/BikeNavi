@@ -19,7 +19,8 @@ data class Point(val lat: Double, val lon: Double) {
 }
 
 data class Edge(val to: Long, val way: Long, val length: Double, val surface: String, val incline: Double = 0.0)
-data class Turn(val via: Long, val from: Long, val to: Set<Long>, val only: Boolean)
+data class Turn(val via: Long, val from: Long, val to: Set<Long>, val only: Boolean,
+                val uTurn: Boolean = false)
 data class Maneuver(val index: Int, val instruction: String)
 data class RidingProfile(
     val bike: String = "touring",
@@ -122,7 +123,8 @@ class BikeGraph private constructor(
                     blockedWays.addAll(viaWays)
                     continue
                 }
-                from.forEach { turns.add(Turn(viaNodes.first(), it, to, kind.startsWith("only_"))) }
+                from.forEach { turns.add(Turn(viaNodes.first(), it, to,
+                    kind.startsWith("only_"), kind in setOf("no_u_turn", "only_u_turn"))) }
             }
             val result = HashMap<Long, MutableList<Edge>>()
             for ((id, way) in ways) {
@@ -204,9 +206,9 @@ class BikeGraph private constructor(
         val (destination, endGap) = nearest(goal)
         if (startGap > 500 || endGap > 500)
             throw RoutingException("Start oder Ziel liegt mehr als 500 m vom Wegenetz entfernt.")
-        data class State(val node: Long, val incoming: Long, val unpavedBucket: Int)
+        data class State(val node: Long, val previous: Long, val incoming: Long, val unpavedBucket: Int)
         data class Candidate(val state: State, val score: Double)
-        val startState = State(origin, -1, 0)
+        val startState = State(origin, -1, -1, 0)
         val distance = HashMap<State, Double>()
         val previous = HashMap<State, Pair<State, Edge>>()
         val queue = PriorityQueue<Candidate>(compareBy { it.score })
@@ -220,13 +222,18 @@ class BikeGraph private constructor(
             if (current.node == destination) { reached = current; break }
             for (edge in edges[current.node].orEmpty()) {
                 val rules = turns.filter { it.via == current.node && it.from == current.incoming }
-                if (rules.any { if (it.only) edge.way !in it.to else edge.way in it.to }) continue
+                if (rules.any { rule ->
+                        if (rule.only) edge.way !in rule.to ||
+                            (rule.uTurn && edge.to != current.previous) ||
+                            (!rule.uTurn && edge.to == current.previous)
+                        else edge.way in rule.to && (!rule.uTurn || edge.to == current.previous)
+                    }) continue
                 val offRoad = edge.surface !in paved
                 val unpavedBucket = if (profile.surface == "pavedOnly")
                     current.unpavedBucket + if (offRoad) ceil(edge.length / 10.0).toInt() else 0
                 else 0
                 if (unpavedBucket * 10 > maxUnpavedMeters) continue
-                val next = State(edge.to, edge.way, unpavedBucket)
+                val next = State(edge.to, current.node, edge.way, unpavedBucket)
                 val penalty = (if (profile.surface == "preferPaved" && offRoad) 8.0 else 0.0) +
                     (if (profile.bike == "road" && offRoad) 3.0 else 0.0) +
                     (if (profile.gentleHills) max(0.0, edge.incline) / 5.0 else 0.0)

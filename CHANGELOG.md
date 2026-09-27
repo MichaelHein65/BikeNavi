@@ -17,6 +17,13 @@ Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release
   `testDebugUnitTest` und `assembleDebug` erfolgreich. Ein Geräte- und
   Feldtest steht noch aus. Debug-APK als CI-Artefakt; kein Android-Release und
   keine Änderung an iOS- oder Pi-Deployment.
+- Android-Ausbau auf dem separaten Branch: mehrere dauerhaft gespeicherte
+  OSM-Gebiete, Zwischenziele, Fahrprofile, Belagsfarben, lokale Favoriten,
+  manuelle Photon-Ortssuche, gespeicherte Planungen und lokale Rückführung.
+  Pausierbare GPS-Fahrten, zeitcodierter GPX-Export, Höhen- und
+  Leistungsdiagramme sowie lesende Bosch-Bluetooth-Kanäle ergänzt.
+  Android-Lockscreen nutzt eine Textbenachrichtigung; iPhone-spezifische
+  perspektivische Karte und Live-Aktivität sind noch nicht gleichwertig.
 
 ### Routing über freigegebene Schranken
 

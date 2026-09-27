@@ -30,11 +30,16 @@ class RideService : Service(), LocationListener {
     var paused = false
         private set
     private var segment = 0
+    lateinit var bike: BikeBluetooth
+        private set
+    private var bikeStarted = false
     private val partialFile by lazy { File(filesDir, "unfinished-ride.json") }
 
     override fun onCreate() {
         super.onCreate()
         locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+        bike = BikeBluetooth(this) { }
+        bike.onMeasurement = { recordBike(it) }
         if (partialFile.exists()) {
             try {
                 val saved = JSONObject(partialFile.readText())
@@ -68,6 +73,8 @@ class RideService : Service(), LocationListener {
             recording = false
             paused = false
             locationManager.removeUpdates(this)
+            bike.stop()
+            bikeStarted = false
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
@@ -90,9 +97,16 @@ class RideService : Service(), LocationListener {
             return START_STICKY
         }
         if (recording) return START_STICKY
-        startForeground(12, notification("Fahrtaufzeichnung aktiv"))
+        val restorePaused = intent == null && paused
+        startForeground(12, notification(if (restorePaused) "Fahrt pausiert · bitte fortsetzen" else "Fahrtaufzeichnung aktiv"))
         recording = true
-        paused = false
+        paused = restorePaused
+        if (!bikeStarted) {
+            bikeStarted = true
+            getSharedPreferences("riding", MODE_PRIVATE).getString("bikeAddress", null)?.let {
+                bike.connect(it)
+            }
+        }
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 3f, this)
@@ -110,6 +124,7 @@ class RideService : Service(), LocationListener {
         getSystemService(NotificationManager::class.java).notify(12, notification(message))
     }
     override fun onLocationChanged(location: Location) {
+        if (kotlin.math.abs(System.currentTimeMillis() - location.time) > 15_000) return
         if (location.hasAccuracy() && location.accuracy > 75f) return
         val point = Point(location.latitude, location.longitude)
         last = point
@@ -148,6 +163,7 @@ class RideService : Service(), LocationListener {
     }
     override fun onDestroy() {
         locationManager.removeUpdates(this)
+        bike.stop()
         if (track.isNotEmpty()) persist()
         super.onDestroy()
     }

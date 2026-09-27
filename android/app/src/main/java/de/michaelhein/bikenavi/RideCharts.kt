@@ -21,6 +21,20 @@ class RideCharts(context: Context, private val ride: SavedRide) : View(context) 
         val start = ride.samples.firstOrNull()?.time ?: ride.time
         val end = max(start + 1, ride.samples.lastOrNull()?.time ?: start + 1)
         fun x(time: Long) = left + (time - start).toFloat() / (end - start) * (right - left)
+        val modes = ride.bikeSamples.filter { it.value.assistMode != null }
+        modes.zipWithNext().forEach { (a, b) ->
+            if (b.time - a.time > 120_000) return@forEach
+            paint.color = when (a.value.assistMode) {
+                0 -> Color.DKGRAY
+                1 -> Color.rgb(38, 150, 85)
+                2 -> Color.rgb(30, 93, 207)
+                3 -> Color.MAGENTA
+                4 -> Color.RED
+                else -> Color.LTGRAY
+            }
+            paint.strokeWidth = 14f
+            canvas.drawLine(x(a.time), 34f, x(b.time), 34f, paint)
+        }
         fun chart(title: String, top: Float, samples: List<Pair<Long, Double?>>, color: Int) {
             paint.color = Color.DKGRAY
             paint.style = Paint.Style.FILL

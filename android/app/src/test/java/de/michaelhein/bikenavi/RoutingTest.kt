@@ -49,4 +49,26 @@ class RoutingTest {
         val route = g.route(Point(45.8, 15.9), Point(45.8, 15.902))
         assertTrue(route.points.contains(Point(45.801, 15.901)))
     }
+
+    @Test fun noUTurnAllowsContinuingAlongSameWay() {
+        val g = graph(""",
+          {"type":"way","id":10,"nodes":[1,2,3],"tags":{"highway":"cycleway"}}""",
+          """,{"type":"relation","id":101,"tags":{"type":"restriction","restriction:bicycle":"no_u_turn"},
+             "members":[{"type":"way","role":"from","ref":10},{"type":"node","role":"via","ref":2},
+                        {"type":"way","role":"to","ref":10}]}""")
+        assertTrue(g.route(Point(45.8, 15.9), Point(45.8, 15.902)).meters > 0)
+    }
+
+    @Test fun realTisnoBridgeFixtureCrossesBothPermittedGates() {
+        val input = javaClass.classLoader!!.getResourceAsStream("tisno_bridge_osm.json")!!
+            .bufferedReader().use { it.readText() }
+        val g = BikeGraph.compile(JSONObject(input))
+        val ids = listOf(272268068L, 275001050L)
+        assertTrue(g.nodes.containsKey(ids[0]))
+        assertTrue(g.nodes.containsKey(ids[1]))
+        val from = g.nodes[ids[0]]!!
+        val to = g.nodes[ids[1]]!!
+        assertTrue(g.route(from, to).meters > 0)
+        assertTrue(g.route(to, from).meters > 0)
+    }
 }
