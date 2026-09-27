@@ -13,9 +13,10 @@ Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release
   Tourenarchiv und GPX-Export ergänzt. Android-Bedienung, Online-Anforderungen
   und funktionale Grenzen dokumentiert.
 - Tests für erlaubte/gesperrte Schranken, Einbahnstraße und
-  Abbiegebeschränkung ergänzt. Android-Build und Gerätetest stehen noch aus,
-  da in der Entwicklungsumgebung weder Android SDK noch Gradle installiert
-  sind. Kein Android-Release und keine Änderung an iOS- oder Pi-Deployment.
+  Abbiegebeschränkung ergänzt. GitHub Actions am 27.09.2026:
+  `testDebugUnitTest` und `assembleDebug` erfolgreich. Ein Geräte- und
+  Feldtest steht noch aus. Debug-APK als CI-Artefakt; kein Android-Release und
+  keine Änderung an iOS- oder Pi-Deployment.
 
 ### Routing über freigegebene Schranken
 

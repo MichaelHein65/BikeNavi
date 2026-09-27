@@ -51,7 +51,7 @@ aufbewahrt. GPS-Aufzeichnungen liegen ausschließlich im privaten App-Speicher.
   Graph kann groß sein; Android kann für sehr ausgedehnte Gebiete Speicher
   benötigen. Die App ist nur für private, moderate Downloads vorgesehen.
 - Der GPX-Export enthält die Geometrie, derzeit keine Zeitstempel.
-- Ein Geräte- oder Feldtest und ein Android-Build müssen auf einer Umgebung
-  mit Android SDK nachgeholt werden.
+- CI baut ein Debug-APK und führt die Routentests aus. Ein Geräte- oder
+  Feldtest muss noch erfolgen.
 
 OSM-Daten: © OpenStreetMap contributors, ODbL.
