@@ -6,6 +6,8 @@ import android.app.AlertDialog
 import android.content.*
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.hardware.GeomagneticField
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -26,7 +28,7 @@ import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
-import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Overlay
 import org.osmdroid.views.overlay.Polyline
 import kotlin.concurrent.thread
 import kotlin.math.*
@@ -198,9 +200,9 @@ class MainActivity : Activity(), SensorEventListener {
         }
     }
     private fun redraw() {
-        map.overlays.removeAll { it is Marker || it is Polyline }
+        map.overlays.removeAll { it is WaypointOverlay || it is Polyline }
         fun marker(p: Point, title: String) {
-            map.overlays.add(Marker(map).apply { position = GeoPoint(p.lat, p.lon); this.title = title })
+            map.overlays.add(WaypointOverlay(p, title))
         }
         start?.let { marker(it, "Start") }
         via.forEachIndexed { i, p -> marker(p, "Zwischenziel ${i + 1}") }
@@ -225,6 +227,26 @@ class MainActivity : Activity(), SensorEventListener {
             })
         }
         map.invalidate()
+    }
+    private class WaypointOverlay(private val point: Point, private val label: String) : Overlay() {
+        private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(30, 90, 215) }
+        private val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = 4f
+        }
+        private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.BLACK
+            textSize = 32f
+            setShadowLayer(3f, 1f, 1f, Color.WHITE)
+        }
+        override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
+            if (shadow) return
+            val pixel = mapView.projection.toPixels(GeoPoint(point.lat, point.lon), null)
+            canvas.drawCircle(pixel.x.toFloat(), pixel.y.toFloat(), 14f, dot)
+            canvas.drawCircle(pixel.x.toFloat(), pixel.y.toFloat(), 14f, outline)
+            canvas.drawText(label, pixel.x + 20f, pixel.y - 16f, text)
+        }
     }
     private fun surfaceColor(s: String) = when (s) {
         "paved", "asphalt", "concrete", "concrete:plates", "concrete:lanes" -> Color.rgb(34, 100, 215)
