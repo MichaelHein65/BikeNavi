@@ -52,6 +52,17 @@ Die Diagramme und Fahrmodusfarben demonstrieren ausschließlich die Darstellung.
 
 Original und Entstehung des Logos: [AppIcon.md](../design/AppIcon.md). Die Screenshots zeigen Karten von OpenFreeMap mit Daten von [© OpenStreetMap-Mitwirkenden](https://www.openstreetmap.org/copyright). Quellen des Routenbeispiels: [Testdaten](../tests/fixtures/README.md).
 
+## Android-Startansicht
+
+Version **0.2.0-beta.1** · Android-35-Emulator · 28. September 2026.
+Der Bildschirm stammt aus dem erfolgreichen CI-Starttest mit dem simulierten
+Standardstandort des Emulators; er enthält keine persönlichen Fahrtdaten.
+Die Karte wird direkt aus OpenStreetMap-Kacheln geladen. Die unteren Aktionen
+bleiben oberhalb der Systemnavigation sichtbar; der CI-Test öffnet auch „Mehr“
+und prüft den Eintrag „Bike-Verbindung“.
+
+<img src="images/android-start.png" width="300" alt="Android-Startansicht mit geladener Karte, Startpunkt und zwei Bedienzeilen">
+
 ## Bilder erneut erstellen
 
 1. Einen eigenen iPhone-Simulator mit iOS 26.1 starten. Keine persönlichen App-Daten oder Serverzugänge verwenden.

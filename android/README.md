@@ -74,7 +74,7 @@ stoßen.
 - Android und iPhone haben wegen der Pi-freien Architektur getrennte Archive.
   Ein automatischer Import der bereits auf dem iPhone oder Pi gespeicherten
   Touren ist noch nicht vorhanden.
-- Build, Unit-Tests und ein Emulator-Starttest laufen in CI. Android-Gerätetest, längere Fahrt,
+- Build, Unit-Tests, Emulator-Start und Öffnen des „Mehr“-Menüs laufen in CI. Android-Gerätetest, längere Fahrt,
   Bluetooth-Gerätetest und Prüfung bei gesperrtem Bildschirm stehen aus.
 
 Karten- und Wegenetzdaten: © OpenStreetMap contributors (ODbL). Ortssuche:

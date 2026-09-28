@@ -28,6 +28,9 @@ Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release
   für schmale Android-Bildschirme samt Systemleisten angepasst. CI baut und
   testet die App sowie ihren Start im Android-35-Emulator; Navigation, Bosch-
   Verbindung und längere Fahrten benötigen weiterhin Gerätetests.
+- Android-CI-Test am 28.09.2026: Build und Unit-Tests erfolgreich; App-Start,
+  sichtbare Karte und Öffnen des „Mehr“-Menüs mit Bike-Eintrag im Android-35-
+  Emulator geprüft. Emulatoraufnahme in `docs/BILDSCHIRME.md` ergänzt.
 
 ### Routing über freigegebene Schranken
 
