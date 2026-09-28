@@ -26,13 +26,13 @@ und Gradle 8.9 werden benötigt. CI führt
   durch langes Drücken auf die Karte wählen; ein weiterer langer Druck bietet
   Zwischenziel, neuen Start/Zielpunkt oder Favorit an.
 - **Suche** fragt Photon nur nach einem ausdrücklichen Suchauftrag ab.
-  **Orte** verwaltet lokale Favoriten. **Wegpunkte** kann eine Tour umkehren,
+  **Mehr → Gespeicherte Orte** verwaltet lokale Favoriten. **Wegpunkte** kann eine Tour umkehren,
   Zwischenziele entfernen und die Planung zurücksetzen.
-- **Profil** wählt Radtyp, E-Unterstützung, Belagswunsch und Hügelpräferenz.
+- **Mehr → Fahrprofil** wählt Radtyp, E-Unterstützung, Belagswunsch und Hügelpräferenz.
   **Route** lädt fehlende OSM-Gebiete und rechnet lokal. Straßenregeln,
   Sperren, Einbahnstraßen und unterstützte Abbiegebeschränkungen werden
-  berücksichtigt. **Details** zeigt Länge und Belagsverteilung.
-- **Plan speichern** legt die Tour mit Wegpunkten und Profil im Archiv ab.
+  berücksichtigt. **Mehr → Routendetails** zeigt Länge und Belagsverteilung.
+- **Mehr → Plan speichern** legt die Tour mit Wegpunkten und Profil im Archiv ab.
   Die aktuelle Planung bleibt nach App-Neustart erhalten.
 - **Fahrt** startet die GPS-Aufzeichnung im Vordergrunddienst. Der nächste
   Abbieger, die Reststrecke und eine Benachrichtigung sind sichtbar; wahlweise
@@ -42,7 +42,7 @@ und Gradle 8.9 werden benötigt. CI führt
   unverändert.
 - **Touren** enthält Pläne und Fahrten. Für Fahrten gibt es Karte,
   Höhen-/Leistungsdiagramme und GPX mit Uhrzeiten und verfügbaren Höhenwerten.
-- **Bike** sucht nach Bosch-Smart-System-Bikes und liest verfügbare Live-Daten
+- **Mehr → Bike-Verbindung** sucht nach Bosch-Smart-System-Bikes und liest verfügbare Live-Daten
   über Bluetooth. Akku, Unterstützungsmodus, Fahrer-/Motorleistung, Kadenz und
   Geschwindigkeit werden nur angezeigt, wenn ein passendes Datenpaket
   empfangen wurde. Während der Fahrt werden empfangene Werte lokal gesichert.
@@ -74,7 +74,7 @@ stoßen.
 - Android und iPhone haben wegen der Pi-freien Architektur getrennte Archive.
   Ein automatischer Import der bereits auf dem iPhone oder Pi gespeicherten
   Touren ist noch nicht vorhanden.
-- Build und Unit-Tests laufen in CI. Android-Gerätetest, längere Fahrt,
+- Build, Unit-Tests und ein Emulator-Starttest laufen in CI. Android-Gerätetest, längere Fahrt,
   Bluetooth-Gerätetest und Prüfung bei gesperrtem Bildschirm stehen aus.
 
 Karten- und Wegenetzdaten: © OpenStreetMap contributors (ODbL). Ortssuche:

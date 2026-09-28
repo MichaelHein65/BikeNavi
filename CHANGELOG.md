@@ -24,6 +24,10 @@ Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release
   Leistungsdiagramme sowie lesende Bosch-Bluetooth-Kanäle ergänzt.
   Android-Lockscreen nutzt eine Textbenachrichtigung; iPhone-spezifische
   perspektivische Karte und Live-Aktivität sind noch nicht gleichwertig.
+- Emulator-Startabsturz der Kartenmarkierung behoben und die Bedienelemente
+  für schmale Android-Bildschirme samt Systemleisten angepasst. CI baut und
+  testet die App sowie ihren Start im Android-35-Emulator; Navigation, Bosch-
+  Verbindung und längere Fahrten benötigen weiterhin Gerätetests.
 
 ### Routing über freigegebene Schranken
 

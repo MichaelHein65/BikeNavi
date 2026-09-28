@@ -22,6 +22,7 @@ import android.os.IBinder
 import android.speech.tts.TextToSpeech
 import android.view.Gravity
 import android.view.View
+import android.view.WindowInsets
 import android.widget.*
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
@@ -118,27 +119,15 @@ class MainActivity : Activity(), SensorEventListener {
         button("Touren") { showRides() }
         panel.addView(status)
         panel.addView(buttons)
-        val more = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        fun moreButton(label: String, action: () -> Unit) {
-            more.addView(Button(this).apply { text = label; textSize = 11f; setOnClickListener { action() } },
+        val secondary = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun secondaryButton(label: String, action: () -> Unit) {
+            secondary.addView(Button(this).apply { text = label; setOnClickListener { action() } },
                 LinearLayout.LayoutParams(0, -2, 1f))
         }
-        moreButton("Suche") { search() }
-        moreButton("Orte") { showPlaces() }
-        moreButton("Wegpunkte") { editWaypoints() }
-        moreButton("Profil") { editProfile() }
-        moreButton("Details") { showRouteDetails() }
-        panel.addView(more)
-        val extra = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        fun extraButton(label: String, action: () -> Unit) {
-            extra.addView(Button(this).apply { text = label; textSize = 12f; setOnClickListener { action() } },
-                LinearLayout.LayoutParams(0, -2, 1f))
-        }
-        extraButton("Bike") { showBike() }
-        extraButton("Einstellungen") { showSettings() }
-        extraButton("Karte folgen") { following = !following; show(if (following) "Kartennachführung aktiv" else "Karte frei") }
-        extraButton("Plan speichern") { savePlan() }
-        panel.addView(extra)
+        secondaryButton("Suche") { search() }
+        secondaryButton("Wegpunkte") { editWaypoints() }
+        secondaryButton("Mehr") { showMoreMenu() }
+        panel.addView(secondary)
         val frame = FrameLayout(this)
         frame.addView(map)
         val attribution = TextView(this).apply {
@@ -149,7 +138,26 @@ class MainActivity : Activity(), SensorEventListener {
         }
         frame.addView(attribution, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.RIGHT))
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.rgb(26, 40, 59))
+            setOnApplyWindowInsetsListener { view, insets ->
+                val top: Int
+                val bottom: Int
+                if (Build.VERSION.SDK_INT >= 30) {
+                    val bars = insets.getInsets(WindowInsets.Type.systemBars())
+                    top = bars.top
+                    bottom = bars.bottom
+                } else {
+                    @Suppress("DEPRECATION")
+                    top = insets.systemWindowInsetTop
+                    @Suppress("DEPRECATION")
+                    bottom = insets.systemWindowInsetBottom
+                }
+                view.setPadding(0, top, 0, bottom)
+                insets
+            }
+        }
         root.addView(frame, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(panel)
         setContentView(root)
@@ -199,14 +207,26 @@ class MainActivity : Activity(), SensorEventListener {
                 }.show()
         }
     }
+    private fun showMoreMenu() {
+        val actions = arrayOf("Gespeicherte Orte", "Fahrprofil", "Routendetails", "Bike-Verbindung",
+            "Karte folgen: ${if (following) "an" else "aus"}", "Plan speichern", "Einstellungen")
+        AlertDialog.Builder(this).setTitle("Weitere Funktionen").setItems(actions) { _, which ->
+            when (which) {
+                0 -> showPlaces()
+                1 -> editProfile()
+                2 -> showRouteDetails()
+                3 -> showBike()
+                4 -> { following = !following; show(if (following) "Kartennachführung aktiv" else "Karte frei") }
+                5 -> savePlan()
+                6 -> showSettings()
+            }
+        }.show()
+    }
     private fun redraw() {
         map.overlays.removeAll { it is WaypointOverlay || it is Polyline }
         fun marker(p: Point, title: String) {
             map.overlays.add(WaypointOverlay(p, title))
         }
-        start?.let { marker(it, "Start") }
-        via.forEachIndexed { i, p -> marker(p, "Zwischenziel ${i + 1}") }
-        goal?.let { marker(it, "Ziel") }
         (navigationRoute ?: route)?.let { r ->
             if (r.surfaces.size == r.points.size - 1) {
                 var from = 0
@@ -226,6 +246,9 @@ class MainActivity : Activity(), SensorEventListener {
                 outlinePaint.strokeWidth = 12f
             })
         }
+        start?.let { marker(it, "Start") }
+        via.forEachIndexed { i, p -> marker(p, "Zwischenziel ${i + 1}") }
+        goal?.let { marker(it, "Ziel") }
         map.invalidate()
     }
     private class WaypointOverlay(private val point: Point, private val label: String) : Overlay() {
