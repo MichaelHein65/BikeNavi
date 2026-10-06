@@ -4,6 +4,8 @@ Stand: 6. Oktober 2026. Dies ist eine Entwicklungsfassung vor 1.0, keine für la
 
 ## Implementiert
 
+- Tourtagebuch mit offline gespeicherten Foto-/Notizorten, Übertragung zum Pi während einer Fahrt, Quellenrecherche, optionaler KI-Websuche und buntem portablem HTML-Blog mit Export. [Ablauf und Grenzen](BLOG.md).
+
 - Xcode-Projekt für iPhone ab iOS 17 mit SwiftUI und MapLibre Native.
 - Kartenansicht, Kartenpunkte als Start/Ziel/Zwischenziel, Standort als Startpunkt, Textsuche sowie Sortieren und Entfernen von Wegpunkten.
 - Automatische lokale Neuberechnung nach Änderungen an Punkten oder Profil; eine veraltete Antwort überschreibt keine neuere Planung.

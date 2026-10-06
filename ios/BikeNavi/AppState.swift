@@ -771,7 +771,11 @@ final class AppState: ObservableObject {
         synchronizing = true
         defer { synchronizing = false; reload() }
         do {
-            for record in try store.all() where record.dirty && (record.document.recordingState != .recording || !(try store.blogPoints(rideID: record.id, pendingOnly: true)).isEmpty) {
+            for record in try store.all() where record.dirty {
+                if record.document.recordingState == .recording {
+                    let pendingPoints = try store.blogPoints(rideID: record.id, pendingOnly: true)
+                    if pendingPoints.isEmpty { continue }
+                }
                 do {
                     let response = try await api.send(record)
                     try store.acknowledge(record, remote: response)

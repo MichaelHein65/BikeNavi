@@ -30,7 +30,7 @@ struct BlogDraft: Codable, Identifiable {
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("BikeNavi/BlogExports", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appendingPathComponent("BikeNavi-Blog-\(id.uuidString).html")
+        let url = directory.appendingPathComponent("BikeNavi-Blog-\(rideID.uuidString)-\(id.uuidString).html")
         try Data(html.utf8).write(to: url, options: .atomic)
         return url
     }

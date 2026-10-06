@@ -30,7 +30,9 @@ Die Streckenplanung erfolgt mit eingerichtetem Pi über openrouteservice und ben
 
 ## Tourtagebuch und Blog
 
-Während einer laufenden Fahrt speichert **Blog-Ort festhalten** einen aktuellen Standort, eine Notiz und optional ein verkleinertes Foto zunächst nur auf dem iPhone. Nach der Fahrt werden diese Orte zusammen mit der Fahrt an den privaten Pi synchronisiert. Im Tourenarchiv erzeugt **Tourtagebuch & Blog** daraus eine portable HTML-Fassung mit Streckenübersicht, Höhenprofil, eigenen Bildern und optionalen topografischen Ausschnitten.
+[Bedienung, Recherche, KI-Konfiguration und Grenzen](docs/BLOG.md).
+
+Während einer laufenden Fahrt speichert **Blog-Ort festhalten** einen aktuellen Standort, eine Notiz und optional ein verkleinertes Foto zunächst nur auf dem iPhone. Bei erreichbarem Pi werden die Orte bereits unterwegs nach einer Fahrtsnapshot übertragen. Im Tourenarchiv erzeugt **Tourtagebuch & Blog** daraus eine portable HTML-Fassung mit Streckenübersicht, Höhenprofil, eigenen Bildern und optionalen topografischen Ausschnitten.
 
 Ohne `BLOG_OPENAI_API_KEY` und `BLOG_OPENAI_MODEL` auf dem Pi erzeugt BikeNavi einen Vorlagenentwurf. Mit beiden optionalen Werten darf der Pi einen kreativen Text über die Responses API erzeugen; dabei übermittelt er nur Tourtitel sowie Titel und Notizen der Orte, niemals Fotos oder vollständige GPS-Spuren. Der HTML-Entwurf ist vor einer Veröffentlichung redaktionell zu prüfen.
 

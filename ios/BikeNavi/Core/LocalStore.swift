@@ -290,6 +290,14 @@ final class LocalStore {
     }
 
     func deleteBlogData(rideID: UUID) throws {
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("BikeNavi/BlogExports", isDirectory: true)
+        if FileManager.default.fileExists(atPath: directory.path) {
+            for url in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                where url.lastPathComponent.hasPrefix("BikeNavi-Blog-\(rideID.uuidString)-") {
+                try FileManager.default.removeItem(at: url)
+            }
+        }
         try execute("DELETE FROM blog_points WHERE ride_id='\(rideID.uuidString)'")
         try execute("DELETE FROM blog_drafts WHERE ride_id='\(rideID.uuidString)'")
         try execute("DELETE FROM metadata WHERE key='blog-\(rideID.uuidString)'")
