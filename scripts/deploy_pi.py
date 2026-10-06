@@ -1,6 +1,7 @@
 """Deploy only this application's files to its dedicated directory on pi5."""
 from pathlib import Path
 import json
+import shlex
 import subprocess
 import tarfile
 
@@ -30,7 +31,27 @@ with tarfile.open(archive, "w:gz") as tar:
     for path in sorted((ROOT / "server/bikenavi").glob("*.py")):
         tar.add(path, arcname=path.relative_to(ROOT))
 subprocess.run(["scp", "-q", str(archive), f"{TARGET}:{REMOTE}/release.tar.gz"], check=True)
-subprocess.run(["scp", "-q", str(ROOT / ".env"), f"{TARGET}:{REMOTE}/.env"], check=True)
+# Preserve Pi-local blog credentials when the Mac's .env has no value for them.
+# The key never travels back to the Mac or appears in command arguments/output.
+merge_environment = r'''from pathlib import Path
+import os, sys
+root=Path("/srv/bikenavi")
+file=root/".env"
+local=sys.stdin.read()
+previous=file.read_text() if file.exists() else ""
+def parse(text):
+    return {k.strip():v.strip() for line in text.splitlines() if "=" in line and not line.lstrip().startswith("#") for k,v in [line.split("=",1)]}
+new,old=parse(local),parse(previous)
+for name in ("BLOG_OPENAI_API_KEY","BLOG_OPENAI_MODEL","BLOG_WEB_SEARCH"):
+    if not new.get(name, "").strip("\"' ") and old.get(name):
+        local="\n".join(line for line in local.splitlines() if line.split("=",1)[0].strip()!=name)+"\n"+name+"="+old[name]+"\n"
+temporary=root/".env.deploy-tmp"
+fd=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
+with os.fdopen(fd,"w") as handle: handle.write(local)
+os.replace(temporary,file)
+file.chmod(0o600)
+'''
+ssh("python3 -c " + shlex.quote(merge_environment), input=(ROOT / ".env").read_bytes())
 ssh("chmod 600 /srv/bikenavi/.env && cd /srv/bikenavi && tar xzf release.tar.gz && sudo -n sh ops/bikenavi-ipv6.sh --install && docker compose up --build -d")
 ssh("sudo -n tailscale serve --bg --https=10443 http://127.0.0.1:8093")
 print("BikeNavi wurde als eigenes Compose-Projekt bereitgestellt.")

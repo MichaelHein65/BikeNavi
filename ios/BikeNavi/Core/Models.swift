@@ -74,12 +74,30 @@ enum SurfacePreference: String, Codable, CaseIterable {
     }
 }
 
+enum TravelMode: String, Codable, CaseIterable {
+    case cycling, bikeAndHike, hiking
+    var title: String {
+        switch self {
+        case .cycling: "Rad"
+        case .bikeAndHike: "Rad&Wandern"
+        case .hiking: "Wandern"
+        }
+    }
+    var symbol: String { self == .hiking ? "figure.hiking" : "bicycle" }
+}
+
 struct RidingProfile: Codable, Equatable {
+    // Optional so older plans and sync receipts keep their original representation.
+    var travelMode: TravelMode?
+    var mode: TravelMode {
+        get { travelMode ?? .cycling }
+        set { travelMode = newValue == .cycling ? nil : newValue }
+    }
     var bike: Bike = .touring
     var electric = true
     var surface: SurfacePreference = .any
     var gentleHills = false
-    var title: String { (electric ? "E-" : "") + bike.title }
+    var title: String { mode == .cycling ? (electric ? "E-" : "") + bike.title : mode.title }
 }
 
 struct Maneuver: Codable, Equatable {
@@ -163,6 +181,17 @@ struct CalculatedRoute: Codable, Identifiable, Equatable {
     var surfaceSections: [RouteSurfaceSection]?
     var intersectionContexts: [IntersectionContext]?
     var waypointIndices: [Int]?
+    var elevationProfile: [RouteElevationSample]?
+    var elevationSource: String?
+    var unmappedDestinationDistance: Double?
+    var walkingStartIndex: Int?
+    var walkingDistance: Double?
+    var cyclingDistance: Double?
+    var bicycleParking: Coordinate? {
+        guard let index = walkingStartIndex, index > 0, index < coordinates.count,
+              index < coordinates.count - 1 || (walkingDistance == 0 && (unmappedDestinationDistance ?? 0) > 20) else { return nil }
+        return coordinates[index]
+    }
 
     var coloredSections: [RouteSurfaceSection] {
         guard coordinates.count > 1 else { return [] }

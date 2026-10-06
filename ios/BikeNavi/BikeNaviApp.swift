@@ -60,8 +60,12 @@ struct AppRoot: View {
                 do { try await Task.sleep(for: .seconds(60)) } catch { break }
             }
         }
-        .onChange(of: phase) { _, value in if value == .active { Task { await state.sync() } } }
+        .onChange(of: phase) { _, value in
+            if value == .active { state.becameActive(); Task { await state.sync() } }
+            else { state.cancelRideStart() }
+        }
         .onChange(of: state.tab, initial: true) { _, tab in
+            state.cancelRideStart()
             bike.monitor(tab == 1, for: .rideScreen)
             if tab == 1 { state.openRide() }
         }

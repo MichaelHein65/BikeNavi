@@ -16,7 +16,7 @@ DEFAULT_OVERPASS = "https://overpass-api.de/api/interpreter"
 FALLBACK_OVERPASS = "https://overpass.private.coffee/api/interpreter"
 
 VERSION = 1
-COMPILER_REVISION = 2
+COMPILER_REVISION = 3
 TILE_DEGREES = 0.05
 ALLOWED = {"yes", "designated", "official", "permissive"}
 ROAD_DEFAULTS = {"cycleway", "residential", "living_street", "unclassified", "service",
@@ -111,7 +111,9 @@ def compile_tile(elements, x, y, generated_at=None):
         raise HTTPException(422, "Dieser Kartenbereich ist für die lokale Rückführung zu groß.")
     excluded = blocked_ways | (set(ways) - {e["way"] for e in edges})
     return {"excludedWays": sorted(excluded), "blockedNodes": sorted(blocked_nodes), "version": VERSION, "compilerRevision": COMPILER_REVISION, "x": x, "y": y, "generatedAt": generated_at or time.time(),
-            "nodes": [{"id": id, "coordinate": {"latitude": nodes[id]["lat"], "longitude": nodes[id]["lon"]}} for id in sorted(used)],
+            "nodes": [{"id": id, "coordinate": {"latitude": nodes[id]["lat"], "longitude": nodes[id]["lon"]},
+                       **({"osmVersion": nodes[id]["version"]} if type(nodes[id].get("version")) is int
+                          and nodes[id]["version"] > 0 else {})} for id in sorted(used)],
             "edges": edges, "restrictions": restrictions}
 
 
@@ -132,7 +134,7 @@ class OfflineTiles:
             # Return complete ways and all referencing restrictions, including their via members.
             query = (f'[out:json][timeout:25][maxsize:67108864];'
                      f'way["highway"]({south:.5f},{west:.5f},{south+TILE_DEGREES:.5f},{west+TILE_DEGREES:.5f})->.roads;'
-                     'rel(bw.roads)["type"="restriction"]->.rules;(.roads;node(w.roads);.rules;);out body;')
+                     'rel(bw.roads)["type"="restriction"]->.rules;(.roads;node(w.roads);.rules;);out meta;')
             # Keep custom installations on their configured provider. For the public
             # default, a second OSM mirror can serve tiles when the first is down.
             urls = [self.url]

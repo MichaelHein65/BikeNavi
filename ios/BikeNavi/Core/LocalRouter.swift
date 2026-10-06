@@ -6,6 +6,7 @@ struct LocalNavigationState: Codable, Equatable {
     var originalProgress = 0.0
     var usedUnpaved = 0.0
     var routeProgress = 0.0
+    var skippedWaypointOrdinals: [Int]?
 }
 
 struct LocalConnection {
@@ -29,21 +30,35 @@ enum LocalRouteMetrics {
             total + max(0, min(to, distances[section.endIndex]) - max(from, distances[section.startIndex]))
         }
     }
-    static func nextWaypointIndex(route: CalculatedRoute, waypoints: [Waypoint], traveled: Double) -> Int {
-        let distances = distances(route)
+    static func waypointIndices(route: CalculatedRoute, waypoints: [Waypoint]) -> [Int] {
         if let indices = route.waypointIndices, indices.count == waypoints.count,
            indices.allSatisfy({ route.coordinates.indices.contains($0) }), indices == indices.sorted() {
-            return indices.dropFirst().first(where: { distances[$0] >= traveled - 3 }) ?? route.coordinates.count-1
+            return indices
         }
+        guard !route.coordinates.isEmpty else { return [] }
         var lower = 0
-        for waypoint in waypoints.dropFirst().dropLast() {
-            let candidates = lower..<route.coordinates.count
-            guard let nearest = candidates.min(by: { route.coordinates[$0].distance(to: waypoint.coordinate) < route.coordinates[$1].distance(to: waypoint.coordinate) }) else { continue }
-            lower = nearest
-            // Only a position beyond the waypoint counts as passed, never a 25 m shortcut.
-            if distances[nearest] >= traveled - 3 { return nearest }
+        return waypoints.enumerated().map { ordinal, waypoint in
+            if ordinal == 0 { return 0 }
+            if ordinal == waypoints.count - 1 { return route.coordinates.count - 1 }
+            lower = (lower..<route.coordinates.count).min(by: {
+                route.coordinates[$0].distance(to: waypoint.coordinate) < route.coordinates[$1].distance(to: waypoint.coordinate)
+            }) ?? lower
+            return lower
         }
-        return route.coordinates.count-1
+    }
+    static func pendingWaypoints(route: CalculatedRoute, waypoints: [Waypoint], traveled: Double,
+                                 skipped: [Int] = []) -> [Int] {
+        let distances = distances(route)
+        let indices = waypointIndices(route: route, waypoints: waypoints)
+        return indices.indices.filter {
+            $0 > 0 && $0 < waypoints.count - 1 && !skipped.contains($0) && distances[indices[$0]] >= traveled - 3
+        }
+    }
+    static func nextWaypointIndex(route: CalculatedRoute, waypoints: [Waypoint], traveled: Double,
+                                  skipped: [Int] = []) -> Int {
+        let indices = waypointIndices(route: route, waypoints: waypoints)
+        let pending = pendingWaypoints(route: route, waypoints: waypoints, traveled: traveled, skipped: skipped)
+        return pending.first.map { indices[$0] } ?? route.coordinates.count - 1
     }
     static func combined(original: CalculatedRoute, state: LocalNavigationState?) -> CalculatedRoute {
         guard let connector = state?.connector, let join = state?.rejoinIndex,
@@ -78,7 +93,8 @@ enum LocalRouteMetrics {
         let originalDistance = distances(original)
         result.distance = distances(result).last ?? 0
         result.duration = connector.duration + original.duration * max(0, (originalDistance.last! - originalDistance[join]) / max(1, originalDistance.last!))
-        result.ascent = original.ascent; result.descent = original.descent
+        result.elevationProfile = nil; result.elevationSource = nil
+        result.ascent = 0; result.descent = 0
         result.surfaces = [] // Totals from the original tour are not valid for the connector.
         result.warnings = original.warnings
         return result
@@ -112,7 +128,8 @@ enum LocalRouter {
     }
     static func connect(graph: OfflineGraph, original: CalculatedRoute, waypoints: [Waypoint], profile: RidingProfile,
                         position: Coordinate, heading: Double?, traveled: Double, usedUnpaved: Double,
-                        timeLimit: Double = 2, planning: Bool = false) throws -> LocalConnection {
+                        timeLimit: Double = 2, planning: Bool = false, skippedWaypoints: [Int] = []) throws -> LocalConnection {
+        guard profile.mode == .cycling else { throw LocalRoutingError.walkingRequiresServer }
         let deadline = ProcessInfo.processInfo.systemUptime + max(0, timeLimit)
         func check() throws {
             try Task.checkCancellation()
@@ -129,7 +146,7 @@ enum LocalRouter {
         let physicalWays = Set(starts.map { graph.edges[$0.edge].way })
         if !planning, physicalWays.count > 1, starts.contains(where: { $0.t > 0.08 && $0.t < 0.92 }) { throw LocalRoutingError.ambiguous }
         let distances = LocalRouteMetrics.distances(original)
-        let nextWaypoint = LocalRouteMetrics.nextWaypointIndex(route: original, waypoints: waypoints, traveled: traveled)
+        let nextWaypoint = LocalRouteMetrics.nextWaypointIndex(route: original, waypoints: waypoints, traveled: traveled, skipped: skippedWaypoints)
         let upper = distances[nextWaypoint]
         // Evaluate every covered vertex up to the next mandatory stop. A nearby
         // return leg can be kilometres ahead along a winding original route.
@@ -303,6 +320,8 @@ extension LocalRouteMetrics {
         guard let best, best.distance <= 25 else { return nil }
         var result = route
         result.coordinates = [best.point] + route.coordinates.dropFirst(best.i+1)
+        result.elevationProfile = nil; result.elevationSource = nil
+        result.ascent = 0; result.descent = 0
         result.maneuvers = route.maneuvers.filter { $0.coordinateIndex > best.i }.map {
             Maneuver(instruction: $0.instruction, distance: $0.distance, coordinateIndex: $0.coordinateIndex-best.i, type: $0.type)
         }
@@ -320,6 +339,7 @@ extension LocalRouter {
     /// Entire itinerary is searched on the phone, using the same access rules
     /// and surface budget as navigation. No routing service is involved.
     static func plan(graph: OfflineGraph, document: TourDocument) throws -> CalculatedRoute {
+        guard document.profile.mode == .cycling else { throw LocalRoutingError.walkingRequiresServer }
         guard document.canCalculateRoute else { throw LocalRoutingError.noConnection }
         var result: CalculatedRoute?
         var indices = [0]

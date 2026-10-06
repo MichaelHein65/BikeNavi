@@ -15,6 +15,9 @@ final class LocalStore {
         try execute("CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, payload BLOB NOT NULL)")
         try execute("CREATE TABLE IF NOT EXISTS bike_samples (id TEXT PRIMARY KEY, ride_id TEXT NOT NULL, payload BLOB NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0)")
         try execute("CREATE INDEX IF NOT EXISTS bike_samples_pending ON bike_samples(ride_id, uploaded)")
+        try execute("CREATE TABLE IF NOT EXISTS blog_points (id TEXT PRIMARY KEY, ride_id TEXT NOT NULL, payload BLOB NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0)")
+        try execute("CREATE INDEX IF NOT EXISTS blog_points_pending ON blog_points(ride_id, uploaded)")
+        try execute("CREATE TABLE IF NOT EXISTS blog_drafts (ride_id TEXT PRIMARY KEY, payload BLOB NOT NULL)")
         try execute("CREATE TABLE IF NOT EXISTS places (id TEXT PRIMARY KEY, payload BLOB NOT NULL)")
         try execute("CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value INTEGER NOT NULL)")
     }
@@ -89,6 +92,7 @@ final class LocalStore {
         try execute("BEGIN IMMEDIATE")
         do {
             try put(record)
+            try deleteBlogData(rideID: id)
             try execute("DELETE FROM bike_samples WHERE ride_id='\(id.uuidString)'")
             try execute("COMMIT")
         } catch { try? execute("ROLLBACK"); throw error }
@@ -115,6 +119,12 @@ final class LocalStore {
                 sample.id = UUID()
                 sample.rideID = copy.id
                 try append(sample)
+            }
+            for point in try blogPoints(rideID: record.id) {
+                var copyPoint = point
+                copyPoint.id = UUID()
+                copyPoint.rideID = copy.id
+                try appendBlogPoint(copyPoint)
             }
             var original = record
             original.dirty = false
@@ -193,6 +203,97 @@ final class LocalStore {
     }
 
     func resetBikeUploads() throws { try execute("UPDATE bike_samples SET uploaded=0") }
+
+    func appendBlogPoint(_ point: BlogPoint, uploaded: Bool = false) throws {
+        guard let ride = try record(id: point.rideID), !ride.deleted, ride.document.kind == .ride else {
+            throw NSError(domain: "BikeNavi.Blog", code: 1, userInfo: [NSLocalizedDescriptionKey: "Die zugehörige Fahrt fehlt."])
+        }
+        let existing = try blogPoints(rideID: point.rideID)
+        if let same = existing.first(where: { $0.id == point.id }) {
+            guard same == point else { throw failure() }
+            if uploaded { try acknowledgeBlogPoints([point.id]) }
+            return
+        }
+        guard existing.count < 50, existing.reduce(point.photo?.count ?? 0, { $0 + ($1.photo?.count ?? 0) }) <= 20 * 1024 * 1024,
+              (point.photo?.count ?? 0) <= 768 * 1024 else {
+            throw NSError(domain: "BikeNavi.Blog", code: 2, userInfo: [NSLocalizedDescriptionKey: "Pro Fahrt sind bis zu 50 Blog-Orte und 20 MB Fotos möglich."])
+        }
+        let data = try encoder.encode(point)
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "INSERT INTO blog_points(id,ride_id,payload,uploaded) VALUES(?,?,?,?)", -1, &statement, nil) == SQLITE_OK else { throw failure() }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, point.id.uuidString, -1, transient)
+        sqlite3_bind_text(statement, 2, point.rideID.uuidString, -1, transient)
+        _ = data.withUnsafeBytes { sqlite3_bind_blob(statement, 3, $0.baseAddress, Int32(data.count), transient) }
+        sqlite3_bind_int(statement, 4, uploaded ? 1 : 0)
+        guard sqlite3_step(statement) == SQLITE_DONE else { throw failure() }
+    }
+
+    func blogPoints(rideID: UUID, pendingOnly: Bool = false) throws -> [BlogPoint] {
+        var statement: OpaquePointer?
+        let sql = "SELECT payload FROM blog_points WHERE ride_id=?" + (pendingOnly ? " AND uploaded=0" : "") + " ORDER BY rowid"
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { throw failure() }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, rideID.uuidString, -1, transient)
+        var points: [BlogPoint] = []
+        while true {
+            let result = sqlite3_step(statement)
+            if result == SQLITE_DONE { return points.sorted { $0.capturedAt < $1.capturedAt } }
+            guard result == SQLITE_ROW, let bytes = sqlite3_column_blob(statement, 0) else { throw failure() }
+            points.append(try decoder.decode(BlogPoint.self, from: Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, 0)))))
+        }
+    }
+
+    func acknowledgeBlogPoints(_ ids: [UUID]) throws {
+        for id in ids { try execute("UPDATE blog_points SET uploaded=1 WHERE id='\(id.uuidString)'") }
+    }
+
+    func blogCursor(rideID: UUID) throws -> Int {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT value FROM metadata WHERE key=?", -1, &statement, nil) == SQLITE_OK else { throw failure() }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, "blog-" + rideID.uuidString, -1, transient)
+        let result = sqlite3_step(statement)
+        if result == SQLITE_DONE { return 0 }
+        guard result == SQLITE_ROW else { throw failure() }
+        return Int(sqlite3_column_int64(statement, 0))
+    }
+
+    func setBlogCursor(_ value: Int, rideID: UUID) throws {
+        try execute("INSERT INTO metadata(key,value) VALUES('blog-\(rideID.uuidString)',\(max(0, value))) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
+    }
+
+    func resetBlogUploads() throws {
+        try execute("UPDATE blog_points SET uploaded=0")
+        try execute("DELETE FROM metadata WHERE key LIKE 'blog-%'")
+    }
+
+    func saveBlogDraft(_ draft: BlogDraft) throws {
+        let data = try encoder.encode(draft)
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "INSERT INTO blog_drafts(ride_id,payload) VALUES(?,?) ON CONFLICT(ride_id) DO UPDATE SET payload=excluded.payload", -1, &statement, nil) == SQLITE_OK else { throw failure() }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, draft.rideID.uuidString, -1, transient)
+        _ = data.withUnsafeBytes { sqlite3_bind_blob(statement, 2, $0.baseAddress, Int32(data.count), transient) }
+        guard sqlite3_step(statement) == SQLITE_DONE else { throw failure() }
+    }
+
+    func blogDraft(rideID: UUID) throws -> BlogDraft? {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT payload FROM blog_drafts WHERE ride_id=?", -1, &statement, nil) == SQLITE_OK else { throw failure() }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, rideID.uuidString, -1, transient)
+        let result = sqlite3_step(statement)
+        if result == SQLITE_DONE { return nil }
+        guard result == SQLITE_ROW, let bytes = sqlite3_column_blob(statement, 0) else { throw failure() }
+        return try decoder.decode(BlogDraft.self, from: Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, 0))))
+    }
+
+    func deleteBlogData(rideID: UUID) throws {
+        try execute("DELETE FROM blog_points WHERE ride_id='\(rideID.uuidString)'")
+        try execute("DELETE FROM blog_drafts WHERE ride_id='\(rideID.uuidString)'")
+        try execute("DELETE FROM metadata WHERE key='blog-\(rideID.uuidString)'")
+    }
 
     func places() throws -> [SavedPlace] {
         var statement: OpaquePointer?

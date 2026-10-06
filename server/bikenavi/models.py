@@ -21,6 +21,7 @@ class Waypoint(Model):
 
 
 class Profile(Model):
+    travelMode: Literal["cycling", "bikeAndHike", "hiking"] | None = None
     bike: Literal["touring", "gravel", "mountain", "road"] = "touring"
     electric: bool = True
     surface: Literal["any", "preferPaved", "pavedOnly"] = "any"
@@ -56,6 +57,11 @@ class IntersectionContext(Model):
     roads: list[ContextRoad] = Field(default_factory=list, max_length=10)
 
 
+class ElevationSample(Model):
+    distance: float = Field(ge=0)
+    altitude: float = Field(ge=-500, le=9000)
+
+
 class Route(Model):
     id: UUID
     coordinates: list[Coordinate] = Field(min_length=2, max_length=100_000)
@@ -71,9 +77,33 @@ class Route(Model):
     warnings: list[str] = Field(default_factory=list)
     provider: str = "openrouteservice"
     calculatedAt: float
+    elevationProfile: list[ElevationSample] | None = Field(default=None, min_length=2, max_length=2000)
+    elevationSource: str | None = Field(default=None, max_length=200)
+    unmappedDestinationDistance: float | None = Field(default=None, gt=20, le=500)
+    walkingStartIndex: int | None = Field(default=None, ge=0)
+    walkingDistance: float | None = Field(default=None, ge=0)
+    cyclingDistance: float | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def check_indices(self):
+        walking = (self.walkingStartIndex, self.walkingDistance, self.cyclingDistance)
+        if any(v is not None for v in walking):
+            if any(v is None for v in walking):
+                raise ValueError("Unvollständige Rad-/Wanderabschnitte")
+            if self.walkingStartIndex >= len(self.coordinates):
+                raise ValueError("Wanderbeginn liegt außerhalb der Route")
+            if self.walkingStartIndex == len(self.coordinates) - 1 and (
+                    self.walkingDistance != 0 or self.unmappedDestinationDistance is None):
+                raise ValueError("Wanderbeginn am Routenende nur bei unerfasstem Fußrest")
+            if abs(self.walkingDistance + self.cyclingDistance - self.distance) > 1:
+                raise ValueError("Rad-/Wanderstrecke passt nicht zur Gesamtlänge")
+            if self.walkingStartIndex == 0 and self.cyclingDistance != 0:
+                raise ValueError("Reine Wanderroute enthält Radstrecke")
+        if self.elevationProfile is not None:
+            samples = self.elevationProfile
+            if (samples[0].distance != 0 or abs(samples[-1].distance - self.distance) > 1
+                    or any(a.distance >= b.distance for a, b in zip(samples, samples[1:]))):
+                raise ValueError("Höhenprofil passt nicht zur Routenlänge")
         if any(m.coordinateIndex >= len(self.coordinates) for m in self.maneuvers):
             raise ValueError("Abbiegehinweis liegt außerhalb der Route")
         if self.waypointIndices is not None and (self.waypointIndices != sorted(self.waypointIndices)
@@ -103,6 +133,7 @@ class LocalNavigationState(Model):
     originalProgress: float = Field(default=0, ge=0)
     usedUnpaved: float = Field(default=0, ge=0)
     routeProgress: float = Field(default=0, ge=0)
+    skippedWaypointOrdinals: list[int] | None = Field(default=None, max_length=48)
 
 
 class Document(Model):
@@ -127,6 +158,9 @@ class Document(Model):
     @model_validator(mode="after")
     def check_local_navigation(self):
         nav = self.localNavigation
+        if nav and nav.skippedWaypointOrdinals:
+            if self.kind != "ride" or any(i <= 0 or i >= len(self.waypoints) - 1 for i in nav.skippedWaypointOrdinals):
+                raise ValueError("Nur Zwischenziele einer Fahrt können übersprungen werden")
         if nav and nav.connector is not None:
             if self.kind != "ride" or self.route is None or nav.rejoinIndex is None or nav.rejoinIndex >= len(self.route.coordinates):
                 raise ValueError("Ungültiger lokaler Anschluss an die Tour")

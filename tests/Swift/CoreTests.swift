@@ -58,6 +58,23 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(restored, [place])
         XCTAssertNotEqual(restored[0].waypoint.id, restored[0].id)
     }
+    func testBlogPointSurvivesReopenAndDeletingRideRemovesItsPrivateData() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("blog.sqlite")
+        let rideID: UUID
+        do {
+            let db = try LocalStore(url: url)
+            var ride = TourDocument()
+            ride.kind = .ride
+            try db.save(ride)
+            rideID = ride.id
+            try db.appendBlogPoint(BlogPoint(rideID: rideID, coordinate: Coordinate(latitude: 49.41, longitude: 8.68),
+                                              title: "Neckarwiese", note: "Pause"))
+        }
+        let reopened = try LocalStore(url: url)
+        XCTAssertEqual(try reopened.blogPoints(rideID: rideID).count, 1)
+        try reopened.deleteBlogData(rideID: rideID)
+        XCTAssertTrue(try reopened.blogPoints(rideID: rideID).isEmpty)
+    }
     func testManySavedPlacesSurviveReopenAndTourChanges() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -426,5 +443,59 @@ final class NavigationHeadingTests: XCTestCase {
             XCTAssertNil(NavigationHeading.compass(trueHeading: 90, magneticHeading: 85, accuracy: accuracy, timestamp: 100, now: 101))
         }
         XCTAssertNil(NavigationHeading.compass(trueHeading: 90, magneticHeading: 85, accuracy: 5, timestamp: 100, now: 106))
+    }
+}
+
+final class WalkingProfileTests: XCTestCase {
+    func testOldProfileDefaultsToCyclingAndKeepsWireFormat() throws {
+        let data = Data(#"{"bike":"touring","electric":true,"surface":"any","gentleHills":false}"#.utf8)
+        let profile = try JSONDecoder().decode(RidingProfile.self, from: data)
+        XCTAssertEqual(profile.mode, .cycling)
+        let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(profile)) as! [String: Any]
+        XCTAssertNil(object["travelMode"])
+    }
+    func testModesSurviveArchiveRoundTripAndParkingIsGeometryIndex() throws {
+        for mode in [TravelMode.hiking, .bikeAndHike] {
+            var plan = TourDocument()
+            plan.profile.mode = mode
+            var route = CalculatedRoute(id: UUID(), coordinates: [
+                Coordinate(latitude:49.41,longitude:8.68), Coordinate(latitude:49.41,longitude:8.681),
+                Coordinate(latitude:49.41,longitude:8.682)], distance:200,duration:100,ascent:0,descent:0,
+                maneuvers:[],surfaces:[],warnings:[],provider:"Beispiel",calculatedAt:0)
+            route.walkingStartIndex = mode == .hiking ? 0 : 1
+            route.walkingDistance = mode == .hiking ? 200 : 100
+            route.cyclingDistance = mode == .hiking ? 0 : 100
+            plan.route = route
+            let restored = try JSONDecoder().decode(TourDocument.self,from:JSONEncoder().encode(plan))
+            XCTAssertEqual(restored, plan)
+            XCTAssertEqual(restored.profile.title, mode.title)
+            XCTAssertEqual(restored.route?.bicycleParking, mode == .hiking ? nil : route.coordinates[1])
+            route.walkingStartIndex = 30
+            XCTAssertNil(route.bicycleParking)
+        }
+    }
+    func testBikeOnlyLocalPlannerRejectsWalkingBeforeSearching() throws {
+        let graph = try OfflineGraph(tiles: [])
+        for mode in [TravelMode.hiking, .bikeAndHike] {
+            var plan = TourDocument(); plan.profile.mode = mode
+            XCTAssertThrowsError(try LocalRouter.plan(graph:graph,document:plan)) { error in
+                guard case LocalRoutingError.walkingRequiresServer = error else { return XCTFail("Wrong error: \(error)") }
+            }
+        }
+    }
+}
+
+final class MissingDestinationAccessTests: XCTestCase {
+    func testTerminalBikeParkingRequiresExplicitUnmappedAccess() throws {
+        var route = CalculatedRoute(id:UUID(),coordinates:[Coordinate(latitude:49.41,longitude:8.68),
+            Coordinate(latitude:49.41,longitude:8.682)],distance:200,duration:100,ascent:0,descent:0,
+            maneuvers:[],surfaces:[],warnings:[],provider:"Beispiel",calculatedAt:0)
+        route.walkingStartIndex = 1; route.walkingDistance = 0; route.cyclingDistance = 200
+        XCTAssertNil(route.bicycleParking)
+        route.unmappedDestinationDistance = 319
+        XCTAssertEqual(route.bicycleParking, route.coordinates.last)
+        let restored = try JSONDecoder().decode(CalculatedRoute.self,from:JSONEncoder().encode(route))
+        XCTAssertEqual(restored.unmappedDestinationDistance,319)
+        XCTAssertEqual(restored.bicycleParking,route.coordinates.last)
     }
 }

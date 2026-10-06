@@ -16,7 +16,7 @@ if not key:
     sys.exit(1)
 try:
     response = httpx.post(
-        "https://api.openrouteservice.org/v2/directions/cycling-regular/geojson",
+        "https://api.heigit.org/openrouteservice/v2/directions/cycling-regular/geojson",
         headers={"Authorization": key}, timeout=40,
         json={"coordinates": [[8.681495, 49.41461], [8.686507, 49.41943]],
               "elevation": True, "instructions": True, "language": "de",

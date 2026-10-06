@@ -3,7 +3,9 @@ import SwiftUI
 struct RideView: View {
     @EnvironmentObject var state: AppState
     @State private var confirmFinish = false
+    @State private var showBlogPoint = false
     @State private var showElevation = false
+    @State private var mapError: String?
     @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
         NavigationStack {
@@ -40,7 +42,17 @@ struct RideView: View {
                              followHeading: ride.recordingState == .recording,
                              navigationPosition: state.progress?.snappedPosition ?? state.location.coordinate,
                              navigationHeading: state.location.navigationHeading,
-                             colorBySurface: true, topOverlayInset: 40)
+                             colorBySurface: true, topOverlayInset: 40, onError: { mapError = $0 })
+                        .overlay(alignment: .topLeading) {
+                            MapStyleMenu().background(Theme.paper, in: Circle()).padding(8)
+                        }
+                        .overlay(alignment: .bottom) {
+                            if let mapError {
+                                Text(mapError).font(.caption).padding(8)
+                                    .background(Theme.paper, in: RoundedRectangle(cornerRadius: 8)).padding(8)
+                            }
+                        }
+                        .onChange(of: state.mapStyleURL) { _, _ in mapError = nil }
                     VStack(spacing: 8) {
                         if let status = state.localRideStatus, state.progress?.distanceFromRoute ?? 0 <= 35 {
                             Text(status).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
@@ -51,6 +63,10 @@ struct RideView: View {
                             rideMetric("Tempo", "\(Int((ride.track.last?.speed ?? 0) * 3.6)) km/h")
                             rideMetric("Fahrzeit", Format.duration(ride.movingDuration))
                         }
+                        Button { showBlogPoint = true } label: {
+                            Label("Blog-Ort festhalten", systemImage: "camera.fill").font(.subheadline.bold())
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }.accessibilityIdentifier("captureBlogPoint")
                         Divider()
                         BikeTelemetryView(compact: true)
                         HStack(spacing: 8) {
@@ -68,20 +84,51 @@ struct RideView: View {
                         }.buttonStyle(.plain)
                     }.padding(.horizontal, 14).padding(.vertical, 8).background(Theme.paper)
                 }
+                .overlay {
+                    if !state.waypointSkipProposal.isEmpty {
+                        ZStack {
+                            Color.black.opacity(0.45).ignoresSafeArea()
+                            VStack(spacing: 18) {
+                                Text(state.waypointSkipProposal.count == 1 ? "Zwischenziel überspringen?" : "Zwischenziele überspringen?")
+                                    .font(.title2.bold())
+                                Text(state.waypointSkipNames).font(.title3).multilineTextAlignment(.center)
+                                Text("Du bist von der Route abgewichen. Diese Ziele für die laufende Fahrt auslassen?")
+                                    .multilineTextAlignment(.center)
+                                Button { state.answerWaypointSkip(true) } label: {
+                                    Text("Ja, überspringen").font(.title2.bold())
+                                        .frame(maxWidth: .infinity, minHeight: 96)
+                                        .background(Theme.forest, in: RoundedRectangle(cornerRadius: 16)).foregroundStyle(.white)
+                                }.accessibilityIdentifier("skipWaypointYes")
+                                Button { state.answerWaypointSkip(false) } label: {
+                                    Text("Nein, anfahren").font(.title2.bold())
+                                        .frame(maxWidth: .infinity, minHeight: 96)
+                                        .background(Theme.paper, in: RoundedRectangle(cornerRadius: 16))
+                                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.forest, lineWidth: 3))
+                                }.accessibilityIdentifier("skipWaypointNo")
+                            }.buttonStyle(.plain).foregroundStyle(Theme.ink)
+                                .padding(24).background(Theme.paper, in: RoundedRectangle(cornerRadius: 24)).padding(16)
+                        }
+                    }
+                }
                 .toolbar(.hidden, for: .navigationBar)
                 .confirmationDialog("Tour beenden?", isPresented: $confirmFinish, titleVisibility: .visible) {
                     Button("Speichern und beenden") { state.finishRide() }
                     Button("Nicht speichern und beenden", role: .destructive) { state.discardRide() }
                     Button("Weiterfahren", role: .cancel) { }
                 }
+                .sheet(isPresented: $showBlogPoint) { BlogPointEditor(rideID: ride.id) }
                 .sheet(isPresented: $showElevation) { if let route = ride.route { RouteDetailsView(route: route) } }
             } else {
                 ScrollView {
                   VStack(spacing: 22) {
                     Image(systemName: "bicycle").font(.system(size: 76, weight: .light)).foregroundStyle(Theme.accent)
-                    Text("Bereit für draußen?").font(.system(.title, design: .rounded, weight: .bold))
+                    Text(state.waitingForRideLocation ? "Standort wird ermittelt …" : "Bereit für draußen?").font(.system(.title, design: .rounded, weight: .bold))
                     Text("Plane deine Strecke und starte deine Tour.\nDein Weg wird unterwegs gespeichert.")
                         .multilineTextAlignment(.center).foregroundStyle(.secondary)
+                    if state.waitingForRideLocation {
+                        ProgressView()
+                        Button("Standortsuche abbrechen") { state.cancelRideStart() }
+                    }
                     Button("Zur Routenplanung") { state.tab = 0 }.buttonStyle(.borderedProminent).tint(Theme.forest).foregroundStyle(.white).controlSize(.large)
                     BikeTelemetryView().padding(.top, 12)
                   }.padding(26).frame(maxWidth: .infinity)

@@ -27,8 +27,8 @@ struct OfflineDownloadView: View {
                 .font(.headline).foregroundStyle(Theme.accent)
             Text(progressText).font(.caption).foregroundStyle(.secondary)
             if let failure { Text(failure).font(.caption).foregroundStyle(.red) }
-            if !state.offlineMapsAllowed {
-                Text("Die Route ist lokal gespeichert. Für ein vollständiges Offline-Paket muss zuerst unser Kartenserver eingerichtet werden.")
+            if !state.canDownloadMapStyle {
+                Text("Die Route ist lokal gespeichert. Für ein vollständiges Offline-Paket in den Einstellungen den eigenen Kartenstil wählen und unseren Kartenserver einrichten. Öffentliche Kartenansichten werden nicht als Offline-Paket heruntergeladen.")
                     .font(.subheadline).foregroundStyle(.secondary)
             } else if !complete {
                 Button(busy ? "Download pausieren" : "Offline-Karte herunterladen") {
@@ -54,7 +54,7 @@ struct OfflineDownloadView: View {
         else { progressText = "\(p.countOfResourcesCompleted) von ca. \(p.countOfResourcesExpected) Kartenteilen geladen" }
     }
     private func download() {
-        guard state.offlineMapsAllowed, let styleURL = URL(string: state.mapStyleURL), styleURL.scheme == "https",
+        guard state.canDownloadMapStyle, let styleURL = URL(string: state.mapStyleURL), styleURL.scheme == "https",
               styleURL.host != "tile.openstreetmap.org" else { return }
         failure = nil
         if let pack = matchingPack { pack.resume(); busy = true; return }

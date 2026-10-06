@@ -38,8 +38,13 @@ struct APIClient {
         return try JSONDecoder().decode(Response.self, from: data)
     }
 
-    func route(_ document: TourDocument, timeout: TimeInterval = 90) async throws -> CalculatedRoute {
-        try await request("/v1/route", method: "POST", body: JSONEncoder().encode(
+    func elevations(_ coordinates: [Coordinate]) async throws -> ElevationResponse {
+        try await request("/v1/elevation", method: "POST", body: JSONEncoder().encode(
+            RouteElevation.Request(coordinates: coordinates)), timeout: 35)
+    }
+
+    func route(_ document: TourDocument, timeout: TimeInterval = 90, includeContext: Bool = true) async throws -> CalculatedRoute {
+        try await request("/v1/route" + (includeContext ? "" : "?include_context=false"), method: "POST", body: JSONEncoder().encode(
             RouteRequest(waypoints: document.waypoints, profile: document.profile)), timeout: timeout)
     }
 

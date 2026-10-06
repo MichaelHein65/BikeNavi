@@ -76,7 +76,16 @@ class Storage:
             payload["document"].pop("sourcePlanID")
         if payload["document"]["localNavigation"] is None:
             payload["document"].pop("localNavigation")
+        nav = payload["document"].get("localNavigation")
+        if nav and nav.get("skippedWaypointOrdinals") is None:
+            nav.pop("skippedWaypointOrdinals", None)
+        if payload["document"]["profile"].get("travelMode") is None:
+            payload["document"]["profile"].pop("travelMode", None)
         route = payload["document"].get("route")
+        if route:
+            for field in ("walkingStartIndex", "walkingDistance", "cyclingDistance", "unmappedDestinationDistance"):
+                if route.get(field) is None:
+                    route.pop(field, None)
         if route and route.get("waypointIndices") is None:
             route.pop("waypointIndices", None)
         if route and route.get("surfaceSections") is None:
@@ -105,6 +114,9 @@ class Storage:
                     session.add(Record(id=str(mutation.document.id), revision=1,
                                        deleted=mutation.deleted, document=payload["document"]))
                 if mutation.deleted:
+                    from .blog_store import JournalPoint, BlogDraft
+                    session.execute(delete(JournalPoint).where(JournalPoint.ride_id == str(mutation.document.id)))
+                    session.execute(delete(BlogDraft).where(BlogDraft.ride_id == str(mutation.document.id)))
                     session.execute(delete(BikeSample).where(BikeSample.ride_id == str(mutation.document.id)))
                 session.add(Change(envelope=envelope))
                 session.add(Receipt(id=str(mutation.mutationID), digest=digest, envelope=envelope))

@@ -25,6 +25,9 @@ def identifier(name):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", required=True, help="Dedicated iOS simulator UUID")
+    parser.add_argument("--elevation", action="store_true", help="Use the public DEM elevation example for the plan")
+    parser.add_argument("--bike-and-hike", action="store_true", help="Synthetic cycle/walk split of the public route, for UI illustration only")
+    parser.add_argument("--unmapped-destination", action="store_true", help="Synthetic POI beyond the mapped network, UI illustration only")
     args = parser.parse_args()
     subprocess.run(["xcrun", "simctl", "terminate", args.device, BUNDLE], capture_output=True)
     container = Path(subprocess.check_output(
@@ -43,6 +46,31 @@ def main():
                 recordingState="finished", startedAt=STAMP, endedAt=STAMP+1350, movingDuration=1350)
     ride["track"] = [dict(coordinate=c, timestamp=STAMP+i*10, accuracy=5, speed=4, segment=0)
                      for i, c in enumerate(route["coordinates"])]
+    if args.elevation:
+        plan["title"] = "Heidelberg · Höhenbeispiel"
+        plan["route"] = json.loads((ROOT / "tests/fixtures/heidelberg-elevation-route.json").read_text())
+    if args.bike_and_hike:
+        plan["title"] = "Rad & Wandern · UI-Beispiel"
+        plan["profile"]["travelMode"] = "bikeAndHike"
+        example = plan["route"]
+        index = len(example["coordinates"]) * 3 // 4
+        example["walkingStartIndex"] = index
+        example["walkingDistance"] = example["distance"] / 4
+        example["cyclingDistance"] = example["distance"] * 3 / 4
+        example["warnings"].append("Synthetische Rad-/Wanderaufteilung für die UI-Dokumentation; kein berechneter Abstellpunkt und kein Feldtest.")
+        example["maneuvers"].append(dict(instruction="Rad abstellen · zu Fuß weiter zum Ziel", distance=0, coordinateIndex=index, type=11))
+        example["maneuvers"].sort(key=lambda m: m["coordinateIndex"])
+    if args.unmapped_destination:
+        plan["title"] = "Zielzugang · UI-Beispiel"
+        plan["profile"]["travelMode"] = "bikeAndHike"
+        example = plan["route"]
+        example["walkingStartIndex"] = len(example["coordinates"]) - 1
+        example["walkingDistance"] = 0
+        example["cyclingDistance"] = example["distance"]
+        example["unmappedDestinationDistance"] = 319
+        plan["waypoints"][-1]["coordinate"] = dict(example["coordinates"][-1])
+        plan["waypoints"][-1]["coordinate"]["latitude"] += 319 / 111_000
+        example["warnings"].append("Synthetisches UI-Beispiel: 319 m Luftlinie mit fehlenden Wegdaten zum Ziel. Kein berechneter Fußrest, keine Geländeprüfung.")
     with sqlite3.connect(database) as db:
         db.execute("CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, payload BLOB NOT NULL)")
         db.execute("CREATE TABLE IF NOT EXISTS places (id TEXT PRIMARY KEY, payload BLOB NOT NULL)")

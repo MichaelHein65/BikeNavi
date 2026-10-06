@@ -58,9 +58,25 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
     }
     private let manager = CLLocationManager()
     private var activeRide = false
+    private var authorizationStatus: CLAuthorizationStatus {
+        #if DEBUG
+        if let scenario = ProcessInfo.processInfo.environment["BIKENAVI_START_LOCATION_TEST"] {
+            return scenario == "denied" ? .denied : .authorizedWhenInUse
+        }
+        #endif
+        return manager.authorizationStatus
+    }
 
     override init() {
         super.init()
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["BIKENAVI_START_LOCATION_TEST"] != nil {
+            coordinate = Coordinate(latitude: 49.414601, longitude: 8.681496)
+            accuracy = 5
+            lastTimestamp = Date().timeIntervalSince1970 - 120
+            return
+        }
+        #endif
         manager.delegate = self
         manager.activityType = .fitness
         manager.headingFilter = 3
@@ -72,8 +88,12 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
     }
     func request() {
         failureMessage = nil
-        if manager.authorizationStatus == .notDetermined { manager.requestWhenInUseAuthorization() }
-        if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways {
+        denied = authorizationStatus == .denied || authorizationStatus == .restricted
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["BIKENAVI_START_LOCATION_TEST"] != nil { return }
+        #endif
+        if authorizationStatus == .notDetermined { manager.requestWhenInUseAuthorization() }
+        if authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways {
             // Planning often happens while standing still. A movement filter can
             // otherwise leave the last fix older than our 15-second freshness limit.
             manager.distanceFilter = activeRide ? 5 : kCLDistanceFilterNone
@@ -91,7 +111,7 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
         if active { request() }
     }
     private func updateHeadingMonitoring() {
-        let authorized = manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways
+        let authorized = authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways
         if activeRide && authorized && CLLocationManager.headingAvailable() {
             manager.startUpdatingHeading()
         } else {
@@ -106,20 +126,21 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
         onHeadingChange?()
     }
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        denied = manager.authorizationStatus == .denied || manager.authorizationStatus == .restricted
+        denied = authorizationStatus == .denied || authorizationStatus == .restricted
         onAuthorizationChange?()
         updateHeadingMonitoring()
-        if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways {
+        if authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways {
             manager.startUpdatingLocation()
         }
     }
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        if (error as? CLError)?.code == .denied { denied = true }
+        denied = authorizationStatus == .denied || authorizationStatus == .restricted
         failureMessage = "Der Standort ist derzeit nicht verfügbar. Die App wartet weiter auf GPS; du kannst auch einen Start auf der Karte wählen."
         onAuthorizationChange?()
     }
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         for location in locations where location.horizontalAccuracy >= 0 && abs(location.timestamp.timeIntervalSinceNow) < 15 {
+            denied = authorizationStatus == .denied || authorizationStatus == .restricted
             failureMessage = nil
             coordinate = Coordinate(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude,
                                     altitude: location.verticalAccuracy >= 0 ? location.altitude : nil)
@@ -133,18 +154,40 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
 
 @MainActor
 final class AppState: ObservableObject {
-    private static let previousDefaultMapStyleURL = "https://tiles.openfreemap.org/styles/liberty"
-    private static let germanMapStyleURL = "https://raw.githubusercontent.com/kalwinskidawid/openfreemap-translations/main/styles/liberty_de.json"
-    @Published var plan = TourDocument()
+    @Published var plan = TourDocument() {
+        didSet {
+            if plan.id != oldValue.id || plan.route?.id != oldValue.route?.id { cancelRideStart() }
+        }
+    }
+    @Published private(set) var waitingForRideLocation = false
+    private var rideStartTask: Task<Void, Never>?
+    func cancelRideStart() {
+        rideStartTask?.cancel()
+        rideStartTask = nil
+        waitingForRideLocation = false
+    }
+    func becameActive() { location.request() }
     @Published var records: [SavedRecord] = []
     @Published var savedPlaces: [SavedPlace] = []
     @Published var activeRide: TourDocument?
     @Published var progress: RouteProgress?
     @Published var errorMessage: String?
     @Published var notice: String?
+    @Published var loadingElevation = false
+    @Published var elevationError: String?
+    private var elevationTask: Task<Void, Never>?
+    private var elevationRequestID: UUID?
     @Published var calculating = false
     @Published var planningError: String?
     @Published var rerouting = false
+    @Published var waypointSkipProposal: [Int] = []
+    private var declinedWaypointSkips: Set<Int> = []
+    var waypointSkipNames: String {
+        guard let ride = activeRide else { return "" }
+        return waypointSkipProposal.filter { ride.waypoints.indices.contains($0) }
+            .map { ride.waypoints[$0].name }.joined(separator: ", ")
+    }
+
     @Published var localRoutingStatus = "Lokale Rückführung noch nicht vorbereitet"
     @Published var preparingLocalRouting = false
     @Published var preparedRouteID: UUID?
@@ -152,6 +195,11 @@ final class AppState: ObservableObject {
     @Published var navigationRoute: CalculatedRoute?
     private var preparedGraph: OfflineGraph?
     private var rideGraph: OfflineGraph?
+    private var neighborhoodTask: Task<Void, Never>?
+    private var neighborhoodRequestID: UUID?
+    private var neighborhoodRideID: UUID?
+    private var neighborhoodAttempt: TimeInterval = 0
+
     private var preparationTask: Task<Void, Never>?
     private var preparationID: UUID?
     private var originalTracker = RouteTracker()
@@ -165,9 +213,55 @@ final class AppState: ObservableObject {
     @Published var selectedPoint: Coordinate?
     @Published var serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? ""
     @Published var token = Keychain.read()
-    @Published var mapStyleURL: String
+    // The active style is deliberately session-only: every launch starts with Liberty DE.
+    @Published var selectedMapStyle: MapStyle = .standard
+    @Published var customMapStyleURL = UserDefaults.standard.string(forKey: "mapStyleURL") ?? "" {
+        didSet { UserDefaults.standard.set(customMapStyleURL, forKey: "mapStyleURL") }
+    }
+    var mapStyleURL: String { selectedMapStyle.url(customURL: customMapStyleURL) }
+    var canDownloadMapStyle: Bool { offlineMapsAllowed && selectedMapStyle == .custom }
     @Published var offlineMapsAllowed = UserDefaults.standard.bool(forKey: "offlineMapsAllowed")
     @Published var voice = true
+    private let volumePreview = AVSpeechSynthesizer()
+    private var volumePreviewTask: Task<Void, Never>?
+    private var systemVolumeObservation: NSKeyValueObservation?
+
+    func observeSystemVolume() {
+        guard tab == 3, systemVolumeObservation == nil else { return }
+        systemVolumeObservation = AVAudioSession.sharedInstance().observe(\.outputVolume, options: [.old, .new]) { [weak self] _, change in
+            guard change.oldValue != change.newValue else { return }
+            Task { @MainActor [weak self] in
+                guard let self, self.tab == 3, self.systemVolumeObservation != nil else { return }
+                self.previewSystemVolume()
+            }
+        }
+    }
+
+    func stopObservingSystemVolume() {
+        systemVolumeObservation?.invalidate()
+        systemVolumeObservation = nil
+        stopVolumePreview()
+    }
+
+    func previewSystemVolume() {
+        stopVolumePreview()
+        // System volume changes replace the previous preview instead of queuing speech.
+        volumePreviewTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .milliseconds(180)) } catch { return }
+            guard let self, !Task.isCancelled else { return }
+            self.speech.stopSpeaking(at: .immediate)
+            let utterance = AVSpeechUtterance(string: "Eine kleine Schnecke sitzt an einer Hecke. Krabbelt hin und her, freut sich dabei sehr.")
+            utterance.voice = AVSpeechSynthesisVoice(language: "de-DE")
+            utterance.volume = 1
+            self.volumePreview.speak(utterance)
+        }
+    }
+
+    func stopVolumePreview() {
+        volumePreviewTask?.cancel()
+        volumePreviewTask = nil
+        volumePreview.stopSpeaking(at: .immediate)
+    }
     let location = LocationService()
     let store: LocalStore
     private var routeTask: Task<Void, Never>?
@@ -186,12 +280,7 @@ final class AppState: ObservableObject {
 
     init(store: LocalStore) {
         self.store = store
-        let savedStyleURL = UserDefaults.standard.string(forKey: "mapStyleURL")
-        mapStyleURL = savedStyleURL == nil || savedStyleURL == Self.previousDefaultMapStyleURL
-            ? Self.germanMapStyleURL : savedStyleURL!
-        if savedStyleURL == nil || savedStyleURL == Self.previousDefaultMapStyleURL {
-            UserDefaults.standard.set(mapStyleURL, forKey: "mapStyleURL")
-        }
+        UserDefaults.standard.removeObject(forKey: "speechVolume")
         reload()
         if let idString = UserDefaults.standard.string(forKey: "currentPlan"),
            let id = UUID(uuidString: idString), let saved = records.first(where: { $0.id == id && !$0.deleted }) {
@@ -228,6 +317,20 @@ final class AppState: ObservableObject {
                 location.locationManager(CLLocationManager(), didUpdateLocations: [sample])
             }
         }
+        if ProcessInfo.processInfo.environment["BIKENAVI_START_LOCATION_TEST"] != nil {
+            // Synthetic public coordinates, only for deterministic simulator regression tests.
+            let a = Coordinate(latitude: 49.414601, longitude: 8.681496)
+            let b = Coordinate(latitude: 49.415, longitude: 8.682)
+            plan = TourDocument()
+            plan.title = "Standorttest · Beispieltour"
+            plan.waypoints = [Waypoint(name: "Beispielstart", coordinate: a), Waypoint(name: "Beispielziel", coordinate: b)]
+            plan.route = CalculatedRoute(id: UUID(), coordinates: [a, b], distance: 60, duration: 30,
+                ascent: 0, descent: 0, maneuvers: [], surfaces: [], warnings: [], provider: "Beispieldaten", calculatedAt: 0)
+            activeRide = nil
+            location.denied = true // Simulate a stale error from a previous callback.
+            serverURL = ""
+            return
+        }
         if ProcessInfo.processInfo.environment["BIKENAVI_CONFIGURE"] == "1" {
             Task { await saveSettings() }
         }
@@ -241,12 +344,13 @@ final class AppState: ObservableObject {
             navigationRoute = LocalRouteMetrics.combined(original: route, state: ride.localNavigation)
             tracker = RouteTracker(lastProgress: ride.localNavigation?.routeProgress ?? 0, lastTimestamp: Date().timeIntervalSince1970)
             originalTracker = RouteTracker(lastProgress: ride.localNavigation?.originalProgress ?? 0, lastTimestamp: Date().timeIntervalSince1970)
+            if ride.profile.mode == .cycling {
             Task {
                 do {
                     let graph = try await offlineRouting.load(route: route)
                     guard activeRide?.id == ride.id else { return }
                     rideGraph = graph
-                    if route.needsLocalSurfaceRepair, var current = activeRide, current.id == ride.id {
+                    if route.needsLocalSurfaceRepair, Set(route.coordinates.map { OfflineTileID.at($0) }).isSubset(of: graph.tiles), var current = activeRide, current.id == ride.id {
                         current.route = route.repairingLocalSurfaces(graph: graph)
                         try store.save(current)
                         activeRide = current
@@ -254,6 +358,10 @@ final class AppState: ObservableObject {
                     }
                     localRideStatus = nil
                 } catch { if activeRide?.id == ride.id { localRideStatus = "Lokale Rückführung noch nicht vorbereitet" } }
+            }
+            } else {
+                rideGraph = nil
+                localRideStatus = "Gespeicherte Wanderroute · keine lokale Rückführung"
             }
         }
         prepareLocalRouting()
@@ -265,7 +373,14 @@ final class AppState: ObservableObject {
     }
 
     func prepareLocalRouting(refresh: Bool = false) {
-        guard let route = plan.route else { return }
+        loadPlanElevation()
+        guard plan.profile.mode == .cycling else {
+            preparationTask?.cancel(); preparationID = nil; preparingLocalRouting = false
+            preparedGraph = nil; preparedRouteID = nil
+            localRoutingStatus = "Wanderroute offline gespeichert · keine lokale Rückführung"
+            return
+        }
+        guard let route = plan.route, let center = location.freshCoordinate ?? route.coordinates.first else { return }
         if preparedRouteID == route.id && !refresh { return }
         preparationTask?.cancel()
         let id = UUID()
@@ -276,21 +391,67 @@ final class AppState: ObservableObject {
         preparationTask = Task {
             defer { if preparationID == id { preparingLocalRouting = false } }
             do {
-                let graph = try await offlineRouting.prepare(route: route, api: api, refresh: refresh) { [weak self] done, total in
+                let graph = try await offlineRouting.prepareNeighborhood(route: route, center: center, api: api, refresh: refresh) { [weak self] done, total in
                     await self?.reportPreparation(id: id, done: done, total: total)
                 }
                 guard !Task.isCancelled, preparationID == id, plan.route?.id == route.id else { return }
-                if route.needsLocalSurfaceRepair {
-                    plan.route = route.repairingLocalSurfaces(graph: graph)
+                if let current = plan.route, current.needsLocalSurfaceRepair,
+                   Set(current.coordinates.map { OfflineTileID.at($0) }).isSubset(of: graph.tiles) {
+                    plan.route = current.repairingLocalSurfaces(graph: graph)
                     savePlan()
                 }
                 preparedGraph = graph
                 preparedRouteID = route.id
-                localRoutingStatus = "Lokale Rückführung bereit · ohne Pi und Internet"
-                if activeRide?.route?.id == route.id { rideGraph = graph; localRideStatus = nil }
+                localRoutingStatus = "Rückführung im geladenen 3-km-Umkreis bereit"
+
             } catch {
                 guard !Task.isCancelled, preparationID == id else { return }
                 localRoutingStatus = (localRoutingReady ? "Gespeichertes Wegenetz weiterhin bereit. Aktualisierung ausstehend: " : "Lokale Rückführung nicht bereit: ") + error.localizedDescription
+            }
+        }
+    }
+
+    private func cancelElevation() {
+        elevationTask?.cancel()
+        elevationRequestID = nil
+        loadingElevation = false
+        elevationError = nil
+    }
+
+    func loadPlanElevation() {
+        guard let route = plan.route, !route.hasElevation, !loadingElevation else { return }
+        guard let api else {
+            elevationError = "Verbinde den Pi, um die Höhendaten zu laden."
+            return
+        }
+        let planID = plan.id
+        let requestID = UUID()
+        elevationRequestID = requestID
+        loadingElevation = true
+        elevationError = nil
+        elevationTask = Task {
+            defer {
+                if elevationRequestID == requestID { loadingElevation = false; elevationRequestID = nil }
+            }
+            do {
+                let sampling = try RouteElevation.sample(route)
+                let response = try await api.elevations(sampling.coordinates)
+                guard !Task.isCancelled, elevationRequestID == requestID,
+                      plan.id == planID, let current = plan.route, current.id == route.id else { return }
+                let elevated = try RouteElevation.applying(response, sampling: sampling, to: current)
+                plan.route = elevated
+                savePlan()
+                await sync()
+            } catch {
+                guard !Task.isCancelled, elevationRequestID == requestID,
+                      plan.id == planID, plan.route?.id == route.id else { return }
+                if let apiError = error as? APIError {
+                    elevationError = apiError.message
+                } else if error is URLError {
+                    elevationError = "Der Pi ist gerade nicht erreichbar. Die Route bleibt nutzbar. Prüfe die Verbindung und versuche es erneut."
+                } else {
+                    elevationError = "Die empfangenen Höhendaten passen nicht vollständig zur Route. Die Route bleibt nutzbar; versuche es erneut."
+                }
             }
         }
     }
@@ -447,6 +608,7 @@ final class AppState: ObservableObject {
         }
     }
     func invalidateRoute() {
+        cancelElevation()
         planningError = nil
         preparationTask?.cancel()
         preparationID = nil
@@ -468,11 +630,13 @@ final class AppState: ObservableObject {
     }
     func calculateRoute() async {
         guard plan.canCalculateRoute else { return }
+        cancelElevation()
+        preparationTask?.cancel(); preparationID = nil; preparingLocalRouting = false
         let snapshot = plan
         planningError = nil
         let calculationID = UUID()
         routeCalculationID = calculationID
-        localRoutingStatus = "Die Route wird auf deinem iPhone vorbereitet …"
+        localRoutingStatus = "Die Route wird berechnet …"
         calculating = true
         defer {
             if routeCalculationID == calculationID {
@@ -481,18 +645,19 @@ final class AppState: ObservableObject {
             }
         }
         do {
-            let (route, graph) = try await offlineRouting.plan(document: snapshot, api: api) { [weak self] done, total in
+            let route = try await offlineRouting.calculate(document: snapshot, api: api) { [weak self] done, total in
                 await self?.reportPlanning(id: calculationID, done: done, total: total)
             }
             guard !Task.isCancelled, routeCalculationID == calculationID, snapshot.id == plan.id,
                   snapshot.waypoints.map(\.coordinate) == plan.waypoints.map(\.coordinate),
                   snapshot.profile == plan.profile else { return }
             plan.route = route
-            preparedGraph = graph
-            preparedRouteID = route.id
-            localRoutingStatus = "Planung und Rückführung auf dem iPhone bereit"
+            preparedGraph = nil
+            preparedRouteID = nil
+            localRoutingStatus = "Route bereit · lokales Umfeld wird geladen"
             mapRevision = UUID()
             savePlan()
+            prepareLocalRouting()
             calculating = false
             await sync()
         } catch {
@@ -509,6 +674,7 @@ final class AppState: ObservableObject {
         }
     }
     func newPlan() {
+        cancelElevation()
         planningError = nil
         preparationTask?.cancel()
         preparationID = nil
@@ -524,6 +690,7 @@ final class AppState: ObservableObject {
         savePlan()
     }
     func resetPlan() {
+        cancelElevation()
         planningError = nil
         preparationTask?.cancel()
         preparationID = nil
@@ -541,6 +708,7 @@ final class AppState: ObservableObject {
         savePlan()
     }
     func open(_ document: TourDocument) {
+        cancelElevation()
         savePlan()
         routeTask?.cancel()
         routeCalculationID = nil
@@ -564,7 +732,9 @@ final class AppState: ObservableObject {
             deleted.dirty = true
             deleted.mutationID = UUID()
             try store.put(deleted)
+            try store.deleteBlogData(rideID: record.id)
             if plan.id == record.id {
+                cancelElevation()
                 routeTask?.cancel()
                 nameTask?.cancel()
                 calculating = false
@@ -587,7 +757,7 @@ final class AppState: ObservableObject {
             paused.recordingState = .paused
             activeRide = paused
             segment += 1
-            location.setRiding(false)
+            cancelNeighborhood(); location.setRiding(false)
             UIApplication.shared.isIdleTimerDisabled = false
             try? store.save(paused)
             rideActivity.update(progress: progress, route: paused.route, paused: true, rerouting: false)
@@ -601,7 +771,7 @@ final class AppState: ObservableObject {
         synchronizing = true
         defer { synchronizing = false; reload() }
         do {
-            for record in try store.all() where record.dirty && record.document.recordingState != .recording {
+            for record in try store.all() where record.dirty && (record.document.recordingState != .recording || !(try store.blogPoints(rideID: record.id, pendingOnly: true)).isEmpty) {
                 do {
                     let response = try await api.send(record)
                     try store.acknowledge(record, remote: response)
@@ -626,12 +796,33 @@ final class AppState: ObservableObject {
                     try store.acknowledgeBikeSamples(receipt.accepted)
                 }
             }
+            // A recording snapshot is sent when a blog point needs its parent ride.
+            // New GPS samples can keep the document dirty while its points upload.
+            for record in try store.all() where !record.deleted && record.document.kind == .ride && record.revision > 0 {
+                for point in try store.blogPoints(rideID: record.id, pendingOnly: true) {
+                    let receipt: BikeSampleReceipt = try await api.request("/v1/blog-points", method: "POST", body: JSONEncoder().encode(point))
+                    guard receipt.accepted == [point.id] else { throw APIError(status: 0, message: "Der Pi hat den Blog-Ort noch nicht bestätigt.") }
+                    try store.acknowledgeBlogPoints(receipt.accepted)
+                }
+            }
             var hasMore = true
             while hasMore {
                 let page: ChangePage = try await api.request("/v1/changes?after=\(store.cursor)")
-                for remote in page.records { try store.merge(remote) }
+                for remote in page.records {
+                    try store.merge(remote)
+                    if remote.deleted, try store.record(id: remote.document.id)?.deleted == true { try store.deleteBlogData(rideID: remote.document.id) }
+                }
                 try store.setCursor(page.cursor)
                 hasMore = page.hasMore
+            }
+            for record in try store.all() where !record.deleted && record.document.kind == .ride && record.revision > 0 {
+                var more = true
+                while more {
+                    let page: BlogPointPage = try await api.request("/v1/rides/\(record.id.uuidString)/blog-points?after=\(try store.blogCursor(rideID: record.id))")
+                    for point in page.points { try store.appendBlogPoint(point, uploaded: true) }
+                    try store.setBlogCursor(page.cursor, rideID: record.id)
+                    more = page.hasMore
+                }
             }
             if plan == planAtStart,
                let latest = try store.all().first(where: { $0.id == plan.id && !$0.dirty && !$0.deleted }) {
@@ -646,23 +837,92 @@ final class AppState: ObservableObject {
             if UserDefaults.standard.string(forKey: "serverURL") != serverURL {
                 try store.setCursor(0)
                 try store.resetBikeUploads()
+                try store.resetBlogUploads()
                 // A different server has its own revision history. Preserve all local documents.
                 for var record in try store.all() { record.revision = 0; record.dirty = true; record.mutationID = UUID(); try store.put(record) }
             }
             try Keychain.save(token.trimmingCharacters(in: .whitespacesAndNewlines))
             token = Keychain.read()
             UserDefaults.standard.set(serverURL, forKey: "serverURL")
-            UserDefaults.standard.set(mapStyleURL, forKey: "mapStyleURL")
+            UserDefaults.standard.set(customMapStyleURL, forKey: "mapStyleURL")
             UserDefaults.standard.set(offlineMapsAllowed, forKey: "offlineMapsAllowed")
             let _: ServerStatus = try await api!.request("/v1/status")
             notice = "Mit dem Pi-Datenspeicher verbunden. Routen berechnet das iPhone."
             await sync()
         } catch { errorMessage = error.localizedDescription }
     }
+    func saveBlogPoint(_ point: BlogPoint) throws {
+        guard let ride = activeRide, ride.id == point.rideID else {
+            throw APIError(status: 0, message: "Diese Fahrt wurde bereits beendet. Bitte den Ort in einer laufenden Fahrt speichern.")
+        }
+        try store.appendBlogPoint(point)
+        reload()
+        Task { await sync() }
+    }
+
+    func generateBlog(rideID: UUID) async throws -> BlogDraft {
+        guard let api else { throw APIError(status: 0, message: "Verbinde den Pi in den Einstellungen, um einen Blog zu erstellen.") }
+        while synchronizing { try await Task.sleep(for: .milliseconds(200)) }
+        await sync()
+        guard let record = try store.record(id: rideID), !record.deleted, !record.dirty,
+              record.document.recordingState == .finished,
+              try store.blogPoints(rideID: rideID, pendingOnly: true).isEmpty else {
+            throw APIError(status: 0, message: "Bitte die Fahrt beenden und alle Blog-Orte zum Pi übertragen. Der Abgleich ist noch ausstehend.")
+        }
+        let draft: BlogDraft = try await api.request("/v1/rides/\(rideID.uuidString)/blog", method: "POST", timeout: 180)
+        try store.saveBlogDraft(draft)
+        return draft
+    }
+
     func startRide() {
         guard activeRide == nil else { tab = 1; return }
         guard plan.canCalculateRoute, plan.route != nil else { errorMessage = "Bitte zuerst eine Route berechnen."; return }
-        guard location.coordinate != nil && !location.denied else { location.request(); errorMessage = "Zum Starten der Fahrt wird dein Standort benötigt."; return }
+        guard !waitingForRideLocation else { return }
+        location.request()
+        guard !location.denied else {
+            errorMessage = "Bitte erlaube BikeNavi den Standortzugriff in den iPhone-Einstellungen."
+            return
+        }
+        guard location.freshCoordinate != nil else {
+            waitingForRideLocation = true
+            let planID = plan.id, routeID = plan.route?.id
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["BIKENAVI_START_LOCATION_TEST"] == "delayed" {
+                Task { [weak self] in
+                    try? await Task.sleep(for: .seconds(5))
+                    let sample = CLLocation(coordinate: .init(latitude: 49.414601, longitude: 8.681496),
+                        altitude: 114, horizontalAccuracy: 5, verticalAccuracy: 5, timestamp: Date())
+                    self?.location.locationManager(CLLocationManager(), didUpdateLocations: [sample])
+                }
+            }
+            #endif
+            rideStartTask = Task { [weak self] in
+                let deadline = ContinuousClock.now.advanced(by: .seconds(15))
+                while !Task.isCancelled {
+                    guard let self else { return }
+                    guard self.plan.id == planID, self.plan.route?.id == routeID, self.activeRide == nil else {
+                        self.cancelRideStart(); return
+                    }
+                    if self.location.denied {
+                        self.cancelRideStart()
+                        self.errorMessage = "Bitte erlaube BikeNavi den Standortzugriff in den iPhone-Einstellungen."
+                        return
+                    }
+                    if self.location.freshCoordinate != nil {
+                        self.cancelRideStart()
+                        self.startRide()
+                        return
+                    }
+                    if ContinuousClock.now >= deadline {
+                        self.cancelRideStart()
+                        self.errorMessage = "Noch kein aktueller Standort verfügbar. Bitte versuche den Fahrtstart erneut."
+                        return
+                    }
+                    do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
+                }
+            }
+            return
+        }
         var ride = plan
         ride.id = UUID()
         ride.kind = .ride
@@ -674,15 +934,29 @@ final class AppState: ObservableObject {
         ride.createdAt = Date().timeIntervalSince1970
         ride.startedAt = ride.createdAt
         ride.recordingState = .recording
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["BIKENAVI_PREVIEW_SKIP"] == "1", let route = ride.route, route.coordinates.count > 4 {
+            let a = route.coordinates.count / 3, b = route.coordinates.count * 2 / 3
+            ride.waypoints = [ride.waypoints.first!, Waypoint(name: "Beispiel: Aussichtspunkt", coordinate: route.coordinates[a]),
+                Waypoint(name: "Beispiel: Rastplatz", coordinate: route.coordinates[b]), ride.waypoints.last!]
+            ride.route?.waypointIndices = [0, a, b, route.coordinates.count - 1]
+        }
+        #endif
         do {
             try store.save(ride)
             activeRide = ride
             navigationRoute = ride.route
             rideGraph = localRoutingReady ? preparedGraph : nil
-            localRideStatus = rideGraph == nil ? "Lokale Rückführung noch nicht vorbereitet" : nil
+            localRideStatus = ride.profile.mode == .cycling
+                ? (rideGraph == nil ? "Lokale Rückführung noch nicht vorbereitet" : nil)
+                : "Gespeicherte Wanderroute · keine lokale Rückführung"
             originalTracker = RouteTracker(lastProgress: 0, lastTimestamp: Date().timeIntervalSince1970)
             tracker = RouteTracker(lastProgress: 0, lastTimestamp: Date().timeIntervalSince1970)
             reroutePolicy = ReroutePolicy()
+            waypointSkipProposal = []; declinedWaypointSkips = []
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["BIKENAVI_PREVIEW_SKIP"] == "1" { waypointSkipProposal = [1, 2] }
+            #endif
             segment = 0
             lastAnnouncement = nil
             location.setRiding(true)
@@ -715,7 +989,7 @@ final class AppState: ObservableObject {
             rideGraph = nil
             localRideStatus = nil
             progress = nil
-            location.setRiding(false)
+            cancelNeighborhood(); location.setRiding(false)
             UIApplication.shared.isIdleTimerDisabled = false
             rideActivity.end()
             reload()
@@ -723,6 +997,7 @@ final class AppState: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
     func togglePause() {
+        cancelNeighborhood()
         guard var ride = activeRide else { return }
         cancelRerouting()
         ride.recordingState = ride.recordingState == .recording ? .paused : .recording
@@ -737,7 +1012,13 @@ final class AppState: ObservableObject {
             reload()
         } catch { errorMessage = error.localizedDescription }
     }
+    private func cancelNeighborhood() {
+        neighborhoodTask?.cancel(); neighborhoodTask = nil; neighborhoodRequestID = nil
+        neighborhoodRideID = nil; neighborhoodAttempt = 0
+    }
+
     private func cancelRerouting() {
+        waypointSkipProposal = []
         speech.stopSpeaking(at: .immediate)
         rerouteTask?.cancel()
         rerouteTask = nil
@@ -755,7 +1036,7 @@ final class AppState: ObservableObject {
             rideGraph = nil
             localRideStatus = nil
             progress = nil
-            location.setRiding(false)
+            cancelNeighborhood(); location.setRiding(false)
             UIApplication.shared.isIdleTimerDisabled = false
             rideActivity.end()
             reload()
@@ -776,7 +1057,7 @@ final class AppState: ObservableObject {
             rideGraph = nil
             localRideStatus = nil
             progress = nil
-            location.setRiding(false)
+            cancelNeighborhood(); location.setRiding(false)
             UIApplication.shared.isIdleTimerDisabled = false
             rideActivity.end()
             reload()
@@ -785,6 +1066,10 @@ final class AppState: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
     private func reroute(from position: Coordinate, heading: Double?, ride: TourDocument) {
+        guard ride.profile.mode == .cycling else {
+            localRideStatus = "Wanderroute verlassen · gespeicherte Strecke auf der Karte prüfen"
+            return
+        }
         guard rerouteTask == nil, let original = ride.route else { return }
         guard let graph = rideGraph else {
             localRideStatus = "Lokale Rückführung nicht vorbereitet · gespeicherte Tour auf der Karte"
@@ -809,7 +1094,8 @@ final class AppState: ObservableObject {
             do {
                 let work = Task.detached(priority: .userInitiated) {
                     try LocalRouter.connect(graph: graph, original: original, waypoints: ride.waypoints, profile: ride.profile,
-                        position: position, heading: heading, traveled: navigation.originalProgress, usedUnpaved: navigation.usedUnpaved)
+                        position: position, heading: heading, traveled: navigation.originalProgress, usedUnpaved: navigation.usedUnpaved,
+                        skippedWaypoints: navigation.skippedWaypointOrdinals ?? [])
                 }
                 let connection = try await withTaskCancellationHandler { try await work.value } onCancel: { work.cancel() }
                 try Task.checkCancellation()
@@ -842,6 +1128,81 @@ final class AppState: ObservableObject {
             }
         }
     }
+    func answerWaypointSkip(_ skip: Bool) {
+        let proposal = waypointSkipProposal
+        guard !proposal.isEmpty, var ride = activeRide, ride.recordingState == .recording else { return }
+        if skip {
+            var nav = ride.localNavigation ?? LocalNavigationState()
+            nav.skippedWaypointOrdinals = Array(Set((nav.skippedWaypointOrdinals ?? []) + proposal)).sorted()
+            nav.connector = nil; nav.rejoinIndex = nil
+            nav.routeProgress = nav.originalProgress
+            ride.localNavigation = nav
+            do { try store.save(ride) } catch { errorMessage = error.localizedDescription; return }
+            cancelRerouting()
+            activeRide = ride
+            navigationRoute = ride.route
+            tracker = RouteTracker(lastProgress: nav.originalProgress, lastTimestamp: Date().timeIntervalSince1970)
+            originalTracker = tracker
+            progress = nil
+            lastAnnouncement = nil
+            reroutePolicy = ReroutePolicy()
+        } else {
+            declinedWaypointSkips.formUnion(proposal)
+            waypointSkipProposal = []
+        }
+        if let sample = location.latestSample { receive(sample) }
+    }
+
+    private func proposeWaypointSkip(ride: TourDocument, position: Coordinate, heading: Double?) {
+        guard let original = ride.route else { return }
+        let nav = ride.localNavigation ?? LocalNavigationState()
+        let pending = LocalRouteMetrics.pendingWaypoints(route: original, waypoints: ride.waypoints,
+            traveled: nav.originalProgress, skipped: nav.skippedWaypointOrdinals ?? [])
+        guard let next = pending.first else { waypointSkipProposal = []; return }
+        var probe = RouteTracker()
+        let match = probe.update(position: position, timestamp: Date().timeIntervalSince1970, route: original, heading: heading)
+        let indices = LocalRouteMetrics.waypointIndices(route: original, waypoints: ride.waypoints)
+        let distances = LocalRouteMetrics.distances(original)
+        let passed = pending.filter { distances[indices[$0]] + 3 < (match?.traveled ?? 0) }
+        let proposed = match?.snappedPosition != nil && !passed.isEmpty ? passed : [next]
+        if !Set(proposed).isSubset(of: declinedWaypointSkips) { waypointSkipProposal = proposed }
+    }
+
+    /// Called only for fresh, accurate fixes. Keep the previous window on errors;
+    /// retry after 30 seconds and never install data for another or paused ride.
+    private func updateNeighborhood(ride: TourDocument, position: Coordinate) {
+        guard ride.profile.mode == .cycling else { return }
+        guard let route = ride.route, let required = try? OfflineTileID.neighborhood(position) else { return }
+        if neighborhoodRideID != ride.id {
+            neighborhoodTask?.cancel(); neighborhoodTask = nil; neighborhoodRequestID = nil
+            neighborhoodRideID = ride.id; neighborhoodAttempt = 0
+        }
+        if let graph = rideGraph, (api == nil || graph.hasCurrentAccessRules),
+           Set(required).isSubset(of: graph.tiles) { return }
+        let now = Date().timeIntervalSince1970
+        guard neighborhoodTask == nil, now - neighborhoodAttempt >= 30 else { return }
+        neighborhoodAttempt = now
+        let requestID = UUID()
+        neighborhoodRequestID = requestID
+        let api = api
+        neighborhoodTask = Task {
+            defer {
+                if neighborhoodRequestID == requestID { neighborhoodTask = nil; neighborhoodRequestID = nil }
+            }
+            do {
+                let graph = try await offlineRouting.prepareNeighborhood(route: route, center: position, api: api) { _, _ in }
+                guard !Task.isCancelled, neighborhoodRequestID == requestID,
+                      activeRide?.id == ride.id, activeRide?.recordingState == .recording else { return }
+                rideGraph = graph
+                localRideStatus = nil
+            } catch {
+                guard !Task.isCancelled, neighborhoodRequestID == requestID,
+                      activeRide?.id == ride.id, activeRide?.recordingState == .recording else { return }
+                localRideStatus = "Umfeld konnte nicht nachgeladen werden · Rückführung nur mit gespeicherten Wegedaten"
+            }
+        }
+    }
+
     private func receive(_ sample: CLLocation) {
         if PlanningLocation.isUsable(timestamp: sample.timestamp.timeIntervalSince1970,
                                      accuracy: sample.horizontalAccuracy, now: Date().timeIntervalSince1970),
@@ -867,8 +1228,25 @@ final class AppState: ObservableObject {
         progress?.snappedPosition = nil
         if let original = ride.route, let route = ridingRoute, abs(sample.timestamp.timeIntervalSinceNow) < 5,
            sample.horizontalAccuracy >= 0, sample.horizontalAccuracy <= 25 {
+            updateNeighborhood(ride: ride, position: point.coordinate)
             var nav = ride.localNavigation ?? LocalNavigationState()
-            progress = tracker.update(position: point.coordinate, timestamp: point.timestamp, route: route, heading: heading, accuracy: point.accuracy)
+            // After a detour, also inspect distant portions of the original route.
+            // Never silently cross an unvisited, unskipped mandatory stop.
+            var recovery = RouteTracker()
+            if (progress?.distanceFromRoute ?? 0) > 35 || (progress == nil && !(nav.skippedWaypointOrdinals ?? []).isEmpty),
+               let match = recovery.update(position: point.coordinate, timestamp: point.timestamp,
+                    route: original, heading: heading, accuracy: point.accuracy),
+               match.snappedPosition != nil, match.traveled > nav.originalProgress + 25 {
+                let mandatory = LocalRouteMetrics.nextWaypointIndex(route: original, waypoints: ride.waypoints,
+                    traveled: nav.originalProgress, skipped: nav.skippedWaypointOrdinals ?? [])
+                if match.traveled <= LocalRouteMetrics.distances(original)[mandatory] + 3 {
+                    nav.originalProgress = match.traveled
+                    nav.connector = nil; nav.rejoinIndex = nil
+                    navigationRoute = original; tracker = recovery; originalTracker = recovery
+                    cancelRerouting(); localRideStatus = nil
+                }
+            }
+            progress = tracker.update(position: point.coordinate, timestamp: point.timestamp, route: ridingRoute ?? route, heading: heading, accuracy: point.accuracy)
             if nav.connector != nil, let join = nav.rejoinIndex {
                 let connectorDistance = nav.connector.map { LocalRouteMetrics.distances($0).last ?? 0 } ?? 0
                 if let p = progress, p.distanceFromRoute < 25, p.traveled >= connectorDistance {
@@ -888,7 +1266,7 @@ final class AppState: ObservableObject {
                     // A genuine return before the selected join also ends the detour.
                     let d = LocalRouteMetrics.distances(original)
                     let i = max(0, min(original.coordinates.count-2, (d.firstIndex(where: { $0 > p.traveled }) ?? 1)-1))
-                    let mandatory = LocalRouteMetrics.nextWaypointIndex(route: original, waypoints: ride.waypoints, traveled: nav.originalProgress)
+                    let mandatory = LocalRouteMetrics.nextWaypointIndex(route: original, waypoints: ride.waypoints, traveled: nav.originalProgress, skipped: nav.skippedWaypointOrdinals ?? [])
                     if p.traveled <= d[mandatory] + 3,
                        (heading.map({ LocalGeometry.angle($0, LocalGeometry.bearing(original.coordinates[i], original.coordinates[i+1])) <= 60 }) ?? true) {
                         nav.originalProgress = max(nav.originalProgress,p.traveled)
@@ -909,17 +1287,22 @@ final class AppState: ObservableObject {
         }
         if accepted {
             do { try store.save(ride) } catch {
-                location.setRiding(false); ride.recordingState = .paused
+                cancelNeighborhood(); location.setRiding(false); ride.recordingState = .paused
                 cancelRerouting()
                 errorMessage = "Aufzeichnung pausiert: \(error.localizedDescription)"
             }
         }
         activeRide = ride
+        if !waypointSkipProposal.isEmpty, point.accuracy >= 0, point.accuracy <= 25,
+           abs(sample.timestamp.timeIntervalSinceNow) < 5 {
+            proposeWaypointSkip(ride: ride, position: point.coordinate, heading: heading)
+        }
         guard ride.recordingState == .recording else { return }
         rideActivity.update(progress: progress, route: ridingRoute, headingDegrees: heading, paused: false, rerouting: rerouting)
-        if let progress, !rerouting,
+        if ride.profile.mode == .cycling, let progress, !rerouting,
            reroutePolicy.observe(distanceFromRoute: progress.distanceFromRoute, timestamp: point.timestamp,
                 accuracy: point.accuracy, now: Date().timeIntervalSince1970) {
+            proposeWaypointSkip(ride: ride, position: point.coordinate, heading: heading)
             reroute(from: point.coordinate, heading: heading, ride: ride)
         }
         if voice, let progress, progress.distanceFromRoute < 35,
@@ -928,6 +1311,8 @@ final class AppState: ObservableObject {
             lastAnnouncement = next.coordinateIndex
             let utterance = AVSpeechUtterance(string: "In \(Int(progress.distanceToManeuver / 10) * 10) Metern. \(next.instruction)")
             utterance.voice = AVSpeechSynthesisVoice(language: "de-DE")
+            utterance.volume = 1
+            stopVolumePreview()
             speech.speak(utterance)
         }
     }

@@ -68,7 +68,7 @@ def test_tiles_auth_cache_and_partial_upstream_failure(tmp_path):
         overpass_url='https://osm.test/api')
     with TestClient(failed) as client:
         assert client.get('/v1/offline-tiles/3760/2780',headers=AUTH).status_code == 503
-        assert failed.state.storage.offline_tile('1/2/3760/2780') is None
+        assert failed.state.storage.offline_tile('1/3/3760/2780') is None
 
 
 def test_public_provider_failure_uses_mirror_and_caches_complete_tile(tmp_path):
@@ -107,7 +107,7 @@ def test_failed_mirrors_preserve_existing_tile_on_refresh(tmp_path):
         failing = True
         assert client.get('/v1/offline-tiles/3781/2798?refresh=true', headers=AUTH).status_code == 503
         assert calls == [DEFAULT_OVERPASS, DEFAULT_OVERPASS, FALLBACK_OVERPASS]
-        assert app.state.storage.offline_tile('1/2/3781/2798') == original
+        assert app.state.storage.offline_tile('1/3/3781/2798') == original
 
 
 def test_operable_barriers_use_most_specific_explicit_access():
@@ -132,7 +132,7 @@ def test_tisno_bridge_has_continuous_access_in_both_directions():
     assert compile_tile(source['elements'], 3912, 2675, generated_at=1) == expected
     assert tile['blockedNodes'] == []
     assert tile['excludedWays'] == []
-    assert tile['compilerRevision'] == 2
+    assert tile['compilerRevision'] == 3
     for start, end in [(272268068, 275001050), (275001050, 272268068)]:
         visited, pending = set(), [start]
         while pending:
@@ -157,7 +157,16 @@ def test_old_compiler_cache_is_not_reused(tmp_path):
         app.state.storage.save_offline_tile('1/3760/2780', old)
         response = client.get('/v1/offline-tiles/3760/2780', headers=AUTH)
         assert response.status_code == 200
-        assert response.json()['compilerRevision'] == 2
+        assert response.json()['compilerRevision'] == 3
         assert len(response.json()['edges']) == 4
         assert len(calls) == 1
         assert app.state.storage.offline_tile('1/3760/2780') == old
+
+
+def test_osm_node_versions_are_kept_without_contributor_metadata():
+    data = elements()
+    data[0].update(version=7, user='Example contributor', uid=123, changeset=456)
+    tile = compile_tile(data, 1, 1)
+    assert tile['nodes'][0]['osmVersion'] == 7
+    assert 'osmVersion' not in tile['nodes'][1]
+    assert all(not {'user', 'uid', 'changeset'} & node.keys() for node in tile['nodes'])

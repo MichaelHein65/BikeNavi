@@ -1,6 +1,6 @@
-# Umsetzungsstand – Version 0.2.0
+# Umsetzungsstand – Version 0.3.0
 
-Stand: 23. September 2026. Dies ist eine Entwicklungsfassung, keine für lange Touren freigegebene Navigations-App.
+Stand: 6. Oktober 2026. Dies ist eine Entwicklungsfassung vor 1.0, keine für lange Touren freigegebene Navigations-App.
 
 ## Implementiert
 
@@ -10,6 +10,8 @@ Stand: 23. September 2026. Dies ist eine Entwicklungsfassung, keine für lange T
 - Automatischer Tourname aus Start und Ziel. Bei Kartenpunkten werden Ortsnamen über den Pi ermittelt; die gewählten Koordinaten bleiben unverändert. Eigene Namen bleiben auch nach Neustart und Synchronisierung erhalten. Ein leerer, mit „Fertig“ bestätigter Name schaltet die Automatik wieder ein.
 - Fahrradtyp, E-Unterstützung, Wunsch nach sanften Steigungen und drei Belagsoptionen.
 - Echte ORS-Routen mit Linie, Abbiegehinweisen, Höhenprofil, Wegbelägen und Warnungen.
+- Koordinaten- und Plus-Code-Suche, Fahrprofile für Rad, Rad&Wandern und Wandern sowie ein klar ausgewiesener Abstellpunkt vor dem Wanderanteil. Nicht erfasste Zielzugänge werden mit ihrer Restdistanz genannt, ohne einen Weg zu erfinden.
+- Kartenansichten für Standard, Hell, Detailreich, Dunkel, Satellit und Topografisch. Die Standardkarte erscheint bei jedem vollständigen App-Start; die Auswahl bleibt innerhalb der Sitzung in Planung, Fahrt und Einstellungen erhalten.
 - Die Planungsansicht färbt die Route abschnittsweise nach dem Untergrund; eine Legende erläutert die Farben. Fehlende Daten bleiben grau. Ältere gespeicherte Routen können über den eingeblendeten Hinweis neu berechnet werden, um Abschnittsdaten zu erhalten.
 - Der Datenbereich lässt sich nach unten auf den Tourtitel einklappen und nach oben wieder vollständig öffnen. Ein Pfeil bietet dieselbe Funktion ohne Wischgeste; die gewählte Darstellung bleibt beim nächsten Start erhalten.
 - Ein eigenes App-Icon mit Fahrrad und Navigationspfeil ist im Asset-Katalog eingebunden.

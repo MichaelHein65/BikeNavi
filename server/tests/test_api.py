@@ -1,3 +1,4 @@
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from uuid import uuid4
@@ -41,7 +42,7 @@ def upstream_route(surface=3, distance=100):
 
 
 def test_authentication_and_no_secret_exposure(client):
-    assert client.get("/health").json() == {"status": "ok", "version": "0.2.0"}
+    assert client.get("/health").json() == {"status": "ok", "version": "0.3.0"}
     for path in ["/v1/status", "/v1/changes"]:
         assert client.get(path).status_code == 401
     assert client.post("/v1/mutations", json=mutation()).status_code == 401
@@ -57,6 +58,23 @@ def test_retry_does_not_duplicate_a_tour_or_change(client):
     page = client.get("/v1/changes", headers=AUTH).json()
     assert len(page["records"]) == 1
     assert page["records"][0]["revision"] == 1
+
+
+def test_blog_points_require_a_synced_ride_and_are_idempotent(client):
+    ride_id, point_id = uuid4(), uuid4()
+    point = {"id": str(point_id), "rideID": str(ride_id), "coordinate": {"latitude": 49.41, "longitude": 8.68},
+             "capturedAt": 1, "title": "Neckarwiese", "note": "Pause am Fluss"}
+    assert client.post("/v1/blog-points", json=point).status_code == 401
+    assert client.post("/v1/blog-points", headers=AUTH, json=point).status_code == 404
+    ride = mutation(ride_id, title="Heidelberg")
+    ride["document"]["kind"] = "ride"
+    ride["document"]["recordingState"] = "finished"
+    assert client.post("/v1/mutations", headers=AUTH, json=ride).status_code == 200
+    first = client.post("/v1/blog-points", headers=AUTH, json=point)
+    assert first.status_code == 200 and first.json() == {"accepted": [str(point_id)]}
+    assert client.post("/v1/blog-points", headers=AUTH, json=point).status_code == 200
+    page = client.get(f"/v1/rides/{ride_id}/blog-points", headers=AUTH).json()
+    assert page["points"] == [point] and page["hasMore"] is False and page["cursor"] > 0
 
 
 def test_reusing_mutation_id_with_different_content_is_rejected(client):
@@ -191,7 +209,7 @@ def test_prefer_paved_can_keep_first_candidate_when_second_is_unavailable(tmp_pa
 
 def test_place_name_is_authenticated_and_keeps_coordinates_out_of_result(tmp_path):
     def handler(request):
-        assert request.url.path == "/geocode/reverse"
+        assert str(request.url.copy_with(query=None)) == "https://api.heigit.org/pelias/v1/reverse"
         assert request.headers["Authorization"] == "secret-ors"
         assert request.url.params["point.lon"] == "8.68"
         assert request.url.params["point.lat"] == "49.41"
@@ -229,6 +247,10 @@ def test_old_receipt_still_accepts_retry_without_naming_field(client, with_route
         change["document"]["route"] = parse_route(upstream_route())
         change["document"]["route"].pop("surfaceSections")
     legacy_payload = Mutation.model_validate(change).model_dump(mode="json")
+    legacy_payload["document"]["profile"].pop("travelMode")
+    if with_route:
+        for field in ("walkingStartIndex", "walkingDistance", "cyclingDistance", "unmappedDestinationDistance"):
+            legacy_payload["document"]["route"].pop(field)
     legacy_payload["document"].pop("usesAutomaticTitle")
     legacy_payload["document"].pop("awaitingStart")
     legacy_payload["document"].pop("sourcePlanID")
@@ -333,3 +355,94 @@ def test_discarding_ride_removes_bike_samples_and_prevents_late_upload(client):
     assert client.post('/v1/mutations', json=deletion, headers=AUTH).status_code == 200
     assert client.get(f'/v1/rides/{ride_id}/bike-samples', headers=AUTH).json()['samples'] == []
     assert client.post('/v1/bike-samples', json={'samples': [sample]}, headers=AUTH).status_code == 409
+
+
+def test_skipped_waypoints_survive_sync_and_destination_is_rejected(client):
+    change = mutation()
+    change["document"]["kind"] = "ride"
+    points = route_request()["waypoints"]
+    change["document"]["waypoints"] = [points[0], {**points[0], "id": str(uuid4())},
+                                         {**points[1], "id": str(uuid4())}, points[1]]
+    change["document"]["localNavigation"] = {"skippedWaypointOrdinals": [1, 2]}
+    result = client.post("/v1/mutations", json=change, headers=AUTH)
+    assert result.status_code == 200
+    assert result.json()["document"]["localNavigation"]["skippedWaypointOrdinals"] == [1, 2]
+    saved = client.get("/v1/changes", headers=AUTH).json()["records"][0]
+    assert saved["document"]["localNavigation"]["skippedWaypointOrdinals"] == [1, 2]
+    change["document"]["localNavigation"]["skippedWaypointOrdinals"] = [3]
+    assert client.post("/v1/mutations", json=change, headers=AUTH).status_code == 422
+
+
+def test_route_without_context_never_requests_overpass(tmp_path):
+    calls = []
+
+    def upstream(request):
+        calls.append(str(request.url))
+        assert "/v2/directions/" in request.url.path
+        return httpx.Response(200, json=upstream_route(distance=600_000))
+
+    with TestClient(create_app(f"sqlite:///{tmp_path / 'long.sqlite'}", TOKEN, "secret-ors",
+                              httpx.MockTransport(upstream))) as client:
+        response = client.post("/v1/route?include_context=false", headers=AUTH, json=route_request())
+        assert response.status_code == 200
+        assert response.json()["distance"] == 600_000
+        assert response.json()["intersectionContexts"] == []
+        assert len(calls) == 1
+
+
+def test_long_route_profiles_share_wait_time_and_keep_surface_selection(tmp_path):
+    started = set()
+    both_started = asyncio.Event()
+
+    async def upstream(request):
+        # A sequential implementation deadlocks here and fails the test.
+        started.add(request.url.path)
+        if len(started) == 2:
+            both_started.set()
+        await asyncio.wait_for(both_started.wait(), timeout=1)
+        assert request.extensions["timeout"] == {
+            "connect": 10, "read": 75, "write": 75, "pool": 75}
+        if "cycling-road" in request.url.path:
+            return httpx.Response(200, json=upstream_route(surface=3, distance=1_250_000))
+        return httpx.Response(200, json=upstream_route(surface=8, distance=1_200_000))
+
+    with TestClient(create_app(f"sqlite:///{tmp_path / 'parallel.sqlite'}", TOKEN, "secret-ors",
+                              httpx.MockTransport(upstream))) as client:
+        response = client.post("/v1/route?include_context=false", headers=AUTH,
+                               json=route_request("preferPaved"))
+        assert response.status_code == 200
+        assert response.json()["distance"] == 1_250_000
+        assert response.json()["surfaces"][0]["name"] == "Asphalt"
+
+
+def test_route_deadline_cancels_all_provider_requests(tmp_path, monkeypatch):
+    monkeypatch.setattr("bikenavi.providers.ROUTE_DEADLINE_SECONDS", 0.05)
+    started, cancelled = set(), set()
+
+    async def upstream(request):
+        started.add(request.url.path)
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            cancelled.add(request.url.path)
+            raise
+
+    with TestClient(create_app(f"sqlite:///{tmp_path / 'deadline.sqlite'}", TOKEN, "secret-ors",
+                              httpx.MockTransport(upstream))) as client:
+        response = client.post("/v1/route?include_context=false", headers=AUTH,
+                               json=route_request("preferPaved"))
+        assert response.status_code == 502
+        assert len(started) == 2
+        assert cancelled == started
+        assert "secret" not in response.text
+
+
+def test_search_keeps_shorter_shared_timeout(tmp_path):
+    def upstream(request):
+        assert request.extensions["timeout"]["read"] == 35
+        return httpx.Response(200, json={"features": []})
+
+    with TestClient(create_app(f"sqlite:///{tmp_path / 'search-timeout.sqlite'}", TOKEN, "secret-ors",
+                              httpx.MockTransport(upstream))) as client:
+        response = client.get("/v1/search", params={"q": "Heidelberg"}, headers=AUTH)
+        assert response.status_code == 200

@@ -38,6 +38,7 @@ struct PlannerView: View {
                             .padding(10).background(Theme.paper, in: RoundedRectangle(cornerRadius: 16))
                         Spacer()
                         HStack(spacing: 8) {
+                            MapStyleMenu().background(Theme.paper, in: Circle())
                             Button { state.resetPlan() } label: { Image(systemName: "minus").font(.title3.bold()).frame(width: 44, height: 44) }
                                 .background(Theme.paper, in: Circle()).accessibilityLabel("Planung zurücksetzen")
                             Button { state.newPlan() } label: { Image(systemName: "plus").font(.title3.bold()).frame(width: 44, height: 44) }
@@ -82,6 +83,7 @@ struct PlannerView: View {
                     }
                 }
             }
+            .onChange(of: state.mapStyleURL) { _, _ in mapError = nil }
             .sheet(isPresented: $showSearch) { SearchView() }
             .sheet(isPresented: $showProfile) { ProfileView() }
             .sheet(isPresented: $showDetails) { if let route = state.plan.route { RouteDetailsView(route: route) } }
@@ -148,15 +150,18 @@ struct PlannerView: View {
             if detailsExpanded {
                 HStack {
                     Button { showProfile = true } label: {
-                        Label(state.plan.profile.title, systemImage: "bicycle").font(.subheadline.weight(.semibold))
-                    }.buttonStyle(.bordered)
+                        Label(state.plan.profile.title, systemImage: state.plan.profile.mode.symbol)
+                            .font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.75)
+                    }.buttonStyle(.bordered).accessibilityIdentifier("routeProfile")
                     Button { showSavedPlaces = true } label: {
                         Label("Meine Orte", systemImage: "bookmark.fill").font(.subheadline.weight(.semibold))
                     }.buttonStyle(.bordered)
-                    Text(state.plan.profile.surface == .any ? "Schotter erlaubt" : "Befestigte Wege")
-                        .font(.caption).foregroundStyle(Theme.secondaryInk)
                     Spacer(minLength: 0)
                 }
+                Text(state.plan.profile.mode == .hiking ? "Ohne Klettern" : state.plan.profile.surface.title)
+                    .font(.caption).foregroundStyle(Theme.secondaryInk)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("surfacePreferenceSummary")
                 Button { showWaypoints = true } label: {
                     HStack(alignment: .center) {
                         VStack(spacing: 4) {
@@ -181,7 +186,11 @@ struct PlannerView: View {
                     HStack {
                         Metric(label: "Strecke", value: Format.distance(route.distance))
                         Metric(label: "Fahrzeit ca.", value: Format.duration(route.duration))
-                        Metric(label: "Anstieg", value: route.provider.hasPrefix("BikeNavi iPhone") ? "–" : "\(Int(route.ascent)) m")
+                        Metric(label: "Anstieg", value: route.hasElevation ? "\(Int(route.ascent.rounded())) m" : "–")
+                    }
+                    if let missing = route.unmappedDestinationDistance {
+                        Label("Wegdaten zum Ziel fehlen · ca. " + Format.distance(missing) + " Luftlinie. Zugang vor Ort prüfen.", systemImage: "exclamationmark.triangle")
+                            .font(.caption).foregroundStyle(.orange)
                     }
                     SurfaceLegend()
                     if route.surfaceSections == nil {
@@ -199,7 +208,7 @@ struct PlannerView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(state.localRoutingStatus).font(.caption).foregroundStyle(.secondary)
                             .accessibilityIdentifier("localRoutingStatus")
-                        if !state.preparingLocalRouting {
+                        if state.plan.profile.mode == .cycling && !state.preparingLocalRouting {
                             Button(state.localRoutingReady ? "Wegenetz aktualisieren" : "Lokale Rückführung vorbereiten") {
                                 state.prepareLocalRouting(refresh: state.localRoutingReady)
                             }.font(.caption)
@@ -208,7 +217,10 @@ struct PlannerView: View {
                     HStack {
                         Button { showDetails = true } label: { Image(systemName: "chart.xyaxis.line").frame(width: 44, height: 44) }
                             .buttonStyle(.bordered).accessibilityLabel("Höhenprofil und Wegbeläge")
-                        Button { state.startRide() } label: { Label("Tour starten", systemImage: "location.north.fill").frame(maxWidth: .infinity).padding(.vertical, 8) }
+                        Button { if state.waitingForRideLocation { state.cancelRideStart() } else { state.startRide() } } label: {
+                            Label(state.waitingForRideLocation ? "Standortsuche abbrechen" : "Tour starten", systemImage: "location.north.fill")
+                                .frame(maxWidth: .infinity).padding(.vertical, 8)
+                        }
                             .buttonStyle(.borderedProminent).tint(Theme.forest).foregroundStyle(.white)
                     }
                 } else {
@@ -331,6 +343,7 @@ struct SavedPlacesView: View {
 }
 
 struct SearchView: View {
+    @FocusState private var queryFocused: Bool
     @EnvironmentObject var state: AppState
     @Environment(\.dismiss) var dismiss
     @State private var query = ""
@@ -344,9 +357,23 @@ struct SearchView: View {
             List {
                 Section {
                     HStack {
-                        TextField("Ort, Adresse oder Sehenswürdigkeit", text: $query).submitLabel(.search).onSubmit { Task { await search() } }
-                        Button { Task { await search() } } label: { Image(systemName: "magnifyingglass") }.disabled(query.count < 3 || searching)
+                        TextField("Ort, Adresse oder Koordinaten", text: $query).focused($queryFocused).accessibilityIdentifier("placeSearchQuery").submitLabel(.search).onSubmit { Task { await search() } }
+                        Button { Task { await search() } } label: { Image(systemName: "magnifyingglass") }.accessibilityIdentifier("placeSearchSubmit").disabled(query.count < 3 || searching)
                     }
+                }
+                if searching { ProgressView("Suche läuft …") }
+                if let error { Text(error).font(.subheadline).foregroundStyle(.secondary) }
+                ForEach(results) { point in
+                    HStack {
+                        Button { state.addPlaceToTour(point); dismiss() } label: {
+                            Label(point.name, systemImage: "mappin.and.ellipse").foregroundStyle(.primary).padding(.vertical, 5)
+                        }
+                        .accessibilityIdentifier("placeSearchResult")
+                        Spacer()
+                        Button { saveCandidate = point } label: { Image(systemName: "bookmark") }
+                            .accessibilityLabel("Ort speichern")
+                    }
+                    .buttonStyle(.borderless)
                 }
                 if !state.savedPlaces.isEmpty {
                     Section("Gespeicherte Orte") {
@@ -358,21 +385,8 @@ struct SearchView: View {
                         }
                     }
                 }
-                if searching { ProgressView("Suche läuft …") }
-                if let error { Text(error).font(.subheadline).foregroundStyle(.secondary) }
-                ForEach(results) { point in
-                    HStack {
-                        Button { state.addPlaceToTour(point); dismiss() } label: {
-                            Label(point.name, systemImage: "mappin.and.ellipse").foregroundStyle(.primary).padding(.vertical, 5)
-                        }
-                        Spacer()
-                        Button { saveCandidate = point } label: { Image(systemName: "bookmark") }
-                            .accessibilityLabel("Ort speichern")
-                    }
-                    .buttonStyle(.borderless)
-                }
                 if results.isEmpty && !searching && error == nil {
-                    Text("Suche beispielsweise nach einer Burg, einem Café oder einer Adresse.").foregroundStyle(.secondary)
+                    Text("Suche nach einem Ort oder gib Koordinaten ein, z. B. 49.4100; 8.7000 (Breite; Länge). Auch Grad, Minuten, Sekunden und Plus Codes wie 2WF2+8F Rodgau sind möglich.").foregroundStyle(.secondary)
                 }
             }.navigationTitle("Ort wählen").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { dismiss() } } }
@@ -383,7 +397,42 @@ struct SearchView: View {
         }
     }
     func search() async {
-        guard query.count >= 3 else { return }
+        guard query.count >= 3, !searching else { return }
+        queryFocused = false
+        results = []; error = nil
+        if let plusCode = PlusCode(query) {
+            if plusCode.isShort && plusCode.locality.isEmpty {
+                error = "Ergänze beim kurzen Plus Code den Ort, z. B. 2WF2+8F Rodgau."
+                return
+            }
+            if plusCode.isShort && state.api == nil {
+                error = "Für einen kurzen Plus Code mit Ortsangabe verbinde deinen Pi. Vollständige Plus Codes funktionieren offline."
+                return
+            }
+            searching = true
+            defer { searching = false }
+            do {
+                results = try await plusCode.places { locality in
+                    guard let api = state.api else { return [] }
+                    return try await api.search(locality, near: nil)
+                }
+                if results.isEmpty { error = "Kein passender Bezugsort für diesen Plus Code gefunden." }
+            } catch { self.error = error.localizedDescription }
+            return
+        }
+        switch CoordinateParser.parse(query) {
+        case .coordinate(let coordinate):
+            let name = String(format: "%.6f; %.6f", locale: Locale(identifier: "en_US_POSIX"), coordinate.latitude, coordinate.longitude)
+            results = [Waypoint(name: name, coordinate: coordinate)]
+            return
+        case .ambiguous:
+            error = "Koordinaten sind mehrdeutig. Trenne Breite und Länge mit einem Semikolon oder ergänze N/S und E/W."
+            return
+        case .invalid:
+            error = "Koordinaten nicht erkannt. Beispiel: 49.4100; 8.7000. Breite: −90 bis 90°, Länge: −180 bis 180°; Minuten und Sekunden unter 60."
+            return
+        case .notCoordinate: break
+        }
         guard let api = state.api else { error = "Verbinde zuerst deinen Pi in den Einstellungen. Orte kannst du bereits auf der Karte auswählen."; return }
         searching = true; error = nil
         defer { searching = false }
@@ -435,6 +484,24 @@ struct ProfileView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    ForEach(TravelMode.allCases, id: \.self) { mode in
+                        Button { state.plan.profile.mode = mode } label: {
+                            HStack {
+                                Label(mode.title, systemImage: mode.symbol)
+                                Spacer()
+                                if state.plan.profile.mode == mode { Image(systemName: "checkmark.circle.fill") }
+                            }
+                        }.foregroundStyle(.primary).accessibilityIdentifier("travelMode_" + mode.rawValue)
+                    }
+                } header: { Text("Unterwegs") } footer: {
+                    Text(state.plan.profile.mode == .bikeAndHike
+                         ? "Mit dem Rad so nah wie möglich zum Ziel, dann zu Fuß. Der berechnete Übergang wird als „Rad abstellen“ markiert. Zwischenziele werden mit dem Rad angefahren."
+                         : state.plan.profile.mode == .hiking
+                         ? "Einfache Wanderwege ohne bekannte Kletterpassagen (höchstens SAC T1). Fehlende Schwierigkeitsangaben bleiben möglich."
+                         : "Die gesamte Tour mit dem Rad fahren.")
+                }
+                if state.plan.profile.mode != .hiking {
                 Section("Dein Fahrrad") {
                     Picker("Fahrradtyp", selection: $state.plan.profile.bike) { ForEach(Bike.allCases, id: \.self) { Text($0.title).tag($0) } }
                     Toggle("Elektrische Unterstützung", isOn: $state.plan.profile.electric)
@@ -446,14 +513,24 @@ struct ProfileView: View {
                         }.foregroundStyle(.primary)
                     }
                 } header: { Text("Deine Wege") } footer: {
-                    Text("Befestigt umfasst auch Pflaster. „Nur bekannte befestigte Wege“ erlaubt insgesamt bis zu 100 m unbefestigte oder unbekannte Abschnitte pro Tour, beispielsweise kurze Schotterverbindungen. Eine Garantie für den tatsächlichen Zustand ist damit nicht verbunden.")
+                    Text("Befestigt umfasst auch Pflaster. „Nur bekannte befestigte Wege“ erlaubt insgesamt bis zu 100 m unbefestigte oder unbekannte Abschnitte. Online werden zusätzlich Belagslücken auf Straßen zwischen bekannten befestigten Abschnitten toleriert: bis zu 250 m je Lücke, insgesamt höchstens 500 m. Der Belag bleibt unbekannt. Die lokale Offline-Berechnung bleibt bei 100 m. Zustand vor Ort prüfen.")
                 }
                 Section { Toggle("Sanfte Steigungen bevorzugen", isOn: $state.plan.profile.gentleHills) }
+                }
+                if state.plan.profile.mode != .hiking {
                 Section("Schnellauswahl") {
                     Button("Meine Tour · Schotter erlaubt") { state.plan.profile.surface = .any }
                     Button("Gemeinsam · befestigte Wege bevorzugen") { state.plan.profile.surface = .preferPaved }
                 }
-            }.navigationTitle("So fährst du gern").navigationBarTitleDisplayMode(.inline)
+                }
+                if state.plan.profile.mode != .cycling {
+                    Section {
+                        Text("Die Berechnung benötigt den Pi. Gespeicherte Strecken funktionieren offline; lokale Rückführung auf Wanderwegen ist noch nicht verfügbar.")
+                        Text("Wanderwege können in OpenStreetMap fehlen. Beschilderung und Sperrungen vor Ort beachten.")
+                        Link("Freie Wanderkarte · Waymarked Trails", destination: URL(string: "https://hiking.waymarkedtrails.org/")!)
+                    } header: { Text("Kartendaten") }
+                }
+            }.navigationTitle("So bist du unterwegs").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Übernehmen") { dismiss() } } }
                 .onDisappear { state.invalidateRoute() }
         }
@@ -494,17 +571,48 @@ struct WaypointsView: View {
 }
 
 struct RouteDetailsView: View {
-    let route: CalculatedRoute
+    private let originalRoute: CalculatedRoute
+    init(route: CalculatedRoute) { originalRoute = route }
+    private var route: CalculatedRoute {
+        if let current = state.plan.route, current.id == originalRoute.id { return current }
+        return originalRoute
+    }
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var state: AppState
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    HStack { Metric(label: "Strecke", value: Format.distance(route.distance)); Metric(label: "Anstieg", value: route.provider.hasPrefix("BikeNavi iPhone") ? "–" : "\(Int(route.ascent)) m"); Metric(label: "Abstieg", value: route.provider.hasPrefix("BikeNavi iPhone") ? "–" : "\(Int(route.descent)) m") }
+                    HStack { Metric(label: "Strecke", value: Format.distance(route.distance)); Metric(label: "Anstieg", value: route.hasElevation ? "\(Int(route.ascent.rounded())) m" : "–"); Metric(label: "Abstieg", value: route.hasElevation ? "\(Int(route.descent.rounded())) m" : "–") }
                         .padding(.vertical, 8)
-                    ElevationChart(coordinates: route.coordinates).frame(height: 170)
-                } header: { Text("Höhenprofil") } footer: { Text("Höhen und Fahrzeit sind Schätzwerte aus den verfügbaren Kartendaten.") }
+                    ElevationChart(route: route).frame(height: 170)
+                    if !route.hasElevation && state.plan.route?.id == route.id {
+                        if state.loadingElevation {
+                            ProgressView("Höhendaten werden geladen …")
+                        } else {
+                            if let message = state.elevationError { Text(message).font(.caption).foregroundStyle(.secondary) }
+                            Button("Höhendaten laden") { state.loadPlanElevation() }
+                        }
+                    }
+                } header: { Text("Höhenprofil") } footer: { Text(route.elevationDescription) }
+                if let walking = route.walkingDistance, let cycling = route.cyclingDistance {
+                    Section("Rad & Wandern") {
+                        Label("Rad: " + Format.distance(cycling), systemImage: "bicycle")
+                        if walking > 0 || route.unmappedDestinationDistance == nil {
+                            Label("Wandern: " + Format.distance(walking), systemImage: "figure.hiking")
+                        }
+                        if let missing = route.unmappedDestinationDistance {
+                            Label("Fußrest nicht berechnet · ca. " + Format.distance(missing) + " Luftlinie", systemImage: "exclamationmark.triangle")
+                            Text("Zum POI fehlen Wegdaten. Gelände und Zugang vor Ort prüfen; die Restzeit ist nicht enthalten.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        if let parking = route.bicycleParking {
+                            Label("Rad abstellen", systemImage: "parkingsign.circle.fill")
+                            Text(String(format: "%.6f; %.6f", parking.latitude, parking.longitude))
+                                .font(.caption).textSelection(.enabled)
+                        }
+                    }
+                }
                 Section("Wegbeschaffenheit") {
                     SurfaceLegend()
                     Text("Die Farben zeigen den Untergrund in der Planung. Grau bedeutet: Für diesen Abschnitt fehlen Angaben.")
@@ -528,16 +636,9 @@ struct RouteDetailsView: View {
 }
 
 struct ElevationChart: View {
-    let coordinates: [Coordinate]
+    let route: CalculatedRoute
     private var samples: [(distance: Double, altitude: Double)] {
-        var distance = 0.0
-        var values: [(Double, Double)] = []
-        for (i, c) in coordinates.enumerated() {
-            if i > 0 { distance += coordinates[i - 1].distance(to: c) }
-            if let altitude = c.altitude { values.append((distance / 1000, altitude)) }
-        }
-        let stride = max(1, values.count / 350)
-        return values.enumerated().compactMap { $0.offset % stride == 0 ? $0.element : nil }
+        route.elevationSamples.map { ($0.distance / 1000, $0.altitude) }
     }
     var body: some View {
         let points = samples

@@ -51,7 +51,13 @@ sources = obj("sources", f"isa = PBXSourcesBuildPhase; buildActionMask = 2147483
 assets = obj("assets", 'isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = ios/BikeNavi/Assets.xcassets; sourceTree = SOURCE_ROOT;')
 refs.append(assets)
 asset_build = obj("assets-build", f"isa = PBXBuildFile; fileRef = {assets};")
-resources = obj("resources", f"isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ({asset_build},); runOnlyForDeploymentPostprocessing = 0;")
+map_style_builds = []
+for path in sorted((ROOT / "ios/BikeNavi/MapStyles").glob("*.json")):
+    relative = path.relative_to(ROOT).as_posix()
+    ref = obj(relative, f'isa = PBXFileReference; lastKnownFileType = text.json; path = "{relative}"; sourceTree = SOURCE_ROOT;')
+    refs.append(ref)
+    map_style_builds.append(obj(relative + "/build", f"isa = PBXBuildFile; fileRef = {ref};"))
+resources = obj("resources", f"isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ({','.join([asset_build] + map_style_builds)},); runOnlyForDeploymentPostprocessing = 0;")
 widget_app = obj("widget-product", 'isa = PBXFileReference; explicitFileType = wrapper.app-extension; path = BikeNaviLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR;')
 widget_sources = obj("widget-sources", f"isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ({','.join(widget_builds)},); runOnlyForDeploymentPostprocessing = 0;")
 widget_frameworks = obj("widget-frameworks", "isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;")
@@ -68,7 +74,7 @@ settings = '''
     PRODUCT_NAME = "$(TARGET_NAME)";
     INFOPLIST_FILE = ios/BikeNavi/Info.plist;
     MARKETING_VERSION = __VERSION__;
-    CURRENT_PROJECT_VERSION = 2;
+    CURRENT_PROJECT_VERSION = 3;
     ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
     CODE_SIGN_STYLE = Automatic;
     DEVELOPMENT_TEAM = 4JDC67R76Q;
@@ -91,7 +97,7 @@ for name in ["Debug", "Release"]:
         PRODUCT_NAME = BikeNaviLiveActivity;
         INFOPLIST_FILE = ios/BikeNaviWidget/Info.plist;
         MARKETING_VERSION = {VERSION};
-        CURRENT_PROJECT_VERSION = 2;
+        CURRENT_PROJECT_VERSION = 3;
         SWIFT_VERSION = 5.0;
         IPHONEOS_DEPLOYMENT_TARGET = 17.0;
         SDKROOT = iphoneos;

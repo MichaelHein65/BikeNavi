@@ -9,6 +9,20 @@ struct OfflineTileID: Codable, Hashable, Comparable {
         Self(x: min(7199, max(0, Int(floor((point.longitude + 180) / 0.05)))),
              y: min(3599, max(0, Int(floor((point.latitude + 90) / 0.05)))))
     }
+    /// Three kilometres of routing reach plus 500 m download lead. Tile edges
+    /// extend beyond this window; LocalRouter still enforces its 3 km radius.
+    static func neighborhood(_ center: Coordinate) throws -> [Self] {
+        guard center.latitude.isFinite, center.longitude.isFinite,
+              abs(center.latitude) < 75, abs(center.longitude) <= 180 else { throw LocalRoutingError.tooLarge }
+        let latitudeRadius = 3_500.0 / 110_000
+        let longitudeRadius = latitudeRadius / cos((abs(center.latitude) + latitudeRadius) * .pi / 180)
+        let low = at(Coordinate(latitude: center.latitude - latitudeRadius, longitude: center.longitude - longitudeRadius))
+        let high = at(Coordinate(latitude: center.latitude + latitudeRadius, longitude: center.longitude + longitudeRadius))
+        let minX = Int(floor((center.longitude - longitudeRadius + 180) / 0.05))
+        let maxX = Int(floor((center.longitude + longitudeRadius + 180) / 0.05))
+        let xs = (minX...maxX).map { (($0 % 7200) + 7200) % 7200 }
+        return (low.y...high.y).flatMap { y in xs.map { Self(x: $0, y: y) } }.sorted()
+    }
     /// Add one ring of surrounding tiles for detours around rivers or other gaps.
     static func expanded(_ ids: [Self]) throws -> [Self] {
         var result = Set(ids)
@@ -54,7 +68,11 @@ struct OfflineTileID: Codable, Hashable, Comparable {
     }
 }
 
-struct OfflineGraphNode: Codable { var id: Int64; var coordinate: Coordinate }
+struct OfflineGraphNode: Codable {
+    var id: Int64
+    var coordinate: Coordinate
+    var osmVersion: Int? = nil
+}
 struct OfflineGraphEdge: Codable, Hashable {
     var from: Int64; var to: Int64; var way: Int64
     var surface: Int; var name: String; var incline: Double
@@ -65,7 +83,7 @@ struct OfflineTurnRule: Codable, Hashable {
 struct OfflineGraphTile: Codable {
     var version: Int; var x: Int; var y: Int; var generatedAt: Double
     var compilerRevision: Int? = nil
-    var hasCurrentAccessRules: Bool { compilerRevision == 2 }
+    var hasCurrentAccessRules: Bool { compilerRevision == 3 }
     var excludedWays: [Int64] = []; var blockedNodes: [Int64] = []
     var nodes: [OfflineGraphNode]; var edges: [OfflineGraphEdge]; var restrictions: [OfflineTurnRule]
     func validate(for id: OfflineTileID) throws {
@@ -81,12 +99,14 @@ struct OfflineGraphTile: Codable {
 }
 
 enum LocalRoutingError: LocalizedError {
-    case noData, tooLarge, outside, noConnection, timedOut, ambiguous
+    case noData, inconsistentData, tooLarge, outside, noConnection, timedOut, ambiguous, walkingRequiresServer
     case waypointOffNetwork(String)
     var errorDescription: String? {
         switch self {
+        case .walkingRequiresServer: return "Rad&Wandern und Wandern benötigen zur Berechnung den Pi. Gespeicherte Routen sind offline nutzbar; die lokale Rückführung unterstützt derzeit nur Radwege."
         case .noData: return "Für dieses Gebiet fehlen lokale Wegedaten. Verbinde den Pi, um sie auf das iPhone zu laden."
-        case .tooLarge: return "Der Bereich ist zu groß. Bitte die Tour für die lokale Rückführung in kürzere Etappen aufteilen."
+        case .inconsistentData: return "Die gespeicherten Wegedaten haben widersprüchliche Kartenstände. Aktualisiere das Wegenetz mit Verbindung zum Pi."
+        case .tooLarge: return "Das lokale Wegenetz überschreitet das Speicher- oder Suchlimit. Die gespeicherte Route bleibt nutzbar."
         case .outside: return "Lokaler Routenbereich verlassen. Die gespeicherte Tour bleibt auf der Karte."
         case .noConnection: return "Kein passender lokaler Anschluss gefunden. Folge der gespeicherten Tour auf der Karte."
         case .timedOut: return "Die lokale Suche wurde begrenzt. Beim Weiterfahren wird sie erneut versucht."
@@ -108,17 +128,28 @@ final class OfflineGraph: @unchecked Sendable {
     private let cells: [String: [Int]]
     init(tiles input: [OfflineGraphTile]) throws {
         var nodes: [Int64: Coordinate] = [:]
+        var nodeVersions: [Int64: Int] = [:]
         var byWay: [Int64: Set<OfflineGraphEdge>] = [:]
         var excluded: Set<Int64> = [], blocked: Set<Int64> = []
         var rules: Set<OfflineTurnRule> = []
         for tile in input {
             try tile.validate(for: OfflineTileID(x: tile.x, y: tile.y))
             for node in tile.nodes {
-                if let old = nodes[node.id], old.distance(to: node.coordinate) > 1 {
-                    // Mixed map revisions must be refreshed, never silently joined.
-                    throw LocalRoutingError.noData
+                let version = node.osmVersion ?? 0
+                guard version >= 0 else { throw LocalRoutingError.noData }
+                if let old = nodes[node.id] {
+                    let previous = nodeVersions[node.id] ?? 0
+                    if old.distance(to: node.coordinate) > 1 {
+                        // Download time cannot identify the newer map: mirrors can lag.
+                        // Only OSM's own monotonic node version resolves changed positions.
+                        guard previous > 0, version > 0, previous != version else {
+                            throw LocalRoutingError.inconsistentData
+                        }
+                    }
+                    if previous >= version { continue }
                 }
                 nodes[node.id] = node.coordinate
+                nodeVersions[node.id] = version
             }
             excluded.formUnion(tile.excludedWays); blocked.formUnion(tile.blockedNodes)
             for (way, edges) in Dictionary(grouping: tile.edges, by: \.way) {

@@ -119,6 +119,7 @@ struct RouteMap: UIViewRepresentable {
         var applyingNavigationCamera = false
         var focus: Coordinate?
         var fitRevision: UUID?
+        var hasLoadedStyle = false
         init(_ parent: RouteMap) { self.parent = parent }
         @objc func tapped(_ gesture: UITapGestureRecognizer) {
             guard let map, gesture.state == .ended else { return }
@@ -167,6 +168,13 @@ struct RouteMap: UIViewRepresentable {
                 line.title = "track"
                 map.addAnnotation(line)
             }
+            }
+            if let parking = parent.route?.bicycleParking {
+                let pin = MLNPointAnnotation()
+                pin.coordinate = parking.cl
+                pin.title = "Rad abstellen"
+                pin.subtitle = "Zu Fuß weiter zum Ziel"
+                map.addAnnotation(pin)
             }
             for (index, point) in parent.waypoints.enumerated() {
                 let pin = MLNPointAnnotation()
@@ -288,7 +296,8 @@ struct RouteMap: UIViewRepresentable {
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
             redraw()
             updateNavigationPosition()
-            if !(parent.follow && parent.followHeading) { fit() }
+            if !hasLoadedStyle && !(parent.follow && parent.followHeading) { fit() }
+            hasLoadedStyle = true
         }
         func mapViewDidFailLoadingMap(_ mapView: MLNMapView, withError error: Error) {
             parent.onError?("Karte konnte nicht geladen werden. Prüfe die Verbindung oder dein Offline-Paket.")
@@ -314,6 +323,22 @@ struct RouteMap: UIViewRepresentable {
                 return view
             }
             guard annotation is MLNPointAnnotation else { return nil }
+            if annotation.title == "Rad abstellen" {
+                let view = MLNAnnotationView(reuseIdentifier: "bicycle-parking")
+                view.frame = CGRect(x: 0, y: 0, width: 42, height: 42)
+                view.backgroundColor = .systemOrange
+                view.layer.zPosition = 100
+                view.layer.cornerRadius = 21
+                view.layer.borderWidth = 3
+                view.layer.borderColor = UIColor.white.cgColor
+                let icon = UIImageView(image: UIImage(systemName: "bicycle"))
+                icon.frame = view.bounds.insetBy(dx: 8, dy: 8)
+                icon.tintColor = .white
+                icon.contentMode = .scaleAspectFit
+                view.addSubview(icon)
+                view.accessibilityLabel = "Rad abstellen · zu Fuß weiter zum Ziel"
+                return view
+            }
             if annotation is SavedPlaceAnnotation {
                 let view = MLNAnnotationView(reuseIdentifier: "saved-place")
                 view.frame = CGRect(x: 0, y: 0, width: 32, height: 32)

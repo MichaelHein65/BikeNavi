@@ -21,6 +21,9 @@ services:
       DATABASE_URL: postgresql+psycopg://bikenavi:${POSTGRES_PASSWORD:?Bitte .env ausfüllen}@database/bikenavi
       BIKENAVI_TOKEN: ${BIKENAVI_TOKEN:?Bitte .env ausfüllen}
       ORS_API_KEY: ${ORS_API_KEY:-}
+      BLOG_OPENAI_API_KEY: ${BLOG_OPENAI_API_KEY:-}
+      BLOG_OPENAI_MODEL: ${BLOG_OPENAI_MODEL:-}
+      BLOG_WEB_SEARCH: ${BLOG_WEB_SEARCH:-true}
       OVERPASS_URL: ${OVERPASS_URL:-https://overpass-api.de/api/interpreter}
     networks:
       - default

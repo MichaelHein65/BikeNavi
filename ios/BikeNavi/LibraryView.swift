@@ -30,7 +30,7 @@ struct LibraryView: View {
                             }
                             HStack(spacing: 15) {
                                 Text(Format.distance(kind == .ride ? record.document.recordedDistance : record.document.route?.distance ?? 0))
-                                if let route = record.document.route { Label("\(Int(route.ascent)) m", systemImage: "arrow.up.right") }
+                                if let route = record.document.route { Label(route.hasElevation ? "\(Int(route.ascent.rounded())) m" : "–", systemImage: "arrow.up.right") }
                                 Spacer()
                                 Image(systemName: record.dirty || ((try? state.store.bikeSampleCounts(rideID: record.id).pending) ?? 0) > 0 ? "internaldrive" : "checkmark.icloud")
                             }.font(.caption).foregroundStyle(.secondary)
@@ -86,7 +86,7 @@ struct TourDetailView: View {
                     RidePowerChart(points: powerPoints, distanceKM: document.recordedDistance / 1000)
                     if let measurementError { Text(measurementError).font(.caption).foregroundStyle(.red) }
                 } else if let route = document.route {
-                    ElevationChart(coordinates: route.coordinates).frame(height: 140)
+                    ElevationChart(route: route).frame(height: 140)
                 }
                 if document.route != nil {
                     Button("Wegbeschaffenheit und Routendetails") { showRoute = true }
@@ -95,6 +95,11 @@ struct TourDetailView: View {
                     Label(document.kind == .ride ? "Als neue Tour planen" : "Planung öffnen", systemImage: "map")
                         .frame(maxWidth: .infinity).padding(.vertical, 8)
                 }.buttonStyle(.borderedProminent).tint(Theme.forest).foregroundStyle(.white)
+                if document.kind == .ride {
+                    NavigationLink { BlogJournalView(rideID: document.id) } label: {
+                        Label("Tourtagebuch & Blog", systemImage: "book.pages.fill")
+                    }.accessibilityIdentifier("openBlogJournal")
+                }
                 if let exportURL { ShareLink(item: exportURL) { Label("GPX exportieren", systemImage: "square.and.arrow.up") } }
                 if document.kind == .ride { Text("Belagsfarben: geplante Route · Fahrmodusfarben: gefahrene Strecke").font(.caption).foregroundStyle(.secondary) }
             }.padding(20)

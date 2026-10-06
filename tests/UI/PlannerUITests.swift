@@ -206,6 +206,118 @@ final class PlannerUITests: XCTestCase {
 
 /// Run after scripts/seed_gallery.py on a dedicated simulator; otherwise skipped.
 final class DocumentationScreenshotsTests: XCTestCase {
+    func testBlogPointOfflineAndJournalScreens() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://beispiel.invalid"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launchEnvironment["BIKENAVI_PLAN_ID"] = "123C7446-B126-41E7-82E3-64D572AFA78B"
+        app.launchEnvironment["BIKENAVI_PREVIEW_LOCATION"] = "49.414601,8.681496"
+        app.launch()
+        XCTAssertTrue(app.textFields["tourName"].waitForExistence(timeout: 20))
+        let tourTitle = app.textFields["tourName"].value as? String ?? ""
+        app.tabBars.buttons["Fahren"].tap()
+        XCTAssertTrue(app.buttons["captureBlogPoint"].waitForExistence(timeout: 15))
+        capture(app, "12-fahren")
+        app.buttons["captureBlogPoint"].tap()
+        let title = app.textFields["blogPointTitle"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["saveBlogPoint"].isEnabled)
+        title.tap(); title.typeText("Neckarblick · Beispieldaten")
+        let note = app.textFields["blogPointNote"]
+        note.tap(); note.typeText("Synthetische Beispielnotiz: Eine kleine Pause am Fluss. Weiter geht es mit frischer Neugier!")
+        // Dismiss keyboard so the complete form is visible in the documentation.
+        app.staticTexts["Standort des Moments"].tap()
+        XCTAssertTrue(app.buttons["saveBlogPoint"].isEnabled)
+        capture(app, "30-blog-ort")
+        app.buttons["saveBlogPoint"].tap()
+        XCTAssertTrue(app.buttons["Tour beenden"].waitForExistence(timeout: 5))
+        app.buttons["Tour beenden"].tap()
+        app.buttons["Speichern und beenden"].tap()
+        XCTAssertTrue(app.segmentedControls.buttons["Gefahren"].waitForExistence(timeout: 5))
+        app.segmentedControls.buttons["Gefahren"].tap()
+        let entry = app.cells.containing(.staticText, identifier: tourTitle).firstMatch
+        XCTAssertTrue(entry.waitForExistence(timeout: 5)); entry.tap()
+        let journal = app.buttons["openBlogJournal"]
+        for _ in 0..<5 { if journal.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(journal.isHittable); journal.tap()
+        XCTAssertTrue(app.staticTexts["1. Neckarblick · Beispieldaten"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["1 Orte · 1 zur Übertragung vorgemerkt"].exists)
+        capture(app, "31-tourtagebuch")
+        app.terminate()
+        app.launch()
+        app.tabBars.buttons["Touren"].tap()
+        app.segmentedControls.buttons["Gefahren"].tap()
+        app.cells.containing(.staticText, identifier: tourTitle).firstMatch.tap()
+        for _ in 0..<5 { if app.buttons["openBlogJournal"].isHittable { break }; app.swipeUp() }
+        app.buttons["openBlogJournal"].tap()
+        XCTAssertTrue(app.staticTexts["1. Neckarblick · Beispieldaten"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["generateBlog"].isEnabled)
+        app.buttons["generateBlog"].tap()
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Verbinde den Pi")).firstMatch.waitForExistence(timeout: 5))
+        app.terminate()
+    }
+
+    func testWaypointSkipLargeButtons() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://beispiel.invalid"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launchEnvironment["BIKENAVI_PLAN_ID"] = "123C7446-B126-41E7-82E3-64D572AFA78B"
+        app.launchEnvironment["BIKENAVI_PREVIEW_LOCATION"] = "49.414601,8.681496"
+        app.launchEnvironment["BIKENAVI_PREVIEW_SKIP"] = "1"
+        app.launch()
+        XCTAssertTrue(app.textFields["tourName"].waitForExistence(timeout: 20))
+        app.tabBars.buttons["Fahren"].tap()
+        let yes = app.buttons["skipWaypointYes"], no = app.buttons["skipWaypointNo"]
+        XCTAssertTrue(yes.waitForExistence(timeout: 15))
+        XCTAssertGreaterThanOrEqual(yes.frame.height, 96)
+        XCTAssertGreaterThanOrEqual(no.frame.height, 96)
+        XCTAssertTrue(yes.isHittable); XCTAssertTrue(no.isHittable)
+        capture(app, "15-zwischenziele", delay: 2)
+        no.tap()
+        XCTAssertFalse(yes.exists)
+        app.buttons["Tour beenden"].tap()
+        app.buttons["Speichern und beenden"].tap()
+        app.tabBars.buttons["Planen"].tap()
+        app.tabBars.buttons["Fahren"].tap()
+        XCTAssertTrue(yes.waitForExistence(timeout: 10))
+        yes.tap()
+        XCTAssertFalse(yes.exists)
+        XCTAssertTrue(app.buttons["Pause"].exists)
+        app.terminate()
+    }
+
+    func testCaptureSavedElevationOffline() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://beispiel.invalid"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launchEnvironment["BIKENAVI_PLAN_ID"] = "123C7446-B126-41E7-82E3-64D572AFA78B"
+        app.launch()
+        XCTAssertTrue(app.textFields["tourName"].waitForExistence(timeout: 20))
+        guard app.textFields["tourName"].value as? String == "Heidelberg · Höhenbeispiel" else {
+            throw XCTSkip("Seed the documentation simulator with scripts/seed_gallery.py --elevation first.")
+        }
+        if !app.buttons["waypoints"].exists { app.buttons["togglePlanningDetails"].tap() }
+        capture(app, "01-planen", delay: 12)
+        app.buttons["Höhenprofil und Wegbeläge"].tap()
+        let source = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Geländehöhen: openrouteservice")).firstMatch
+        XCTAssertTrue(source.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["Keine Höhendaten verfügbar"].exists)
+        XCTAssertFalse(app.buttons["Höhendaten laden"].exists)
+        capture(app, "07-routendetails")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["Höhenprofil und Wegbeläge"].waitForExistence(timeout: 15))
+        app.buttons["Höhenprofil und Wegbeläge"].tap()
+        XCTAssertTrue(source.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Höhendaten laden"].exists)
+    }
+
     func testCaptureGallery() throws {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -267,7 +379,7 @@ final class DocumentationScreenshotsTests: XCTestCase {
         defer { XCUIDevice.shared.location = nil }
         app.launch()
         XCTAssertTrue(app.textFields["tourName"].waitForExistence(timeout: 20))
-        guard app.textFields["tourName"].value as? String == "Heidelberg · Beispieltour" else {
+        guard ["Heidelberg · Beispieltour", "Heidelberg · Höhenbeispiel"].contains(app.textFields["tourName"].value as? String ?? "") else {
             throw XCTSkip("Seed the documentation simulator first.")
         }
         app.tabBars.buttons["Fahren"].tap()
@@ -292,6 +404,277 @@ final class DocumentationScreenshotsTests: XCTestCase {
         let ready = expectation(description: "Wait for the actual screen to settle")
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { ready.fulfill() }
         wait(for: [ready], timeout: delay + 5)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Gallery-" + name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+}
+
+
+final class RideLocationTests: XCTestCase {
+    private func launch(_ scenario: String) -> XCUIApplication {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_START_LOCATION_TEST"] = scenario
+        app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Fahren"].waitForExistence(timeout: 20))
+        app.tabBars.buttons["Fahren"].tap()
+        return app
+    }
+    func testDelayedFixRecoversStaleDenialAndStartsRide() {
+        let app = launch("delayed")
+        XCTAssertTrue(app.buttons["Standortsuche abbrechen"].waitForExistence(timeout: 3))
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Gallery-16-standortsuche"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        XCTAssertFalse(app.alerts["BikeNavi"].exists)
+        XCTAssertTrue(app.buttons["Pause"].waitForExistence(timeout: 12))
+    }
+    func testCancelledStartIgnoresLateFix() {
+        let app = launch("delayed")
+        XCTAssertTrue(app.buttons["Standortsuche abbrechen"].waitForExistence(timeout: 3))
+        app.buttons["Standortsuche abbrechen"].tap()
+        XCTAssertFalse(app.buttons["Pause"].waitForExistence(timeout: 7))
+        XCTAssertFalse(app.alerts["BikeNavi"].exists)
+    }
+    func testMissingFixTimesOutAndCanRetry() {
+        let app = launch("timeout")
+        XCTAssertTrue(app.buttons["Standortsuche abbrechen"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.alerts["BikeNavi"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["Noch kein aktueller Standort verfügbar. Bitte versuche den Fahrtstart erneut."].exists)
+        app.buttons["Verstanden"].tap()
+        app.tabBars.buttons["Planen"].tap()
+        app.tabBars.buttons["Fahren"].tap()
+        XCTAssertTrue(app.buttons["Standortsuche abbrechen"].waitForExistence(timeout: 3))
+    }
+    func testDeniedPermissionExplainsSettings() {
+        let app = launch("denied")
+        XCTAssertTrue(app.alerts["BikeNavi"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Bitte erlaube BikeNavi den Standortzugriff in den iPhone-Einstellungen."].exists)
+        XCTAssertFalse(app.buttons["Pause"].exists)
+    }
+    func testBackgroundCancelsPendingStart() {
+        let app = launch("delayed")
+        XCTAssertTrue(app.buttons["Standortsuche abbrechen"].waitForExistence(timeout: 3))
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertFalse(app.buttons["Pause"].waitForExistence(timeout: 7))
+        XCTAssertFalse(app.buttons["Standortsuche abbrechen"].exists)
+    }
+    func testLeavingRideTabCancelsPendingStart() {
+        let app = launch("delayed")
+        XCTAssertTrue(app.buttons["Standortsuche abbrechen"].waitForExistence(timeout: 3))
+        app.tabBars.buttons["Planen"].tap()
+        XCTAssertFalse(app.buttons["Pause"].waitForExistence(timeout: 7))
+        XCTAssertTrue(app.tabBars.buttons["Planen"].isSelected)
+    }
+}
+
+
+final class SettingsVolumeTests: XCTestCase {
+    func testSystemVolumeBoxIsFirstAndOffersPreview() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://beispiel.invalid"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Einstellungen"].waitForExistence(timeout: 20))
+        app.tabBars.buttons["Einstellungen"].tap()
+        let label = app.staticTexts["systemVolumeLabel"]
+        XCTAssertTrue(label.waitForExistence(timeout: 5))
+        XCTAssertLessThan(label.frame.minY, app.buttons["Speichern und Verbindung prüfen"].frame.minY)
+        XCTAssertFalse(app.sliders["speechVolume"].exists)
+        XCTAssertTrue(app.buttons["volumePreview"].isHittable)
+        app.buttons["volumePreview"].tap()
+        app.tabBars.buttons["Planen"].tap()
+        app.tabBars.buttons["Einstellungen"].tap()
+        XCTAssertTrue(label.waitForExistence(timeout: 5))
+        // System volume itself is only available on a physical iPhone.
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Gallery-11-einstellungen"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+}
+
+final class CoordinateSearchTests: XCTestCase {
+    func testCoordinateSearchWithoutServerAndSelection() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://beispiel.invalid"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launch()
+        XCTAssertTrue(app.buttons["placeSearch"].waitForExistence(timeout: 15))
+        app.buttons["placeSearch"].tap()
+        let field = app.textFields["placeSearchQuery"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("49,4100; 8,7000")
+        app.buttons["placeSearchSubmit"].tap()
+        let result = app.buttons.matching(identifier: "placeSearchResult").firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 5))
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Gallery-05-suche"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        result.tap()
+        XCTAssertTrue(field.waitForNonExistence(timeout: 5))
+        // A previously seeded example plan can start recalculation after inserting the point.
+        if app.alerts.buttons["Verstanden"].waitForExistence(timeout: 3) { app.alerts.buttons["Verstanden"].tap() }
+        if !app.buttons["waypoints"].exists { app.buttons["togglePlanningDetails"].tap() }
+        app.buttons["waypoints"].tap()
+        XCTAssertTrue(app.staticTexts["49.410000; 8.700000"].waitForExistence(timeout: 5))
+    }
+}
+
+final class WalkingOptionsTests: XCTestCase {
+    private func launch() -> XCUIApplication {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://beispiel.invalid"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launchEnvironment["BIKENAVI_PLAN_ID"] = "123C7446-B126-41E7-82E3-64D572AFA78B"
+        app.launch()
+        XCTAssertTrue(app.buttons["togglePlanningDetails"].waitForExistence(timeout:20))
+        if !app.buttons["routeProfile"].exists { app.buttons["togglePlanningDetails"].tap() }
+        return app
+    }
+    private func capture(_ app: XCUIApplication, _ name: String) {
+        let attachment = XCTAttachment(screenshot:app.screenshot())
+        attachment.name = "Gallery-" + name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+    func testWalkingModesSelectionAndPersistence() {
+        let app = launch()
+        app.buttons["routeProfile"].tap()
+        for mode in ["cycling", "bikeAndHike", "hiking"] {
+            XCTAssertTrue(app.buttons["travelMode_" + mode].waitForExistence(timeout:5))
+        }
+        capture(app,"06-profil")
+        app.buttons["travelMode_bikeAndHike"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format:"label CONTAINS %@", "Mit dem Rad so nah")).firstMatch.exists)
+        app.buttons["travelMode_hiking"].tap()
+        XCTAssertFalse(app.switches["Elektrische Unterstützung"].exists)
+        capture(app,"17-wandern-profil")
+        app.buttons["Übernehmen"].tap()
+        XCTAssertTrue(app.buttons["routeProfile"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.buttons["routeProfile"].label.contains("Wandern"))
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["routeProfile"].waitForExistence(timeout:15))
+        XCTAssertTrue(app.buttons["routeProfile"].label.contains("Wandern"))
+    }
+    func testPlanningDistinguishesPreferredAndStrictPaving() {
+        let app = launch()
+        for (title, image) in [("Befestigte Wege bevorzugen", "23-belagswahl-bevorzugen"),
+                               ("Nur bekannte befestigte Wege", "22-belagswahl-streng")] {
+            app.buttons["routeProfile"].tap()
+            XCTAssertTrue(app.buttons[title].waitForExistence(timeout:5))
+            app.buttons[title].tap()
+            if title == "Nur bekannte befestigte Wege" {
+                let tolerance = app.staticTexts.matching(NSPredicate(format:"label CONTAINS %@", "250 m je Lücke")).firstMatch
+                for _ in 0..<3 where !tolerance.isHittable { app.swipeUp() }
+                XCTAssertTrue(tolerance.isHittable)
+                app.swipeUp() // Show the complete long footer, including offline limits.
+                capture(app, "24-belagsluecken-profil")
+            }
+            app.buttons["Übernehmen"].tap()
+            if app.alerts.firstMatch.waitForExistence(timeout:3) {
+                app.alerts.buttons["Verstanden"].tap()
+            }
+            XCTAssertTrue(app.staticTexts["surfacePreferenceSummary"].waitForExistence(timeout:5))
+            XCTAssertEqual(app.staticTexts["surfacePreferenceSummary"].label, title)
+            capture(app, image)
+        }
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["surfacePreferenceSummary"].waitForExistence(timeout:15))
+        XCTAssertEqual(app.staticTexts["surfacePreferenceSummary"].label, "Nur bekannte befestigte Wege")
+    }
+    func testUnmappedPOIAccessKeepsVisibleRouteAndParking() {
+        let app = launch()
+        XCTAssertEqual(app.textFields["tourName"].value as? String, "Zielzugang · UI-Beispiel")
+        XCTAssertTrue(app.buttons["Rad abstellen"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format:"label CONTAINS %@", "Wegdaten zum Ziel fehlen")).firstMatch.exists)
+        capture(app,"20-zielzugang-karte")
+        app.buttons["Höhenprofil und Wegbeläge"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format:"label CONTAINS %@", "Fußrest nicht berechnet")).firstMatch.waitForExistence(timeout:5))
+        XCTAssertTrue(app.staticTexts["Rad abstellen"].exists)
+        capture(app,"21-zielzugang-details")
+    }
+    func testMixedExampleShowsParkingAndSeparateDistancesOffline() {
+        let app = launch()
+        XCTAssertTrue(app.textFields["tourName"].value as? String == "Rad & Wandern · UI-Beispiel")
+        XCTAssertTrue(app.buttons["Höhenprofil und Wegbeläge"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.buttons["Rad abstellen"].waitForExistence(timeout:5))
+        capture(app,"18-rad-wandern-karte")
+        app.buttons["Höhenprofil und Wegbeläge"].tap()
+        XCTAssertTrue(app.staticTexts["Rad abstellen"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format:"label BEGINSWITH %@", "Wandern: ")).firstMatch.exists)
+        capture(app,"19-rad-wandern-details")
+    }
+}
+
+final class MapStyleTests: XCTestCase {
+    func testStylesSwitchAcrossTabsAndRestartWithGermanDefault() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://beispiel.invalid"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launchEnvironment["BIKENAVI_PLAN_ID"] = "123C7446-B126-41E7-82E3-64D572AFA78B"
+        app.launch()
+        let menu = app.buttons["mapStyleMenu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 20))
+        XCTAssertEqual(menu.value as? String, "Standard · Deutsch")
+        let title = app.textFields["tourName"].value as? String
+        XCTAssertTrue(["Heidelberg · Beispieltour", "Heidelberg · Höhenbeispiel"].contains(title ?? ""), "Galerie nur mit gekennzeichneten öffentlichen Beispieldaten erstellen")
+        for (name, image) in [("Hell", "25-karte-hell"), ("Detailreich", "26-karte-detailreich"),
+                              ("Dunkel", "27-karte-dunkel"), ("Satellit", "28-karte-satellit"),
+                              ("Topografisch", "29-karte-topografisch")] {
+            menu.tap()
+            XCTAssertTrue(app.buttons[name].waitForExistence(timeout: 5))
+            app.buttons[name].tap()
+            XCTAssertTrue(menu.waitForExistence(timeout: 5))
+            XCTAssertEqual(menu.value as? String, name)
+            XCTAssertEqual(app.textFields["tourName"].value as? String, title)
+            capture(app, image)
+        }
+        app.tabBars.buttons["Einstellungen"].tap()
+        let picker = app.buttons["settingsMapStyle"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        XCTAssertTrue(picker.label.contains("Topografisch"))
+        picker.tap()
+        app.buttons["Standard · Deutsch"].tap()
+        capture(app, "11-einstellungen")
+        app.tabBars.buttons["Planen"].tap()
+        XCTAssertEqual(menu.value as? String, "Standard · Deutsch")
+        let toggle = app.buttons["togglePlanningDetails"]
+        if !app.buttons["waypoints"].exists { toggle.tap() }
+        capture(app, "01-planen")
+        toggle.tap()
+        capture(app, "02-karte")
+        menu.tap()
+        app.buttons["Dunkel"].tap()
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertEqual(menu.value as? String, "Dunkel")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(menu.waitForExistence(timeout: 20))
+        XCTAssertEqual(menu.value as? String, "Standard · Deutsch")
+        XCTAssertEqual(app.textFields["tourName"].value as? String, title)
+    }
+    private func capture(_ app: XCUIApplication, _ name: String) {
+        let ready = expectation(description: "Kartenkacheln laden")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { ready.fulfill() }
+        wait(for: [ready], timeout: 8)
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "Gallery-" + name
         attachment.lifetime = .keepAlways

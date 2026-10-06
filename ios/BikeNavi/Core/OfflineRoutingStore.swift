@@ -5,6 +5,7 @@ import Foundation
 actor OfflineRoutingStore {
     struct Entry: Codable { var id: OfflineTileID; var file: String }
     private var prepared: (graph: OfflineGraph, entries: [Entry])?
+    private var downloads: [UUID: [Entry]] = [:]
     let directory: URL
     init(directory: URL) { self.directory = directory }
     private func manifest(_ route: CalculatedRoute) -> URL { directory.appendingPathComponent(route.id.uuidString + ".manifest") }
@@ -17,17 +18,55 @@ actor OfflineRoutingStore {
         try tile.validate(for: entry.id)
         return tile
     }
+    /// Evict only files not referenced by a completed package or active download.
+    /// Existing offline packages remain intact; an old moving window becomes
+    /// reclaimable only after its replacement manifest was committed.
+    private func makeRoom(for bytes: Int) throws {
+        let files = try FileManager.default.contentsOfDirectory(at: directory,
+            includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey])
+        var pinned = Set(downloads.values.flatMap { $0 }.map(\.file))
+        pinned.formUnion(prepared?.entries.map(\.file) ?? [])
+        for file in files where file.pathExtension == "manifest" {
+            // A corrupt manifest must not silently cause deletion of its data.
+            let entries = try JSONDecoder().decode([Entry].self, from: Data(contentsOf: file))
+            pinned.formUnion(entries.map(\.file))
+        }
+        var used = files.reduce(0) { $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
+        let candidates = files.filter { $0.pathExtension == "json" && !pinned.contains($0.lastPathComponent) }
+            .sorted { ((try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast)
+                < ((try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) }
+        for file in candidates where used + bytes > 250 * 1024 * 1024 {
+            let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            try FileManager.default.removeItem(at: file)
+            used -= size
+        }
+        guard used + bytes <= 250 * 1024 * 1024 else { throw LocalRoutingError.tooLarge }
+    }
+
     private func latest(_ id: OfflineTileID) -> Entry {
         let ref = directory.appendingPathComponent(id.key + ".ref")
         return Entry(id: id, file: (try? String(contentsOf: ref, encoding: .utf8)) ?? id.key + ".json")
     }
     func load(route: CalculatedRoute) throws -> OfflineGraph {
         let entries = try JSONDecoder().decode([Entry].self, from: Data(contentsOf: manifest(route)))
-        guard Set(route.coordinates.map { OfflineTileID.at($0) }).isSubset(of: Set(entries.map(\.id))) else { throw LocalRoutingError.noData }
         return try OfflineGraph(tiles: entries.map { try read($0) })
     }
+    /// Planning never waits for the local navigation window when a server is configured.
+    func calculate(document: TourDocument, api: APIClient?,
+                   progress: @Sendable (Int, Int) async -> Void) async throws -> CalculatedRoute {
+        if let api { return try await api.route(document, includeContext: false) }
+        return try await plan(document: document, api: nil, progress: progress).0
+    }
+
+    func prepareNeighborhood(route: CalculatedRoute, center: Coordinate, api: APIClient?, refresh: Bool = false,
+                             progress: @Sendable (Int, Int) async -> Void) async throws -> OfflineGraph {
+        try await prepare(route: route, api: api, refresh: refresh,
+                          ids: OfflineTileID.neighborhood(center), progress: progress)
+    }
+
     func plan(document: TourDocument, api: APIClient?,
               progress: @Sendable (Int, Int) async -> Void) async throws -> (CalculatedRoute, OfflineGraph) {
+        guard document.profile.mode == .cycling else { throw LocalRoutingError.walkingRequiresServer }
         let seed = CalculatedRoute(id: UUID(), coordinates: document.waypoints.map(\.coordinate), distance: 0,
             duration: 0, ascent: 0, descent: 0, maneuvers: [], surfaces: [], warnings: [],
             provider: "Wegenetz", calculatedAt: Date().timeIntervalSince1970)
@@ -98,10 +137,13 @@ actor OfflineRoutingStore {
         if refresh { prepared = nil }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         if !refresh, let complete = try? load(route: route),
-           (api == nil || complete.hasCurrentAccessRules), Set(ids).isSubset(of: complete.tiles) {
+           (api == nil || complete.hasCurrentAccessRules), Set(ids) == complete.tiles {
             await progress(ids.count, ids.count)
             return complete
         }
+        let downloadID = UUID()
+        downloads[downloadID] = []
+        defer { downloads.removeValue(forKey: downloadID) }
         var tiles: [OfflineGraphTile] = [], entries: [Entry] = []
         for (i,id) in ids.enumerated() {
             try Task.checkCancellation()
@@ -128,17 +170,22 @@ actor OfflineRoutingStore {
                 try Task.checkCancellation()
                 try tile.validate(for: id)
                 let data = try JSONEncoder().encode(tile)
-                let used = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey]).reduce(0) {
-                    $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
-                }
-                guard used + data.count <= 250 * 1024 * 1024 else { throw LocalRoutingError.tooLarge }
+                try makeRoom(for: data.count)
                 entry.file = id.key + "-" + UUID().uuidString + ".json"
                 try data.write(to: directory.appendingPathComponent(entry.file), options: .atomic)
                 try Data(entry.file.utf8).write(to: directory.appendingPathComponent(id.key + ".ref"), options: .atomic)
             }
             tiles.append(tile); entries.append(entry)
+            downloads[downloadID] = entries
         }
-        let graph = try OfflineGraph(tiles: tiles)
+        let graph: OfflineGraph
+        do {
+            graph = try OfflineGraph(tiles: tiles)
+        } catch LocalRoutingError.inconsistentData where !refresh && api != nil {
+            // One complete refresh for legacy/unresolvable snapshots. Keep the
+            // last route manifest intact if this also fails.
+            return try await prepare(route: route, api: api, refresh: true, ids: ids, progress: progress)
+        }
         try Task.checkCancellation()
         try JSONEncoder().encode(entries).write(to: manifest(route), options: .atomic)
         prepared = (graph, entries)

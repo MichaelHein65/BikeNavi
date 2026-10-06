@@ -10,7 +10,10 @@ from . import __version__
 from .models import BikeSampleBatch, Mutation, Route, RouteRequest, Waypoint
 from .providers import ORS
 from .offline import OfflineTiles
+from .elevation import ElevationRequest, ElevationResponse, elevations
 from .storage import Storage
+from .blog_store import BlogPoint, BlogRepository
+from .blog import BlogGenerator
 
 
 def create_app(database_url: str | None = None, token: str | None = None,
@@ -29,6 +32,8 @@ def create_app(database_url: str | None = None, token: str | None = None,
         async with httpx.AsyncClient(timeout=35, transport=transport) as client:
             app.state.ors = ORS(key, client, context_url)
             app.state.offline = OfflineTiles(client, app.state.storage, context_url)
+            app.state.blogs = BlogRepository(app.state.storage)
+            app.state.blog_generator = BlogGenerator(client, app.state.blogs)
             yield
         app.state.storage.engine.dispose()
 
@@ -78,9 +83,29 @@ def create_app(database_url: str | None = None, token: str | None = None,
     def read_bike_samples(ride_id: UUID, after: int = Query(default=0, ge=0)):
         return app.state.storage.bike_samples(str(ride_id), after)
 
+    @app.post("/v1/blog-points", dependencies=[Depends(authenticate)])
+    def blog_point(body: BlogPoint):
+        return app.state.blogs.append(body)
+
+    @app.get("/v1/rides/{ride_id}/blog-points", dependencies=[Depends(authenticate)])
+    def blog_points(ride_id: UUID, after: int = Query(default=0, ge=0)):
+        return app.state.blogs.points(str(ride_id), after)
+
+    @app.post("/v1/rides/{ride_id}/blog", dependencies=[Depends(authenticate)])
+    async def generate_blog(ride_id: UUID):
+        return await app.state.blog_generator.generate(str(ride_id))
+
+    @app.get("/v1/rides/{ride_id}/blog", dependencies=[Depends(authenticate)])
+    def read_blog(ride_id: UUID):
+        return app.state.blogs.latest(str(ride_id))
+
     @app.post("/v1/route", response_model=Route, dependencies=[Depends(authenticate)])
-    async def route(body: RouteRequest):
-        return await app.state.ors.route(body)
+    async def route(body: RouteRequest, include_context: bool = True):
+        return await app.state.ors.route(body, include_context=include_context)
+
+    @app.post("/v1/elevation", response_model=ElevationResponse, dependencies=[Depends(authenticate)])
+    async def elevation(body: ElevationRequest):
+        return await elevations(app.state.ors.client, key, body)
 
     @app.get("/v1/offline-tiles/{x}/{y}", dependencies=[Depends(authenticate)])
     async def offline_tile(x: int, y: int, refresh: bool = False):

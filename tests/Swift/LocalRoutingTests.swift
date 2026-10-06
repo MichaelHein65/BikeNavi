@@ -2,6 +2,39 @@ import XCTest
 @testable import BikeNaviCore
 
 final class LocalRoutingTests: XCTestCase {
+    func testSkippingTwoStopsAllowsRejoinBeyondBothWithoutChangingProgress() throws {
+        let (tile, base, _) = try fixture()
+        var route = base
+        route.waypointIndices = [0, 2, 4, 8]
+        let stops = [0, 2, 4, 8].map { Waypoint(name: "Beispiel \($0)", coordinate: route.coordinates[$0]) }
+        XCTAssertEqual(LocalRouteMetrics.nextWaypointIndex(route: route, waypoints: stops, traveled: 0), 2)
+        XCTAssertEqual(LocalRouteMetrics.nextWaypointIndex(route: route, waypoints: stops, traveled: 0, skipped: [1]), 4)
+        XCTAssertEqual(LocalRouteMetrics.nextWaypointIndex(route: route, waypoints: stops, traveled: 0, skipped: [1, 2, 3]), 8)
+        let result = try LocalRouter.connect(graph: OfflineGraph(tiles: [tile]), original: route, waypoints: stops,
+            profile: RidingProfile(surface: .any), position: point(550, 0), heading: 90,
+            traveled: 0, usedUnpaved: 0, skippedWaypoints: [1, 2])
+        XCTAssertGreaterThan(result.rejoinIndex, 4)
+        XCTAssertEqual(route.waypointIndices, [0, 2, 4, 8])
+    }
+
+    func testSkipPersistenceAndLegacyNavigationState() throws {
+        let legacy = Data(#"{"originalProgress":12,"usedUnpaved":2,"routeProgress":12}"#.utf8)
+        var state = try JSONDecoder().decode(LocalNavigationState.self, from: legacy)
+        XCTAssertNil(state.skippedWaypointOrdinals)
+        state.skippedWaypointOrdinals = [1, 2]
+        let restored = try JSONDecoder().decode(LocalNavigationState.self, from: JSONEncoder().encode(state))
+        XCTAssertEqual(restored.skippedWaypointOrdinals, [1, 2])
+        XCTAssertEqual(restored.originalProgress, 12)
+    }
+
+    func testSkipFallbackMappingRetainsDestination() throws {
+        let (_, route, _) = try fixture()
+        let stops = [0, 2, 4, 8].map { Waypoint(name: "Beispiel", coordinate: route.coordinates[$0]) }
+        XCTAssertEqual(LocalRouteMetrics.pendingWaypoints(route: route, waypoints: stops, traveled: 0), [1, 2])
+        XCTAssertEqual(LocalRouteMetrics.pendingWaypoints(route: route, waypoints: stops, traveled: 0, skipped: [1, 2]), [])
+        XCTAssertEqual(LocalRouteMetrics.nextWaypointIndex(route: route, waypoints: stops, traveled: 0, skipped: [1, 2]), 8)
+    }
+
     func testTisnoBridgeRoutesBothWaysWithEverySurfacePreference() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -491,7 +524,7 @@ private final class AccessRevisionTileProtocol: URLProtocol {
         let parts = request.url!.pathComponents
         let x = Int(parts[parts.count - 2])!, y = Int(parts.last!)!
         let body = """
-        {"version":1,"compilerRevision":2,"x":\(x),"y":\(y),"generatedAt":1,
+        {"version":1,"compilerRevision":3,"x":\(x),"y":\(y),"generatedAt":1,
          "nodes":[],"edges":[],"restrictions":[],"excludedWays":[],"blockedNodes":[]}
         """
         client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 200,
@@ -526,5 +559,216 @@ extension LocalRoutingTests {
         var another = route; another.id = UUID()
         let reused = try await reopened.prepare(route: another, api: nil) { _, _ in }
         XCTAssertTrue(reused.hasCurrentAccessRules)
+    }
+}
+
+extension LocalRoutingTests {
+    func testDifferentOSMNodeVersionsResolvePositionsRegardlessOfDownloadOrder() throws {
+        let (base, _, _) = try fixture()
+        var older = base, newer = base
+        older.nodes = older.nodes.map { node in var copy = node; copy.osmVersion = 4; return copy }
+        newer.nodes = newer.nodes.map { node in var copy = node; copy.osmVersion = 5; return copy }
+        newer.nodes[0].coordinate = point(0, 20)
+        // A mirror may return old data in a more recent HTTP download.
+        older.generatedAt = 200; newer.generatedAt = 100
+        for tiles in [[older, newer], [newer, older]] {
+            let graph = try OfflineGraph(tiles: tiles)
+            XCTAssertEqual(graph.nodes[newer.nodes[0].id], newer.nodes[0].coordinate)
+            XCTAssertEqual(graph.edges.count, base.edges.count)
+        }
+        // Access exclusions stay conservative, even with newer positions.
+        older.blockedNodes = [newer.nodes[0].id]
+        XCTAssertFalse(try OfflineGraph(tiles: [newer, older]).edges.contains { $0.from == newer.nodes[0].id || $0.to == newer.nodes[0].id })
+    }
+
+    func testUnresolvableMapConflictsHaveTheirOwnError() throws {
+        let (base, _, _) = try fixture()
+        for version: Int? in [nil, 4] {
+            var a = base, b = base
+            a.nodes[0].osmVersion = version
+            b.nodes[0].osmVersion = version
+            b.nodes[0].coordinate = point(0, 20)
+            XCTAssertThrowsError(try OfflineGraph(tiles: [a, b])) { error in
+                guard case LocalRoutingError.inconsistentData = error else { return XCTFail("Wrong error: \(error)") }
+                XCTAssertFalse(error.localizedDescription.contains("fehlen"))
+            }
+        }
+    }
+}
+
+private final class ConflictRefreshTileProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "conflict-refresh.test" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        let parts = request.url!.pathComponents
+        let x = Int(parts[parts.count - 2])!, y = Int(parts.last!)!
+        // Recovery must explicitly bypass the Pi's cached snapshots.
+        let refreshed = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.contains {
+            $0.name == "refresh" && $0.value == "true"
+        } == true
+        let body = """
+        {"version":1,"compilerRevision":3,"x":\(x),"y":\(y),"generatedAt":2,
+         "nodes":[],"edges":[],"restrictions":[],"excludedWays":[],"blockedNodes":[]}
+        """
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: refreshed ? 200 : 400,
+            httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
+
+extension LocalRoutingTests {
+    func testConflictingCurrentTilesTriggerCompleteServerRefresh() async throws {
+        URLProtocol.registerClass(ConflictRefreshTileProtocol.self)
+        defer { URLProtocol.unregisterClass(ConflictRefreshTileProtocol.self) }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let (base, route, _) = try fixture()
+        let ids = try OfflineTileID.corridor(route.coordinates)
+        XCTAssertGreaterThan(ids.count, 1)
+        for (index, id) in ids.enumerated() {
+            var tile = base; tile.x = id.x; tile.y = id.y; tile.compilerRevision = 3
+            // Equal OSM versions cannot resolve the conflicting coordinates.
+            tile.nodes[0].osmVersion = 4
+            tile.nodes[0].coordinate = point(0, index == 0 ? 0 : 20)
+            try JSONEncoder().encode(tile).write(to: directory.appendingPathComponent(id.key + ".json"))
+        }
+        let store = OfflineRoutingStore(directory: directory)
+        let api = APIClient(baseURL: URL(string: "https://conflict-refresh.test")!, token: "test")
+        let graph = try await store.prepare(route: route, api: api) { _, _ in }
+        XCTAssertTrue(graph.hasCurrentAccessRules)
+        XCTAssertTrue(graph.nodes.isEmpty)
+        let reopened = OfflineRoutingStore(directory: directory)
+        let saved = try await reopened.load(route: route)
+        XCTAssertEqual(saved.tiles, Set(ids))
+        XCTAssertTrue(saved.nodes.isEmpty)
+    }
+}
+
+private final class LongRouteProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "long-route.test" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        XCTAssertEqual(request.url?.path, "/v1/route")
+        XCTAssertEqual(request.url?.query, "include_context=false")
+        let body = #"{"id":"FB27949B-96CE-4BD0-BC8D-D72ECCF815E9","coordinates":[{"latitude":49,"longitude":8},{"latitude":52,"longitude":13}],"distance":600000,"duration":100000,"ascent":0,"descent":0,"maneuvers":[],"surfaces":[],"warnings":[],"provider":"test","calculatedAt":1}"#
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 200,
+            httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
+
+extension LocalRoutingTests {
+    func testLongOnlineRouteDoesNotDownloadAnySurroundings() async throws {
+        URLProtocol.registerClass(LongRouteProtocol.self)
+        defer { URLProtocol.unregisterClass(LongRouteProtocol.self) }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var document = TourDocument()
+        document.waypoints = [Waypoint(name: "Beispielstart", coordinate: Coordinate(latitude: 49, longitude: 8)),
+                              Waypoint(name: "Beispielziel", coordinate: Coordinate(latitude: 52, longitude: 13))]
+        XCTAssertThrowsError(try OfflineTileID.corridor(document.waypoints.map(\.coordinate)))
+        let route = try await OfflineRoutingStore(directory: directory).calculate(document: document,
+            api: APIClient(baseURL: URL(string: "https://long-route.test")!, token: "test")) { _, _ in
+                XCTFail("Online route must not wait for a map download")
+            }
+        XCTAssertEqual(route.distance, 600_000)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+    }
+
+    func testNeighborhoodCoversThreeKilometresAndHandlesDateLine() throws {
+        for center in [point(0), Coordinate(latitude: 74.9, longitude: 179.99), Coordinate(latitude: -50, longitude: -179.99)] {
+            let ids = Set(try OfflineTileID.neighborhood(center))
+            XCTAssertLessThan(ids.count, 60)
+            for degrees in stride(from: 0.0, to: 360, by: 5) {
+                let angle = degrees * .pi / 180
+                var longitude = center.longitude + 3_000 * cos(angle) / (111_195 * cos(center.latitude * .pi / 180))
+                if longitude > 180 { longitude -= 360 }; if longitude < -180 { longitude += 360 }
+                let edge = Coordinate(latitude: center.latitude + 3_000 * sin(angle) / 111_195, longitude: longitude)
+                XCTAssertTrue(ids.contains(OfflineTileID.at(edge)))
+            }
+        }
+        XCTAssertThrowsError(try OfflineTileID.neighborhood(Coordinate(latitude: .nan, longitude: 0)))
+    }
+
+    func testMovingWindowForLongRouteReplacesGraphAndSurvivesFailedDownload() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let (base, original, _) = try fixture()
+        var route = original
+        route.coordinates.append(point(500_000))
+        let first = point(0), next = point(15_000)
+        for id in Set(try OfflineTileID.neighborhood(first) + OfflineTileID.neighborhood(next)) {
+            var tile = base; tile.x = id.x; tile.y = id.y
+            try JSONEncoder().encode(tile).write(to: directory.appendingPathComponent(id.key + ".json"))
+        }
+        let store = OfflineRoutingStore(directory: directory)
+        let initial = try await store.prepareNeighborhood(route: route, center: first, api: nil) { _, _ in }
+        XCTAssertEqual(initial.tiles, Set(try OfflineTileID.neighborhood(first)))
+        let moved = try await store.prepareNeighborhood(route: route, center: next, api: nil) { _, _ in }
+        XCTAssertEqual(moved.tiles, Set(try OfflineTileID.neighborhood(next)))
+        XCTAssertTrue(initial.tiles.isDisjoint(with: moved.tiles))
+        do {
+            _ = try await store.prepareNeighborhood(route: route, center: point(100_000), api: nil) { _, _ in }
+            XCTFail("Missing next window must fail")
+        } catch { }
+        let reopened = try await OfflineRoutingStore(directory: directory).load(route: route)
+        XCTAssertEqual(reopened.tiles, moved.tiles)
+    }
+}
+
+extension LocalRoutingTests {
+    func testCancelledWindowKeepsPreviousManifest() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let (base, route, _) = try fixture()
+        let first = point(0), next = point(15_000)
+        for id in Set(try OfflineTileID.neighborhood(first) + OfflineTileID.neighborhood(next)) {
+            var tile = base; tile.x = id.x; tile.y = id.y
+            try JSONEncoder().encode(tile).write(to: directory.appendingPathComponent(id.key + ".json"))
+        }
+        let store = OfflineRoutingStore(directory: directory)
+        let previous = try await store.prepareNeighborhood(route: route, center: first, api: nil) { _, _ in }
+        let pending = Task {
+            try await store.prepareNeighborhood(route: route, center: next, api: nil) { _, _ in
+                withUnsafeCurrentTask { $0?.cancel() }
+            }
+        }
+        do { _ = try await pending.value; XCTFail("Cancelled preparation must not commit") }
+        catch is CancellationError { }
+        let reopened = try await OfflineRoutingStore(directory: directory).load(route: route)
+        XCTAssertEqual(reopened.tiles, previous.tiles)
+    }
+
+    func testCachePressureEvictsUnreferencedFilesAndPreservesCompletedPackage() async throws {
+        URLProtocol.registerClass(AccessRevisionTileProtocol.self)
+        defer { URLProtocol.unregisterClass(AccessRevisionTileProtocol.self) }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let (base, route, _) = try fixture()
+        for id in try OfflineTileID.neighborhood(point(0)) {
+            var tile = base; tile.x = id.x; tile.y = id.y
+            try JSONEncoder().encode(tile).write(to: directory.appendingPathComponent(id.key + ".json"))
+        }
+        let store = OfflineRoutingStore(directory: directory)
+        let previous = try await store.prepareNeighborhood(route: route, center: point(0), api: nil) { _, _ in }
+        let obsolete = directory.appendingPathComponent("obsolete.json")
+        FileManager.default.createFile(atPath: obsolete.path, contents: nil)
+        let file = try FileHandle(forWritingTo: obsolete)
+        try file.truncate(atOffset: 250 * 1024 * 1024) // Sparse file, no large test allocation.
+        try file.close()
+        var another = route; another.id = UUID()
+        _ = try await store.prepareNeighborhood(route: another, center: point(15_000),
+            api: APIClient(baseURL: URL(string: "https://access-revision.test")!, token: "test")) { _, _ in }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: obsolete.path))
+        let saved = try await OfflineRoutingStore(directory: directory).load(route: route)
+        XCTAssertEqual(saved.tiles, previous.tiles)
     }
 }
