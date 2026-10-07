@@ -42,7 +42,7 @@ def upstream_route(surface=3, distance=100):
 
 
 def test_authentication_and_no_secret_exposure(client):
-    assert client.get("/health").json() == {"status": "ok", "version": "0.3.0"}
+    assert client.get("/health").json() == {"status": "ok", "version": "0.4.0"}
     for path in ["/v1/status", "/v1/changes"]:
         assert client.get(path).status_code == 401
     assert client.post("/v1/mutations", json=mutation()).status_code == 401

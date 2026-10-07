@@ -12,15 +12,18 @@ final class BlogJournalTests: XCTestCase {
         return (store, ride)
     }
 
-    func testOfflinePhotoRoundtripAcknowledgementAndRestart() throws {
+    func testOfflinePhotoRoundtripAcknowledgementAndReset() throws {
         let (store, ride) = try fixture()
         let photo = Data([0xff, 0xd8, 0xff, 0xd9])
         let point = BlogPoint(rideID: ride.id, coordinate: .init(latitude: 49.41, longitude: 8.68), title: "Beispiel", note: "Am Fluss", photo: photo)
         try store.appendBlogPoint(point)
         XCTAssertEqual(try store.blogPoints(rideID: ride.id, pendingOnly: true), [point])
+        XCTAssertEqual(try store.blogPointCounts(rideID: ride.id).total, 1)
+        XCTAssertEqual(try store.blogPointCounts(rideID: ride.id).pending, 1)
         XCTAssertEqual(try JSONDecoder().decode(BlogPoint.self, from: JSONEncoder().encode(point)).photo, photo)
         try store.appendBlogPoint(point, uploaded: true)
         XCTAssertTrue(try store.blogPoints(rideID: ride.id, pendingOnly: true).isEmpty)
+        XCTAssertEqual(try store.blogPointCounts(rideID: ride.id).pending, 0)
         try store.resetBlogUploads()
         XCTAssertEqual(try store.blogPoints(rideID: ride.id, pendingOnly: true).count, 1)
     }
@@ -38,6 +41,17 @@ final class BlogJournalTests: XCTestCase {
         try store.discardRide(id: ride.id)
         XCTAssertTrue(try store.blogPoints(rideID: ride.id).isEmpty)
         XCTAssertEqual(try store.blogPoints(rideID: copy.id).count, 1)
+    }
+
+    func testDeleteRemovesEveryLocalHTMLExportForTheRide() throws {
+        let (store, ride) = try fixture()
+        let first = BlogDraft(id: UUID(), rideID: ride.id, createdAt: 1, html: "Beispiel 1", warnings: [], mode: "template", sourceCount: 0)
+        let second = BlogDraft(id: UUID(), rideID: ride.id, createdAt: 2, html: "Beispiel 2", warnings: [], mode: "template", sourceCount: 0)
+        let urls = try [first.export(), second.export()]
+        try store.saveBlogDraft(second)
+        try store.deleteBlogData(rideID: ride.id)
+        for url in urls { XCTAssertFalse(FileManager.default.fileExists(atPath: url.path)) }
+        XCTAssertNil(try store.blogDraft(rideID: ride.id))
     }
 
     func testCursorAndExportPersist() throws {

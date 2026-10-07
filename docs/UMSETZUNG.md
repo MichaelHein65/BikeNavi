@@ -1,6 +1,10 @@
-# Umsetzungsstand – Version 0.3.0
+# Umsetzungsstand – Version 0.4.0
 
-Stand: 6. Oktober 2026. Dies ist eine Entwicklungsfassung vor 1.0, keine für lange Touren freigegebene Navigations-App.
+Stand: 7. Oktober 2026. Dies ist eine Entwicklungsfassung vor 1.0, keine für lange Touren freigegebene Navigations-App.
+
+## Releaseprüfung 0.4.0 (7. Oktober 2026)
+
+144 Backend- und 126 Swift-Kerntests erfolgreich. Simulator-Testbuild, signierter iPhone-Release-Build und App-/Widget-Versionen 0.4.0 (4) geprüft. Relevante Blog-UI-Tests und Versionsanzeige erfolgreich; neue Bildschirmaufnahmen mit ausschließlich öffentlicher Heidelberger Beispielroute und synthetischen Erinnerungen. [Öffentlicher Beispielblog](examples/heidelberg-blog.html) mit drei Hintergrundkapiteln und zwölf Ortsquellen auf dem bestehenden Pi erzeugt; Wikipedia-Recherche/KI-Schreibschritt erfolgreich, zusätzliche Websuche nicht erreichbar und im Entwurf ausgewiesen. Temporäre Pi-Beispieldaten entfernt. Dieser Release-Arbeitslauf veröffentlicht Git/GitHub; kein neues Geräte- oder Pi-Deployment und kein neuer Feldtest. [Details](VERSIONIERUNG.md).
 
 ## Implementiert
 
@@ -102,3 +106,17 @@ Die laufende Tour verankert den Standort bei 80 % der Kartenhöhe. Der Maßstab 
 Die Fahrtrichtung stammt bei Bewegung ab 1 m/s aus einem höchstens fünf Sekunden alten GPS-Kurs. Im Stand oder bei langsamem Tempo dreht die Anzeige mit dem Kompass des iPhones. Heading-Updates lösen unabhängig von aufgezeichneten GPS-Punkten eine Aktualisierung aus. In einer pausierten Tour bleibt die Karte frei bedienbar; „Fortsetzen“ aktiviert die Nachführung wieder.
 
 Alle bis dahin offenen Änderungen sind in [CHANGELOG.md](../CHANGELOG.md) zusammengeführt; die Release-Prüfungen stehen in [VERSIONIERUNG.md](VERSIONIERUNG.md).
+
+
+### Blogprüfung am 6. Oktober 2026
+
+137 Backend- und 126 Swift-Kerntests erfolgreich; nach der letzten HTML-Lesbarkeitskorrektur alle 15 Blog-/Deployment-Tests erneut erfolgreich. Pi nach geprüfter Datenbanksicherung aktualisiert, KI-Konfiguration aus dem vorhandenen Pi-lokalen Schlüssel übernommen. Zwei tatsächliche KI-Blogläufe mit öffentlichen, gekennzeichneten Heidelberger Beispieldaten einschließlich topografischer Kacheln erfolgreich (18 Quellen / 35,1 s, anschließend 16 Quellen / 37,2 s). Testfahrten, Orte und Pi-Entwürfe wieder entfernt. Das [HTML-Beispiel](examples/heidelberg-blog.html) enthält synthetische Notizen, keine private Fahrt und als Bild das gekennzeichnete BikeNavi-Icon. Beide Simulator-UI-Tests (Offline-Ortserfassung mit Neustart sowie HTML-Vorschau) erfolgreich; nach Ladeanzeige erneute Vorschauprüfung einschließlich sichtbarer Topografie erfolgreich. Galeriebilder 12 und 30–34 visuell geprüft. Anfangs leer erfasste Vorschau durch Warten auf WebKit-Ladeabschluss korrigiert; ein danach hängender Xcode-Protokollabschluss wurde durch Neustart des separaten Simulators behoben. Signierter Gerätebuild einschließlich letzter Vorschaukorrektur und strenge Signaturprüfung erfolgreich. Blogfassung 0.3.0 (3) auf Michaels iPhone 15 Pro installiert; automatischer Start wegen Gerätesperre abgewiesen, nach Entsperren manuell öffnen; Gerätebedienung und Feldtest weiterhin offen.
+
+
+### Prüfung nach Nutzer-Testfahrt und Blogüberarbeitung (6. Oktober 2026)
+
+Private Testfahrt samt fünf Foto-Orten auf dem Pi und in einer ignorierten lokalen Diagnosekopie geprüft: Uploads bestätigt, Inhalte identisch, erneuter Abgleich erfolgreich. In der Ortserfassung veraltete GPS-Positionen im Stand asynchron erneuern, ohne Foto/Notiz zu verlieren. Blogaktionen direkt in gefahrenen Touren sowie in zugehörigen archivierten Planungen, vor langen Bild-/Diagrammlisten. 126 Swift-Kerntests und zwei Simulator-UI-Tests (direkter Blogzugang, Ortserfassung mit verzögertem frischem Fix und Offline-Neustart) erfolgreich; signierter Gerätebuild erfolgreich, korrigierte App auf Michaels iPhone installiert und gestartet. Keine Behauptung eines erneuten GPS-Feldtests.
+
+Pi-Blogerstellung nutzt jetzt eine große eingebettete topografische Karte und numerische Profilachsen (m/km); 140 Backend-Tests und 16 gezielte Blogtests erfolgreich. Öffentlicher Live-Beispielblog mit 17 Quellen in 35,3 Sekunden erstellt, ohne Ausfallhinweis; technische Pi-Daten danach entfernt. Private Fotos/Fahrtdaten bleiben außerhalb von Git und öffentlichen Bildern.
+
+Anschließend 141 Backend-Tests und 17 gezielte Blogtests für Hintergrundkapitel, sichere Absatzdarstellung und explizite Quellennummern erfolgreich. Textgenerierung nutzt Recherche im Hauptteil auch ohne gesammelte Stopps. 144 Backend-Tests einschließlich Routenhöhen-Ableitung, Quellenwiederverwendung und Übernahme älterer Quellenrubriken erfolgreich. Neueste private Tour als neue Pi-Fassung mit drei Hintergrundkapiteln und neun Quellen überarbeitet und API-Abruf bestätigt. Trotz vorübergehend ausgefallener Webrecherche bleiben die zuvor gefundenen Hintergründe erhalten. Quellenzuordnung im Haupttext redaktionell geprüft, Titel ohne unbelegten Wetterbezug. Frühere Fassungen erhalten. Zusätzlicher Simulator-Test für direkte Plan-/Fahrtlinks, große Topografie und m/km-Achsen erfolgreich; Galerie 31–37 aktualisiert bzw. ergänzt und visuell geprüft. Fehlt das optionale separate Höhenprofil, nutzt der Pi nun die vollständig vorhandenen Routenpunkthöhen; unvollständige Höhen bleiben unergänzt. Private Texte und Bilder bleiben in ignorierten Artefakten.

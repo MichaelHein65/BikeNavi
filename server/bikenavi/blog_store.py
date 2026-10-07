@@ -1,6 +1,9 @@
 """Private, immutable tour journal and versioned HTML drafts."""
 import base64
 import binascii
+import re
+from html.parser import HTMLParser
+from urllib.parse import urlparse
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -60,6 +63,47 @@ class BlogDraft(Base):
     metadata_json: Mapped[dict] = mapped_column(JSON)
 
 
+class ArchivedSources(HTMLParser):
+    """Recover source appendices from pre-cache drafts, never article/body text."""
+    def __init__(self):
+        super().__init__()
+        self.sources = []
+        self.current = None
+        self.field = None
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "li" and attrs.get("id", "").startswith("source-"):
+            self.current = {"title": "", "text": "", "url": "", "language": "web", "distance": None, "_context": ""}
+        elif self.current is not None:
+            if tag == "a":
+                self.current["url"] = attrs.get("href", "")
+                self.field = "title"
+            elif tag == "p": self.field = "text"
+            elif tag == "small": self.field = "_context"
+
+    def handle_data(self, data):
+        if self.current is not None and self.field:
+            self.current[self.field] += data
+
+    def handle_endtag(self, tag):
+        if self.current is None: return
+        if tag in ("a", "p", "small"): self.field = None
+        if tag == "li":
+            url = urlparse(self.current["url"])
+            if url.scheme == "https" and url.hostname and not url.username and not url.password and self.current["text"].strip():
+                if url.hostname.endswith(".wikipedia.org"):
+                    self.current["language"] = url.hostname.split(".")[0]
+                    match = re.search(r"ca\.\s*(\d+)\s*m",self.current["_context"])
+                    if match: self.current["distance"] = int(match.group(1))
+                self.current.pop("_context",None)
+                self.current["title"] = re.sub(r"^\[\d+\]\s*", "", self.current["title"])[:300]
+                self.current["text"] = self.current["text"][:1500]
+                self.sources.append(self.current)
+            self.current = None
+            self.field = None
+
+
 class BlogRepository:
     def __init__(self, storage):
         self.sessions = storage.sessions
@@ -112,11 +156,25 @@ class BlogRepository:
             session.add(BlogDraft(id=draft_id, ride_id=ride_id, html=html, metadata_json=metadata))
         return {**metadata, "id": draft_id, "html": html}
 
+    def research_sources(self, ride_id):
+        with self.sessions() as session:
+            self.ride(session, ride_id)
+            # Load one source-rich draft, rather than every photo-bearing HTML version.
+            draft = session.scalar(select(BlogDraft).where(BlogDraft.ride_id == ride_id)
+                                   .order_by(BlogDraft.metadata_json["sourceCount"].as_integer().desc(),
+                                             BlogDraft.metadata_json["createdAt"].as_float().desc()).limit(1))
+            if draft is None: return []
+            sources = draft.metadata_json.get("researchSources")
+            if isinstance(sources, list): return sources[:28]
+            parser = ArchivedSources()
+            parser.feed(draft.html)
+            return parser.sources[:28]
+
     def latest(self, ride_id):
         with self.sessions() as session:
             self.ride(session, ride_id)
-            drafts = session.scalars(select(BlogDraft).where(BlogDraft.ride_id == ride_id)).all()
-            if not drafts:
+            draft = session.scalar(select(BlogDraft).where(BlogDraft.ride_id == ride_id)
+                                   .order_by(BlogDraft.metadata_json["createdAt"].as_float().desc()).limit(1))
+            if draft is None:
                 raise HTTPException(404, "Für diese Fahrt gibt es noch keinen Blog.")
-            draft = max(drafts, key=lambda d: d.metadata_json["createdAt"])
             return {**draft.metadata_json, "id": draft.id, "html": draft.html}

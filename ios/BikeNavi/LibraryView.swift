@@ -61,6 +61,11 @@ struct TourDetailView: View {
     @State private var powerPoints: [RidePowerPoint] = []
     @State private var elevationPoints: [RideElevationPoint] = []
     @State private var measurementError: String?
+    private var blogRideID: UUID? {
+        if document.kind == .ride { return document.id }
+        let rides = state.records.filter { !$0.deleted && $0.document.kind == .ride && $0.document.sourcePlanID == document.id && $0.document.recordingState == .finished }
+        return (rides.first { !$0.document.track.isEmpty || ((try? state.store.blogPointCounts(rideID: $0.id).total) ?? 0) > 0 } ?? rides.first)?.id
+    }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
@@ -75,6 +80,13 @@ struct TourDetailView: View {
                 HStack {
                     Metric(label: document.kind == .ride ? "Gefahren" : "Strecke", value: Format.distance(document.kind == .ride ? document.recordedDistance : document.route?.distance ?? 0))
                     Metric(label: document.kind == .ride ? "Aufgezeichnet" : "Fahrzeit ca.", value: Format.duration(document.kind == .ride ? document.movingDuration : document.route?.duration ?? 0))
+                }
+                if let blogRideID {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if document.kind == .plan { Text("Blog der letzten gefahrenen Tour").font(.caption).foregroundStyle(.secondary) }
+                        RideBlogActions(rideID: blogRideID)
+                    }.padding(16)
+                        .background(Theme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
                 }
                 if document.kind == .ride, let counts = try? state.store.bikeSampleCounts(rideID: document.id) {
                     Text(counts.total == 0 ? "Noch keine Bike-Messungen aufgezeichnet" :
@@ -95,11 +107,6 @@ struct TourDetailView: View {
                     Label(document.kind == .ride ? "Als neue Tour planen" : "Planung öffnen", systemImage: "map")
                         .frame(maxWidth: .infinity).padding(.vertical, 8)
                 }.buttonStyle(.borderedProminent).tint(Theme.forest).foregroundStyle(.white)
-                if document.kind == .ride {
-                    NavigationLink { BlogJournalView(rideID: document.id) } label: {
-                        Label("Tourtagebuch & Blog", systemImage: "book.pages.fill")
-                    }.accessibilityIdentifier("openBlogJournal")
-                }
                 if let exportURL { ShareLink(item: exportURL) { Label("GPX exportieren", systemImage: "square.and.arrow.up") } }
                 if document.kind == .ride { Text("Belagsfarben: geplante Route · Fahrmodusfarben: gefahrene Strecke").font(.caption).foregroundStyle(.secondary) }
             }.padding(20)

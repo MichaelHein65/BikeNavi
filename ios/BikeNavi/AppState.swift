@@ -102,6 +102,43 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
             updateHeadingMonitoring()
         }
     }
+    /// A stationary ride uses a movement filter; explicitly renew the fix for a journal stop.
+    func journalCoordinate(timeout: TimeInterval = 15) async throws -> Coordinate {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["BIKENAVI_BLOG_STALE_LOCATION"] == "delayed", let example = coordinate {
+            lastTimestamp = Date().timeIntervalSince1970 - 120
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                let sample = CLLocation(coordinate: .init(latitude: example.latitude, longitude: example.longitude),
+                                        altitude: example.altitude ?? 0, horizontalAccuracy: 5, verticalAccuracy: 5, timestamp: Date())
+                self.locationManager(CLLocationManager(), didUpdateLocations: [sample])
+            }
+        }
+        #endif
+        request()
+        guard !denied else { throw APIError(status: 0, message: "Bitte den Standortzugriff in den iPhone-Einstellungen erlauben.") }
+        if let freshCoordinate { return freshCoordinate }
+        #if DEBUG
+        let simulated = ProcessInfo.processInfo.environment["BIKENAVI_START_LOCATION_TEST"] != nil
+        #else
+        let simulated = false
+        #endif
+        if !simulated {
+            manager.stopUpdatingLocation()
+            manager.distanceFilter = kCLDistanceFilterNone
+            manager.startUpdatingLocation()
+        }
+        defer { if !simulated { manager.distanceFilter = activeRide ? 5 : kCLDistanceFilterNone } }
+        let deadline = ContinuousClock.now.advanced(by: .milliseconds(Int(timeout * 1000)))
+        while ContinuousClock.now < deadline {
+            try Task.checkCancellation()
+            if let freshCoordinate { return freshCoordinate }
+            if denied { throw APIError(status: 0, message: "Bitte den Standortzugriff in den iPhone-Einstellungen erlauben.") }
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        throw APIError(status: 0, message: "Noch keine aktuelle GPS-Position. Foto und Notiz bleiben im Formular erhalten. Bitte den Standort erneut übernehmen.")
+    }
+
     func setRiding(_ active: Bool) {
         activeRide = active
         manager.distanceFilter = active ? 5 : kCLDistanceFilterNone

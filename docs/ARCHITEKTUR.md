@@ -150,3 +150,18 @@ ORS puffert ausschließlich erfolgreiche POST-Antworten für Directions und Snap
 Die Onlineprüfung bei `pavedOnly` toleriert zusätzlich fehlende `surface=0`-Angaben zwischen unmittelbar angrenzenden bekannten befestigten Abschnitten. Alle betroffenen Geometriekanten einschließlich beider Nachbarkanten müssen in vollständiger ORS-Wegarteninformation Straßen (2/3) sein. Einzelne Lücke höchstens 250 m Geometriedistanz, alle geeigneten Lücken höchstens 500 m zusammen. Werden 500 m überschritten, keine zusätzliche Freigabe. Ohne vollständige Wegarten, ohne beidseitig befestigte Nachbarn, bei Anfang/Ende der Route, fehlenden Surface-Bereichen oder tatsächlich unbefestigten Belägen gibt es keine Ausnahme. Abzug höchstens bis zur ausdrücklich gemeldeten unbekannten Surface-Summenlänge; nicht gemeldete Entfernung bleibt im 100-m-Budget.
 
 `road_gap_edges` wird auch auf die Wanderreferenz für die Kandidatenfilterung angewandt; endgültige Freigabe immer anhand jeder tatsächlichen Radroute. Rohbeläge und Routensummen werden nicht umklassifiziert; eine Routenwarnung nennt die tolerierten unbekannten Meter. Kletter-/Wegartenprüfung unverändert. Das lokale Offlinegraphformat enthält keine entsprechenden Wegarten und der lokale Radrouter bleibt vorsichtiger beim bisherigen 100-m-Budget; Kombinationsplanung erfolgt ohnehin online. Der Profiltext erklärt diese Grenze.
+
+
+### Blogaktionen und Ortsposition im Stand (6. Oktober 2026)
+
+`RideBlogActions` bündelt Erzeugung, Abruf/Vorschau und HTML-Export; dieselbe Ansicht steht direkt nach den Kennzahlen einer gefahrenen Tour und vor den Bildern im Tourtagebuch. Eine lokale Fassung bleibt ohne Pi abrufbar, beim Öffnen wird gegebenenfalls die neueste Pi-Fassung übernommen. Erzeugung bleibt an eine beendete und vollständig synchronisierte Fahrt gebunden.
+
+`LocationService.journalCoordinate` erneuert einen veralteten Fix für einen Blog-Stopp: Ortung neu starten, vorübergehend keinen Bewegungsfilter einsetzen, bis zu 15 Sekunden auf einen zulässigen Fix warten. Danach den Filter anhand des aktuellen Fahrtzustands wiederherstellen. `BlogPointEditor` übernimmt das Ergebnis asynchron und behält Foto/Notiz bei Fehlern. Der Standort bleibt nach Übernahme am Moment verankert.
+
+
+### Erzählte Hintergründe (6. Oktober 2026)
+
+Das serverinterne `Story`-Schema enthält zusätzlich bis zu vier `BackgroundChapter`-Objekte mit Überschrift und Text. Der Hauptteil entsteht auch bei `stops=[]` aus recherchierten Kapiteln. Mehrere Absätze werden als escaped HTML-Absätze ausgegeben; Quellenverweise bleiben verlinkt. Das iPhone-/Pi-API-Format des HTML-Entwurfs bleibt unverändert. Die KI erhält zusätzlich die tatsächlich aufgezeichnete Distanz und geplante Wegpunktnamen, um Aufzeichnung und Plan nicht zu verwechseln.
+
+
+`BlogRepository.research_sources` übernimmt Quellen aus einer quellenreichen vorherigen Fassung derselben Fahrt: bevorzugt das neue Feld `researchSources` in den Entwurfsmetadaten, bei älteren Fassungen ausschließlich `li#source-*` der Quellenrubrik. Persönliche Notizen und Haupttext werden nicht als Belege übernommen. Neu recherchierte Quellen werden per URL zusammengeführt; kurze neue Auszüge verdrängen keine reicheren gespeicherten Hintergründe. Das Entwurfsformat bleibt für ältere iPhone-Clients lesbar, unbekannte Metadatenfelder werden ignoriert.

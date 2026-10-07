@@ -28,6 +28,7 @@ def main():
     parser.add_argument("--elevation", action="store_true", help="Use the public DEM elevation example for the plan")
     parser.add_argument("--bike-and-hike", action="store_true", help="Synthetic cycle/walk split of the public route, for UI illustration only")
     parser.add_argument("--unmapped-destination", action="store_true", help="Synthetic POI beyond the mapped network, UI illustration only")
+    parser.add_argument("--blog", type=Path, help="Public labelled HTML example from scripts/smoke_blog.py")
     args = parser.parse_args()
     subprocess.run(["xcrun", "simctl", "terminate", args.device, BUNDLE], capture_output=True)
     container = Path(subprocess.check_output(
@@ -72,6 +73,12 @@ def main():
         plan["waypoints"][-1]["coordinate"]["latitude"] += 319 / 111_000
         example["warnings"].append("Synthetisches UI-Beispiel: 319 m Luftlinie mit fehlenden Wegdaten zum Ziel. Kein berechneter Fußrest, keine Geländeprüfung.")
     with sqlite3.connect(database) as db:
+        if args.blog:
+            html = args.blog.read_text()
+            if "Beispiel" not in html: raise SystemExit("Nur ein gekennzeichnetes öffentliches Blog-Beispiel zulässig.")
+            db.execute("CREATE TABLE IF NOT EXISTS blog_drafts (ride_id TEXT PRIMARY KEY, payload BLOB NOT NULL)")
+            draft = dict(id=identifier("example-blog"), rideID=RIDE, createdAt=STAMP, html=html, warnings=["Öffentlicher KI-Beispielblog mit synthetischen Erinnerungen und BikeNavi-Icon als Beispielbild; keine tatsächliche Fahrt."], mode="openai", sourceCount=html.count('id="source-'))
+            db.execute("INSERT INTO blog_drafts(ride_id,payload) VALUES(?,?) ON CONFLICT(ride_id) DO UPDATE SET payload=excluded.payload", (RIDE, json.dumps(draft).encode()))
         db.execute("CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, payload BLOB NOT NULL)")
         db.execute("CREATE TABLE IF NOT EXISTS places (id TEXT PRIMARY KEY, payload BLOB NOT NULL)")
         db.execute("CREATE TABLE IF NOT EXISTS bike_samples (id TEXT PRIMARY KEY, ride_id TEXT NOT NULL, payload BLOB NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0)")
@@ -79,6 +86,9 @@ def main():
         for record_id, payload in db.execute("SELECT id, payload FROM documents").fetchall():
             previous = json.loads(payload)["document"]
             if previous.get("sourcePlanID") == PLAN and record_id != RIDE:
+                for table in ("blog_points", "blog_drafts"):
+                    if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone():
+                        db.execute(f"DELETE FROM {table} WHERE ride_id=?", (record_id,))
                 db.execute("DELETE FROM bike_samples WHERE ride_id=?", (record_id,))
                 db.execute("DELETE FROM documents WHERE id=?", (record_id,))
         for document in [plan, ride]:

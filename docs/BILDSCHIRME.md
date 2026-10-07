@@ -143,3 +143,42 @@ Für diese Bilder den synthetischen Bestand mit `seed_gallery.py --bike-and-hike
 Aufnahme **24** zeigt im Profil die Online-Ausnahme für fehlende Beläge zwischen bekannten befestigten Straßenabschnitten (250 m je Lücke, 500 m insgesamt) sowie die weiterhin strengere lokale Offlinegrenze. Der Simulator-Test prüft den sichtbaren Hinweis anhand derselben öffentlichen, gekennzeichneten Beispielplanung. Profilbild **06** wurde mit dem aktuellen Text ebenfalls erneuert.
 
 <img src="images/24-belagsluecken-profil.png" width="300" alt="Fahrprofil mit Erklärung der begrenzten Online-Toleranz für unbekannte Straßenbeläge und der Offlinegrenze">
+
+
+## Tourtagebuch und Blog
+
+Aufnahme **12** wurde mit der Taste **Blog-Ort festhalten** erneuert. **30** zeigt eine rein synthetische Notiz an einem öffentlichen Heidelberger Standort; im Simulator wird die Kameraaufnahme mangels Kamera nicht angeboten. **31** zeigt den gespeicherten, noch nicht übertragenen Beispielort im Tourtagebuch. Der UI-Test prüft Speicherung ohne Server, Erhalt nach Neustart und einen verständlichen Hinweis bei Blogerstellung ohne Pi-Konfiguration.
+
+| Ort festhalten | Tourtagebuch |
+| --- | --- |
+| <img src="images/30-blog-ort.png" width="300" alt="Blog-Ort mit synthetischer Beispielnotiz und öffentlichem Heidelberger Standort"> | <img src="images/31-tourtagebuch.png" width="300" alt="Tourtagebuch mit lokal gespeichertem Beispielort und ausstehender Übertragung"> |
+
+Die Blogvorschau verwendet einen auf dem Pi tatsächlich erzeugten KI-Blog zu öffentlichen Heidelberger Orten. Die Erinnerungen und Fahrtaufzeichnung sind synthetisch; das als Beispielbild gekennzeichnete BikeNavi-Icon ist kein Reisefoto. Kartenkacheln und Recherchequellen sind real. Das [portable HTML-Beispiel](examples/heidelberg-blog.html) enthält alle Bilder und Karten direkt.
+
+**32–34** zeigen den Titelbereich, die große topografische Streckenübersicht und einen Detailausschnitt mit markiertem Beispielort. Die Vorschauprüfung wartet auf den abgeschlossenen HTML-Ladevorgang und prüft den sichtbaren Kartenausschnitt. Die Aufnahme der großen Karte scrollt zusätzlich gezielt zur vollständigen Übersicht. Alle Aufnahmen wurden visuell kontrolliert.
+
+| KI-Blogvorschau | Topografische Streckenübersicht | Topografische Details |
+| --- | --- | --- |
+| <img src="images/32-blog-vorschau.png" width="250" alt="Bunter KI-Blogtitel und motivierende Einleitung zur öffentlichen Heidelberger Beispieltour"> | <img src="images/33-blog-karte.png" width="250" alt="Topografische Beispielstrecke mit nummerierten Erinnerungsorten"> | <img src="images/34-blog-topografie.png" width="250" alt="Eingebettete topografische Karte am öffentlichen Beispielort mit ausdrücklich synthetischer Notiz"> |
+
+Topografische Kartendaten: © [OpenStreetMap-Mitwirkende](https://www.openstreetmap.org/copyright), SRTM · Darstellung: © [OpenTopoMap](https://opentopomap.org), [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). Lizenz- und Quellenangaben sind im HTML ebenfalls enthalten.
+
+Für reproduzierbare Aufnahmen: Dokumentationssimulator mit `seed_gallery.py --device UUID --elevation --blog docs/examples/heidelberg-blog.html` vorbereiten; gezielt `DocumentationScreenshotsTests/testBlogPointOfflineAndJournalScreens` und `DocumentationScreenshotsTests/testBlogHTMLPreviewWithPublicExample` ausführen. Kein Feldtest.
+
+
+## Direkter Blogzugang und beschriftetes Höhenprofil
+
+**35** zeigt den direkten Bloglink unter den Kennzahlen einer gefahrenen Beispieltour. **36** zeigt denselben Zugang in der zugehörigen archivierten Planung. **31** wurde erneuert: „Blog erstellen“ steht im Tourtagebuch vor den Bildern. **37** zeigt die numerischen Achsen: Höhe in Metern links, Strecke in Kilometern unten. Die große Streckenkarte **33** nutzt jetzt eingebettete OpenTopoMap-Kacheln mit der Route.
+
+| Gefahrene Tour | Zugehörige Planung | Profil mit m/km |
+| --- | --- | --- |
+| <img src="images/35-tour-blog-direkt.png" width="250" alt="Direkter Bloglink unter den Fahrtdaten einer öffentlichen Beispielaufzeichnung"> | <img src="images/36-plan-blog-direkt.png" width="250" alt="Blogzugang zur zugehörigen Beispielaufzeichnung in einer archivierten Planung"> | <img src="images/37-blog-profilachsen.png" width="250" alt="Höhenprofil mit numerischer Höhe-y in Metern und Strecke-x in Kilometern"> |
+
+Alle Aufnahmen mit öffentlichen, gekennzeichneten Heidelberger Beispielen geprüft. Der UI-Test prüft zusätzlich die Wiederherstellung einer veralteten Positionsmeldung durch einen verzögert gelieferten frischen Beispiel-Fix. Kameraberechtigung und tatsächliche GPS-Erneuerung im Stand bleiben Geräteprüfungen.
+
+
+## Versionsanzeige 0.4.0
+
+Die Blogaufnahmen 30–37 wurden für Release 0.4.0 (4) mit dem aktualisierten öffentlichen HTML-Beispiel erneuert. Die Einstellungen **11** wurden ebenfalls erneuert. **38** zeigt die tatsächliche Versions- und Buildnummer aus dem Simulator-App-Bundle. Kein Feldtest und keine echte Serveradresse/Zugangsdaten im Bild.
+
+<img src="images/38-version-0-4.png" width="300" alt="Einstellungen mit tatsächlicher App-Version 0.4.0 und Build 4 sowie öffentlichen Kartenquellen">

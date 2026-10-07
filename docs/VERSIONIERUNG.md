@@ -1,5 +1,27 @@
 # Versionierung und Releases
 
+## Version 0.4.0
+
+Datum: 7. Oktober 2026. App und Live-Aktivität: **0.4.0 (4)**. Backend: **0.4.0**. Git-Tag: **v0.4.0**. Entwicklungsfassung vor 1.0, kein App-Store-Release.
+
+Dieser Release enthält die Weiterentwicklung des Tourtagebuchs: direkt sichtbare Blogaktionen, GPS-Neuerfassung im Stand, große topografische Blogkarte, numerische Profilachsen sowie ausführliche Hintergrundkapitel und wiederverwendbare Recherchequellen. [Bedienung](BLOG.md), [Bildschirmgalerie](BILDSCHIRME.md#tourtagebuch-und-blog) und [öffentlicher HTML-Beispielblog](examples/heidelberg-blog.html).
+
+Die Funktionsfassungen wurden am 6. Oktober bereits auf Pi und iPhone bereitgestellt. Die neue Release-Version wird in diesem Arbeitslauf geprüft und auf Git/GitHub veröffentlicht; damit ist kein neues Geräte- oder Pi-Deployment verbunden. Die installierten Entwicklungsfassungen werden nicht allein durch den GitHub-Release aktualisiert.
+
+### Prüfung für 0.4.0
+
+- Vollständige Backend-Suite: **144 Tests erfolgreich**; zwei bekannte Deprecation-Warnungen aus Testabhängigkeiten.
+- Vollständige Swift-Kerntests: **126 Tests erfolgreich**.
+- Blog-UI-Prüfungen erfolgreich: Erfassung mit verzögertem frischem Beispiel-Fix, Offline-Neustart, sichtbare Blogaktionen in Fahrt/Planung, HTML-Vorschau, topografische Karte und m/km-Achsen.
+- Simulator-Testbuild und signierter iPhone-Release-Build erfolgreich; App und Live-Aktivität jeweils **0.4.0 (4)**, Signaturprüfung erfolgreich.
+- Zusätzlicher Versions-UI-Test mit Anzeige 0.4.0 (4) erfolgreich. Der erste Selektor suchte nur nach einer getrennten Textzelle; für Apples kombinierte Beschriftung/Wert-Darstellung korrigiert und erneut geprüft.
+- Initiale parallele Builds kollidierten im gemeinsam eingestellten Xcode-Buildverzeichnis; Simulator-Build mit eigenem `SYMROOT`/`OBJROOT` erneut erfolgreich.
+- Öffentlicher Heidelberger KI-Beispielblog am 7. Oktober auf dem bestehenden Pi erzeugt: **12 Ortsquellen, drei Hintergrundkapitel, 62,5 Sekunden**. Zusätzliche Websuche nicht erreichbar, Wikipedia-Quellen und KI-Schreibschritt erfolgreich; Ausfallhinweis im HTML. Technische Beispielaufzeichnung samt Pi-Blogdaten wieder entfernt.
+- Bilder 12 und 30–37 mit dem aktuellen öffentlichen Beispiel erneuert; Einstellungen 11 und Versionsanzeige 38 ergänzt/erneuert. Alle vor Commit visuell geprüft. Keine privaten Fahrt-/Fotodaten, Zugangswerte, Datenbanken, Logs oder Buildprodukte im Release.
+- Kamera-/GPS-Erneuerung im tatsächlichen Stand, lange Offline-Fahrten und die konkrete ursprüngliche Fehlermeldung benötigen weitere Geräteprüfung. Simulatorprüfungen sind kein Feldtest.
+- **Kein Geräte- oder Pi-Deployment durch diesen Release-Arbeitslauf.** Die zuvor installierten Entwicklungsfassungen bleiben von Tag/GitHub-Release unabhängig.
+
+
 ## Version 0.3.0
 
 Datum: 6. Oktober 2026. App und Live-Aktivität: **0.3.0 (3)**. Backend: **0.3.0**. Git-Tag: **v0.3.0**. Entwicklungsfassung vor 1.0, kein App-Store-Release.
@@ -49,7 +71,7 @@ Am 5. Oktober 2026 danach die Gipfelpfad-Korrektur auf dem Pi bereitgestellt. 10
 ## Ablauf für weitere Releases
 
 1. Alle vorgesehenen Änderungen prüfen und in `CHANGELOG.md` mit Datum, Verhalten, Grenzen und Tests dokumentieren.
-2. `VERSION`, Buildnummer im Generierungsskript sowie beide Server-Versionsangaben aktualisieren. Versionsprüfung im Backend-Test anpassen.
+2. `VERSION`, Buildnummer im Generierungsskript sowie beide Server-Versionsangaben aktualisieren. Versionsprüfung im Backend-Test und Dokumentations-UI-Versionsprüfung anpassen.
 3. `python3 scripts/generate_project.py` ausführen. App und Live-Aktivität erhalten dieselbe Version.
 4. Swift- und Backend-Tests, Simulator-/Gerätebuild und für die Änderungen relevante UI-Tests ausführen. Ergebnisse und verbleibende Grenzen festhalten.
 5. Bei UI-Änderungen die Galerie aus einem separaten Simulator mit Beispieldaten aktualisieren; alle Bilder vor Veröffentlichung ansehen.
@@ -89,3 +111,12 @@ Am 5. Oktober 2026 die Kartenwahl mit deutschem Standard bei jedem vollständige
 
 
 Am 5. Oktober 2026 anschließend auf Nutzerwunsch die Kartenwahl auf Michaels iPhone 15 Pro installiert. Signierter Debug-Gerätebuild erfolgreich; App und Live-Aktivität sowie eingebundene Rasterstile geprüft, Installation und Geräte-App-Liste erfolgreich. Automatischer App-Start wegen gesperrtem iPhone abgelehnt; die neue Kartenwahl muss nach Entsperren am Gerät geprüft werden. Weiterhin 0.2.0 (2), kein Pi-Deployment, Tag, GitHub-Release oder Feldtest.
+
+
+Am 6. Oktober 2026 nach Entsperren die bereits installierte BikeNavi-App auf Michaels iPhone 15 Pro erfolgreich gestartet (CoreDevice-Start bestätigt). Keine erneute Installation oder Codeänderung in diesem Schritt; Bedienung der Kartenansichten am Gerät durch den Nutzer noch zu prüfen, kein Feldtest.
+
+
+Am 6. Oktober 2026 wurde die Blogfunktion in der Entwicklungsfassung 0.3.0 (3) auf Pi und Michaels iPhone 15 Pro bereitgestellt. Vorher 137 Backend- und 126 Swift-Kerntests, gezielte Simulator-UI-Tests einschließlich Offline-Neustart und abschließender HTML-/Topografievorschau sowie Simulator- und signierter Gerätebuild erfolgreich. Pi-Datenbank gesichert und Wiederherstellung separat geprüft; vorhandenen OpenAI-Schlüssel ausschließlich auf dem Pi übernommen, zwei öffentliche KI-Beispielblogs erfolgreich erstellt und technische Pi-Einträge danach gelöscht. Appinstallation erfolgreich; automatischer Start wegen gesperrtem iPhone abgewiesen, nach Entsperren manuell öffnen. Kamera-/Fotoauswahl am echten iPhone, längere Offline-Fahrten und GPS-Feldtest weiterhin offen. Kein zusätzlicher Git-Tag oder GitHub-Release durch diesen Arbeitslauf; weitere Korrekturen unter „Unveröffentlicht“.
+
+
+Am 6. Oktober 2026 anschließend nach Nutzer-Testfahrt die Blogtasten direkt in Fahrt und zugehöriger Planung ergänzt und GPS-Neuerfassung im Stand überarbeitet. 126 Swift-Kerntests, gezielte Simulator-UI-Tests (verzögerter frischer Beispiel-Fix, Offline-Neustart und Blogzugang), Simulator-/signierter Gerätebuild und Signaturprüfung erfolgreich. Korrigierte Entwicklungsfassung 0.3.0 (3) auf Michaels iPhone installiert und gestartet. Pi erhält große topografische Streckenkarte, m/km-Profilachsen und gehaltvollere Hintergrundkapitel mit gespeicherten Recherchequellen; abschließend 143 Backend-Tests erfolgreich. Private neueste Tour als weitere Blogfassung erhalten, Quellenzuordnung redaktionell geprüft. Abschließende Karte-/Profil-/Planungs-UI-Prüfung und visuelle Galerieprüfung erfolgreich. Kein weiterer Tag oder GitHub-Release; konkrete ursprüngliche Fehlermeldung der Ortserfassung nicht reproduziert, erneuter tatsächlicher GPS-/Kamerafeldtest noch offen.

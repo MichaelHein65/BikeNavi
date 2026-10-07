@@ -74,7 +74,7 @@ settings = '''
     PRODUCT_NAME = "$(TARGET_NAME)";
     INFOPLIST_FILE = ios/BikeNavi/Info.plist;
     MARKETING_VERSION = __VERSION__;
-    CURRENT_PROJECT_VERSION = 3;
+    CURRENT_PROJECT_VERSION = 4;
     ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
     CODE_SIGN_STYLE = Automatic;
     DEVELOPMENT_TEAM = 4JDC67R76Q;
@@ -97,7 +97,7 @@ for name in ["Debug", "Release"]:
         PRODUCT_NAME = BikeNaviLiveActivity;
         INFOPLIST_FILE = ios/BikeNaviWidget/Info.plist;
         MARKETING_VERSION = {VERSION};
-        CURRENT_PROJECT_VERSION = 3;
+        CURRENT_PROJECT_VERSION = 4;
         SWIFT_VERSION = 5.0;
         IPHONEOS_DEPLOYMENT_TARGET = 17.0;
         SDKROOT = iphoneos;

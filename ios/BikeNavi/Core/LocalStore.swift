@@ -244,6 +244,15 @@ final class LocalStore {
         }
     }
 
+    func blogPointCounts(rideID: UUID) throws -> (total: Int, pending: Int) {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT COUNT(*), COALESCE(SUM(1-uploaded),0) FROM blog_points WHERE ride_id=?", -1, &statement, nil) == SQLITE_OK else { throw failure() }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, rideID.uuidString, -1, transient)
+        guard sqlite3_step(statement) == SQLITE_ROW else { throw failure() }
+        return (Int(sqlite3_column_int64(statement, 0)), Int(sqlite3_column_int64(statement, 1)))
+    }
+
     func acknowledgeBlogPoints(_ ids: [UUID]) throws {
         for id in ids { try execute("UPDATE blog_points SET uploaded=1 WHERE id='\(id.uuidString)'") }
     }

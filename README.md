@@ -2,7 +2,7 @@
 
 # BikeNavi
 
-**Version 0.3.0 · iOS-Build 3 · Entwicklungsfassung vor 1.0**
+**Version 0.4.0 · iOS-Build 4 · Entwicklungsfassung vor 1.0**
 
 [Änderungen](CHANGELOG.md) · [GitHub-Releases](https://github.com/MichaelHein65/BikeNavi/releases) · [Alle Bildschirme](docs/BILDSCHIRME.md) · [Versionierung](docs/VERSIONIERUNG.md)
 
@@ -30,11 +30,17 @@ Die Streckenplanung erfolgt mit eingerichtetem Pi über openrouteservice und ben
 
 ## Tourtagebuch und Blog
 
-[Bedienung, Recherche, KI-Konfiguration und Grenzen](docs/BLOG.md).
+Unterwegs über **Blog-Ort festhalten** Fotos und Notizen mit Standort sammeln, auch ohne Verbindung. Bei erreichbarem Pi werden sie bereits während der Fahrt übertragen. Nach Fahrtende stehen **Blog erstellen**, **Blog ansehen** und **HTML exportieren** direkt in der gefahrenen Tour und in der zugehörigen archivierten Planung bereit.
 
-Während einer laufenden Fahrt speichert **Blog-Ort festhalten** einen aktuellen Standort, eine Notiz und optional ein verkleinertes Foto zunächst nur auf dem iPhone. Bei erreichbarem Pi werden die Orte bereits unterwegs nach einer Fahrtsnapshot übertragen. Im Tourenarchiv erzeugt **Tourtagebuch & Blog** daraus eine portable HTML-Fassung mit Streckenübersicht, Höhenprofil, eigenen Bildern und optionalen topografischen Ausschnitten.
+Der Pi recherchiert Orts- und Regionalgeschichte und schreibt mit optionaler KI einen fröhlichen Reiseblog mit ausführlichen Hintergrundkapiteln, Quellenverweisen, eigenen Bildern, großer topografischer Streckenkarte und Höhenprofil mit Metern/Kilometern. Das portable HTML enthält Bilder und Karten direkt. Ohne KI-Konfiguration entsteht ein gekennzeichneter Vorlagenentwurf. Bilder und vollständige GPS-Spuren werden nicht an die KI geschickt; ausgewählte Ortsnamen/Koordinaten dienen der Recherche, Notizen und Tourdaten dem Schreibschritt.
 
-Ohne `BLOG_OPENAI_API_KEY` und `BLOG_OPENAI_MODEL` auf dem Pi erzeugt BikeNavi einen Vorlagenentwurf. Mit beiden optionalen Werten darf der Pi einen kreativen Text über die Responses API erzeugen; dabei übermittelt er nur Tourtitel sowie Titel und Notizen der Orte, niemals Fotos oder vollständige GPS-Spuren. Der HTML-Entwurf ist vor einer Veröffentlichung redaktionell zu prüfen.
+[Bedienung und KI-Konfiguration](docs/BLOG.md) · [Öffentlicher HTML-Beispielblog](docs/examples/heidelberg-blog.html) · [Blog-Bildschirmgalerie](docs/BILDSCHIRME.md#tourtagebuch-und-blog)
+
+| Ort festhalten | Tourtagebuch | Blog direkt in der Tour |
+| --- | --- | --- |
+| <img src="docs/images/30-blog-ort.png" width="220" alt="Blog-Ort mit synthetischer Heidelberger Beispielnotiz"> | <img src="docs/images/31-tourtagebuch.png" width="220" alt="Tourtagebuch mit sichtbarer Blog-Erzeugung"> | <img src="docs/images/35-tour-blog-direkt.png" width="220" alt="Direkter Blogzugang in einer öffentlichen Beispielaufzeichnung"> |
+
+Alle Bilder zeigen gekennzeichnete öffentliche bzw. synthetische Beispiele. Der Beispielblog verwendet das BikeNavi-Icon als ausdrücklich gekennzeichnetes Beispielbild, kein Reisefoto. Vor Veröffentlichung bleiben Text und Quellen redaktionell zu prüfen. Datenfluss, Kostenbegrenzung und verbleibende Geräteprüfungen stehen in der [Blogdokumentation](docs/BLOG.md).
 
 Wird zuerst ein Ziel gewählt, übernimmt die App automatisch den aktuellen Standort als Start. Solange ein frisches GPS-Signal fehlt, bleibt das Ziel gespeichert; die Route wird nach Eingang des Standorts berechnet. Ein ausdrücklich gewählter Start bleibt unverändert. Ohne Standortfreigabe kann der Start weiterhin auf der Karte gewählt werden.
 

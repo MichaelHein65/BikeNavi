@@ -2,6 +2,55 @@
 
 Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release. Versionsnummern folgen `MAJOR.MINOR.PATCH`; vor 1.0 kennzeichnet eine neue Minor-Version einen größeren Entwicklungsschritt. Die iOS-Buildnummer steigt unabhängig davon. Details zum Ablauf: [Versionierung](docs/VERSIONIERUNG.md).
 
+## Unveröffentlicht
+
+Noch keine weiteren Änderungen nach 0.4.0.
+
+## 0.4.0 — 7. Oktober 2026
+
+Entwicklungsfassung, iOS-Build 4. Tourtagebuch mit direkt sichtbaren Blogaktionen, topografischer Streckenkarte, numerischem Höhenprofil und gehaltvollen KI-Hintergrundkapiteln. Bedienung, Architektur, Galerie mit öffentlichen Beispieldaten und portabler HTML-Beispielblog gemeinsam versioniert. Release-Prüfung: 144 Backend- und 126 Swift-Kerntests, relevante Simulator-UI-Prüfungen, Simulator-Testbuild und signierter iPhone-Release-Build erfolgreich; App/Live-Aktivität 0.4.0 (4). Neuer öffentlicher Beispielblog mit zwölf Ortsquellen und drei Hintergrundkapiteln, zusätzliche Websuche während dieses Laufs nicht erreichbar und im Entwurf gekennzeichnet. Einzelheiten und verbleibende Grenzen: [Versionierung](docs/VERSIONIERUNG.md). Historische Prüfungen der Funktionsentwicklung stehen nachfolgend. Dieser GitHub-Release führt kein automatisches Pi-/iPhone-Deployment aus.
+
+
+### Blogtext: Hintergrund erzählen statt Floskeln (06.10.2026)
+
+- Neuester privater Blog gelesen: ohne gesammelte Stopps bislang fast ausschließlich Einleitung/Schluss, recherchierte Ortsdetails nur im Quellenanhang. Jetzt zwei bis vier eigenständige Hintergrundkapitel zu Strecke und Region, auch ohne Fotostopps. Zusammenhänge, Ursachen und heutige Bedeutung in gut lesbaren Absätzen; trockener Humor, keine erfundenen eigenen Erlebnisse oder Dialoge.
+- Recherche sammelt konkrete historische, kulturelle und landschaftliche Geschichten mit Quellen; Schreibauftrag verlangt passende Details im Haupttext, unterscheidet aufgezeichnete Kilometer von geplanter Strecke und vermeidet wiederkehrende Motivationsfloskeln. Quellen bleiben im Text verlinkt, ältere Blogfassungen erhalten.
+- Bereits recherchierte Quellen bleiben je Fahrt für weitere Fassungen verfügbar; bei einem vorübergehenden Rechercheausfall gehen die gehaltvollen Hintergründe nicht wieder verloren. Quellen aus alten Fassungen werden aus der Quellenrubrik übernommen, nicht aus persönlichen Notizen. Explizite Quellennummern sichern die Zuordnung im Schreibauftrag.
+- Mehrere Absätze innerhalb der KI-Textfelder werden im HTML sichtbar dargestellt. Kapiteltexte bleiben escaped, einschließlich Überschriften; keine Fotos oder vollständigen GPS-Spuren an die KI.
+- 144 Backend-Tests einschließlich Ableitung vorhandener Routenhöhen und Wiederverwendung gespeicherter/älterer Quellen, sicherer Absätze und expliziter Quellennummern erfolgreich. Erster neuer privater Entwurf mit drei Hintergrundkapiteln und acht Quellen als weitere Fassung erhalten; explizite Quellennummern im Schreibkontext zur besseren Zuordnung ergänzt. Abschließende, redaktionell geprüfte neue Pi-Fassung mit drei Hintergrundkapiteln und neun Quellen gespeichert und über API erneut abgerufen. Ein erneuter Webrechercheausfall wurde mit den bereits vorhandenen Quellen aufgefangen; Zuordnung der im Haupttext verwendeten Quellen geprüft, Titel ohne unbelegten Wetterbezug. Vorhandene Routenhöhen in der aktuellen privaten Fassung als m/km-Profil ergänzt und API-Abruf bestätigt. Frühere Fassungen bleiben erhalten; private Blogdaten bleiben ausschließlich unter ignorierten `artifacts/`.
+
+
+### Blog: topografische Streckenkarte und lesbare Profilachsen (06.10.2026)
+
+- Große HTML-Streckenkarte mit eingebetteten OpenTopoMap-Kacheln, aufgezeichneter bzw. ausdrücklich geplanter Route und nummerierten Blog-Orten. Zoom passend zum gesamten Ausschnitt; maximal zwölf Übersichtskacheln plus vier bestehende Ortsdetails, drei gleichzeitige Kartenabrufe und 20 Sekunden Zeitbudget für die Übersicht. Bei Kartenausfall ausdrücklich gekennzeichnete Ersatzübersicht; Segmentpausen weiterhin nicht überbrücken. Bisherige Blogfassungen bleiben erhalten; neue Darstellung bei erneuter Erstellung.
+- Höhenprofil auch aus vollständig vorhandenen Routenpunkthöhen ableiten, wenn das optionale separate Profil fehlt; bisher enthielt die private Route Höhen an allen Punkten, aber kein separat gespeichertes Profil. Keine Interpolation bei fehlenden Höhen.
+- Höhenprofil mit numerischer y-Achse „Höhe (m)“, x-Achse „Strecke (km)“ und Raster. Runde Achsenschritte, deutscher Dezimaltrenner und sinnvoller Wertebereich auch bei flachem Profil oder Höhen unter null. Das Profil bleibt als geplante Route gekennzeichnet.
+- Prüfung: 140 Backend-Tests erfolgreich, einschließlich Kartenabrufbudget/Geometrie und Profilachsen; zwei Deprecation-Warnungen aus Testabhängigkeiten. Öffentlicher Pi-Live-Beispielblog mit 17 Quellen in 35,3 s, ohne Ersatzentwurf/Ausfallhinweis, erfolgreich erstellt; technische Pi-Daten danach entfernt. Profilbeschriftung für Mobilansicht vergrößert. Zusätzlicher Simulator-UI-Test für eingebettete Topografie, Profilachsen und Fahrt-/Planungslink erfolgreich; Galerie mit öffentlichen Beispieldaten aktualisiert und visuell geprüft. Ein zuvor fehlgeschlagener Screenshotlauf übersprang den kurzen Kartenausschnitt; kleinere Scrollschritte und dekorative Kacheln ohne eigene Accessibility-Einträge, abschließender Lauf erfolgreich.
+
+
+### Blog nach Testfahrt: sichtbare Tasten und GPS im Stand (06.10.2026)
+
+- In gefahrenen Touren direkt unter den Tourdaten eine Blogkarte mit „Blog erstellen“, bei vorhandener Fassung „Blog ansehen“ sowie HTML-Export und Zugang zu Orten/Notizen. Dieselben Aktionen im Tourtagebuch vor den gesammelten Bildern; dadurch bleibt die Erzeugung auch bei vielen Fotos sichtbar.
+- Auch archivierte Planungen zeigen den Blogzugang zur zugehörigen letzten beendeten Fahrt; ein späterer leerer Fahrteintrag verdrängt eine vorhandene Fahrt mit GPS-Aufzeichnung oder Blog-Orten dabei nicht. Reine Planungen ohne Fahrt erhalten keinen Erzeugungsauftrag.
+- Standortübernahme bei einem Stopp erneuert einen veralteten GPS-Fix ohne Bewegungsfilter, wartet bis zu 15 Sekunden und übernimmt ihn automatisch. Ladeanzeige, erneuter Versuch und Erhalt von Foto/Notiz bei fehlendem GPS; Bewegungsfilter danach entsprechend dem aktuellen Fahrtzustand wiederherstellen. Kein Rückgriff auf veraltete Positionsdaten.
+- Private Testfahrt auf dem Pi geprüft: Aufzeichnung, Bike-Messungen und fünf Foto-Orte vollständig vorhanden, kein Blogentwurf. Zusätzlicher späterer leerer Fahrteintrag unverändert erhalten. Lokale Diagnosekopie mit Pi-Orten abgeglichen, alle Uploads bestätigt, Inhalte identisch und erneute lokale Übernahme erfolgreich. Private Fahrt-/Foto-/Diagnosedaten ausschließlich unter ignorierten `artifacts/`, nicht in öffentlichen Beispielen oder Git.
+- Die konkrete ursprünglich angezeigte Fehlermeldung wurde beim Nutzer angefragt; eine Ursache im Speichern/Abgleich der fünf vorhandenen Orte wurde nicht reproduziert. Standstill-GPS-Schwachstelle anhand des bisherigen Bewegungsfilters und der sofortigen Frischeprüfung korrigiert. 126 Swift-Kerntests, beide gezielten Simulator-UI-Tests einschließlich verzögertem GPS-Fix/Offline-Neustart und signierter Gerätebuild erfolgreich. App auf Michaels iPhone installiert und gestartet. Zusätzliche UI-Prüfung für direkte Fahrt-/Planungslinks, eingebettete Topografie und m/km-Profilachsen erfolgreich; Galerie 31–37 aktualisiert/ergänzt und visuell geprüft; tatsächlicher GPS-Feldtest am Gerät weiterhin offen.
+
+
+### App-Start nach Entsperren (06.10.2026)
+
+- Die bereits installierte BikeNavi-App auf Michaels iPhone 15 Pro nach Entsperren erfolgreich gestartet; CoreDevice bestätigt den Start. Keine erneute Installation oder Codeänderung, kein Feldtest.
+
+### Tourtagebuch: Pi-Betrieb und laufende Fahrten (06.10.2026)
+
+- Blog-Orte können nach einer synchronisierten Fahrtsnapshot bereits während einer laufenden Fahrt zum erreichbaren Pi übertragen werden. Lokale Exportkopien tragen die Fahrt-ID und werden beim Löschen der Fahrt mit entfernt.
+- KI-Recherche kann optional einen begrenzten Websuchschritt zu Geschichte, Kultur und Landschaft nutzen. Der Schreibschritt erhält weiterhin keine Fotos oder vollständigen GPS-Spuren. [BLOG.md](docs/BLOG.md) beschreibt Datenfluss, Konfiguration, Quellen und Grenzen.
+- Das Deployment erhält vorhandene Pi-lokale Blog-Konfiguration, wenn die Mac-`.env` dafür keine Werte enthält. Der Schlüssel wird nicht ausgegeben oder auf den Mac übertragen.
+- Abruf der neuesten Pi-Blogfassung lädt nur diese eine Fassung, um den Arbeitsspeicher bei vielen Bildfassungen zu begrenzen; gegen SQLite und PostgreSQL geprüft. Quellenhintergründe im HTML aufklappbar, damit der Reisebericht leicht lesbar bleibt; Quellenverweise bleiben direkt anklickbar. Formular erhält eine Taste zum Abschließen der Texteingabe. Neue dokumentierte Simulatorabläufe für Ortserfassung, Offline-Neustart und HTML-Vorschau.
+- Prüfung: 137 Backend-Tests und nach Exportbereinigung 126 Swift-Kerntests erfolgreich; gezielte abschließende Blog-/Deployment-Prüfung 15 Tests erfolgreich. Zwei Deprecation-Warnungen aus Testabhängigkeiten. Simulator-Testbuild, beide gezielten UI-Tests (Offline-Erfassung/Neustart und HTML-Vorschau) sowie signierter Gerätebuild erfolgreich. Nach visueller Prüfung zusätzliche Ladeanzeige beim Öffnen des Blogs; erneuter Vorschau-UI-Test mit abgeschlossenem Ladevorgang und sichtbarer Topografie erfolgreich. Ein vorheriger Textselektor im UI-Test fand das HTML-Badge nicht; Testbereitschaft auf den echten WebKit-Ladeabschluss umgestellt. Xcode hing bei der Protokollfinalisierung dieses fehlgeschlagenen Laufs; separaten Dokumentationssimulator neu gestartet, abschließender Lauf vollständig erfolgreich. Galerie 12 erneuert und 30–34 ergänzt, alle visuell geprüft. Aktualisierter signierter Gerätebuild und strenge Signaturprüfung erfolgreich.
+- Pi-Datenbank vor Deployment gesichert und durch Wiederherstellung in einer separaten Datenbank geprüft. Backend aktualisiert, vorhandener Pi-lokaler OpenAI-Schlüssel erhalten, Modell/Websuche im Container bestätigt. Zwei echte KI-Blogläufe mit ausschließlich öffentlichen Heidelberger Beispielen: 18 Quellen / 35,1 s und 16 Quellen / 37,2 s. Beide mit Topografie, ohne Ersatzentwurf/Ausfallhinweis; technische Fahrten samt Blogdaten danach entfernt. [HTML-Beispiel](docs/examples/heidelberg-blog.html). Blogfassung 0.3.0 (3) auf Michaels iPhone 15 Pro installiert. Automatischer Start wegen gesperrtem iPhone abgewiesen; nach Entsperren manuell öffnen. Kein neuer Tag/GitHub-Release durch diesen Arbeitslauf und kein Feldtest.
+
+
 ## 0.3.0 — 6. Oktober 2026
 
 Entwicklungsfassung, iOS-Build 3. Zweiter getaggter Release mit Koordinaten- und Plus-Code-Suche, Höhenprofilen, Rad&Wandern/Wandern, aktualisierten HeiGIT-Diensten, Belagskorrekturen und Kartenansichten. Für die Release-Version erfolgreich geprüft: 134 Backend-Tests, 125 Swift-Kerntests und Simulator-Debug-Build. Die nachfolgenden Einträge dokumentieren Verhalten, weitere Prüfungen und bekannte Grenzen. Pi-Deployment, Geräteinstallation und Simulatorprüfungen ersetzen keinen Feldtest.
@@ -12,15 +61,6 @@ Entwicklungsfassung, iOS-Build 3. Zweiter getaggter Release mit Koordinaten- und
 - Beendete, vollständig synchronisierte Fahrten erhalten im Archiv ein Tourtagebuch. Der Pi erzeugt daraus eine portable HTML-Fassung mit eigener Streckenübersicht, Höhenprofil, eingebetteten Bildern und optionalen topografischen Ausschnitten. Die Fassung kann auf dem iPhone angesehen und als HTML geteilt werden.
 - Ohne konfigurierte optionale `BLOG_OPENAI_API_KEY` und `BLOG_OPENAI_MODEL` entsteht ein Vorlagenentwurf. Bei aktivierter KI werden ausschließlich Tourtitel, Titel und Notizen der Orte sowie recherchierte Quellen übermittelt; Fotos und vollständige GPS-Spuren bleiben auf dem Pi. Jeder Entwurf verlangt vor Veröffentlichung eine redaktionelle Prüfung.
 - Prüfung: API-Test für Zugriffsschutz, fehlende Elternfahrt, idempotente Übertragung und paginierte Rückgabe; Swift-Test für lokale Persistenz und vollständiges Löschen der privaten Blogdaten zusammen mit der Fahrt.
-
-## Unveröffentlicht
-
-### Tourtagebuch: Pi-Betrieb und laufende Fahrten (06.10.2026)
-
-- Blog-Orte können nach einer synchronisierten Fahrtsnapshot bereits während einer laufenden Fahrt zum erreichbaren Pi übertragen werden. Lokale Exportkopien tragen die Fahrt-ID und werden beim Löschen der Fahrt mit entfernt.
-- KI-Recherche kann optional einen begrenzten Websuchschritt zu Geschichte, Kultur und Landschaft nutzen. Der Schreibschritt erhält weiterhin keine Fotos oder vollständigen GPS-Spuren. [BLOG.md](docs/BLOG.md) beschreibt Datenfluss, Konfiguration, Quellen und Grenzen.
-- Das Deployment erhält vorhandene Pi-lokale Blog-Konfiguration, wenn die Mac-`.env` dafür keine Werte enthält. Der Schlüssel wird nicht ausgegeben oder auf den Mac übertragen.
-- Prüfung: gezielter Swift-Test für Exportlöschung und Backend-Test für die Pi-lokale Konfigurationsübernahme. Kein Feldtest oder Geräteinstallationslauf.
 
 ## 0.2.0 — 23. September 2026
 

@@ -206,6 +206,83 @@ final class PlannerUITests: XCTestCase {
 
 /// Run after scripts/seed_gallery.py on a dedicated simulator; otherwise skipped.
 final class DocumentationScreenshotsTests: XCTestCase {
+    func testCaptureReleaseVersionSettings() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://beispiel.invalid"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Einstellungen"].waitForExistence(timeout: 20))
+        app.tabBars.buttons["Einstellungen"].tap()
+        capture(app, "11-einstellungen", delay: 1)
+        let version = app.descendants(matching: .any).matching(NSPredicate(format: "value == %@ OR label CONTAINS %@", "0.4.0 (4)", "0.4.0 (4)")).firstMatch
+        for _ in 0..<4 { if version.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(version.exists)
+        capture(app, "38-version-0-4", delay: 1)
+        app.terminate()
+    }
+
+    func testBlogHTMLPreviewWithPublicExample() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://beispiel.invalid"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launch()
+        app.tabBars.buttons["Touren"].tap()
+        app.segmentedControls.buttons["Gefahren"].tap()
+        let entry = app.cells.containing(.staticText, identifier: "Heidelberg · Beispielaufzeichnung").firstMatch
+        XCTAssertTrue(entry.waitForExistence(timeout: 10)); entry.tap()
+        XCTAssertTrue(app.buttons["generateBlog"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["generateBlog"].exists)
+        XCTAssertTrue(app.buttons["previewBlog"].isHittable)
+        capture(app, "35-tour-blog-direkt", delay: 1)
+        for _ in 0..<5 { if app.buttons["openBlogJournal"].isHittable { break }; app.swipeUp() }
+        app.buttons["openBlogJournal"].tap()
+        let preview = app.buttons["previewBlog"]
+        for _ in 0..<5 { if preview.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(preview.isHittable); preview.tap()
+        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.webViews["blogHTMLReady"].waitForExistence(timeout: 45))
+        capture(app, "32-blog-vorschau", delay: 1)
+        app.webViews.firstMatch.swipeUp()
+        let overview = app.webViews.images.matching(NSPredicate(format: "label CONTAINS %@", "Topografische Streckenübersicht")).firstMatch
+        for _ in 0..<12 {
+            if overview.isHittable && overview.frame.midY < app.webViews.firstMatch.frame.maxY - 120 { break }
+            app.webViews.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.78))
+                .press(forDuration: 0.1, thenDragTo: app.webViews.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.50)))
+        }
+        XCTAssertTrue(overview.isHittable)
+        capture(app, "33-blog-karte", delay: 1)
+        let elevation = app.webViews.images.matching(NSPredicate(format: "label CONTAINS %@", "Höhenprofil: Höhe in Metern")).firstMatch
+        for _ in 0..<12 {
+            if elevation.isHittable && elevation.frame.midY < app.webViews.firstMatch.frame.maxY - 100 { break }
+            app.webViews.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.78))
+                .press(forDuration: 0.1, thenDragTo: app.webViews.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.50)))
+        }
+        XCTAssertTrue(elevation.isHittable)
+        capture(app, "37-blog-profilachsen", delay: 1)
+        let topo = app.webViews.images.matching(NSPredicate(format: "label CONTAINS %@", "Topografischer Kartenausschnitt")).firstMatch
+        for _ in 0..<16 {
+            if topo.isHittable && topo.frame.midY < app.webViews.firstMatch.frame.maxY - 160 { break }
+            app.webViews.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.78))
+                .press(forDuration: 0.1, thenDragTo: app.webViews.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.50)))
+        }
+        XCTAssertTrue(topo.isHittable)
+        capture(app, "34-blog-topografie", delay: 1)
+        app.buttons["Fertig"].tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.segmentedControls.buttons["Geplant"].tap()
+        let planEntry = app.cells.containing(.staticText, identifier: "Heidelberg · Höhenbeispiel").firstMatch
+        XCTAssertTrue(planEntry.waitForExistence(timeout: 5)); planEntry.tap()
+        XCTAssertTrue(app.buttons["previewBlog"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Blog der letzten gefahrenen Tour"].exists)
+        capture(app, "36-plan-blog-direkt", delay: 1)
+        app.terminate()
+    }
+
     func testBlogPointOfflineAndJournalScreens() throws {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -214,6 +291,7 @@ final class DocumentationScreenshotsTests: XCTestCase {
         app.launchEnvironment["BIKENAVI_TOKEN"] = ""
         app.launchEnvironment["BIKENAVI_PLAN_ID"] = "123C7446-B126-41E7-82E3-64D572AFA78B"
         app.launchEnvironment["BIKENAVI_PREVIEW_LOCATION"] = "49.414601,8.681496"
+        app.launchEnvironment["BIKENAVI_BLOG_STALE_LOCATION"] = "delayed"
         app.launch()
         XCTAssertTrue(app.textFields["tourName"].waitForExistence(timeout: 20))
         let tourTitle = app.textFields["tourName"].value as? String ?? ""
@@ -225,10 +303,10 @@ final class DocumentationScreenshotsTests: XCTestCase {
         XCTAssertTrue(title.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["saveBlogPoint"].isEnabled)
         title.tap(); title.typeText("Neckarblick · Beispieldaten")
-        let note = app.textFields["blogPointNote"]
+        let note = app.descendants(matching: .any).matching(identifier: "blogPointNote").firstMatch
         note.tap(); note.typeText("Synthetische Beispielnotiz: Eine kleine Pause am Fluss. Weiter geht es mit frischer Neugier!")
         // Dismiss keyboard so the complete form is visible in the documentation.
-        app.staticTexts["Standort des Moments"].tap()
+        app.buttons["blogKeyboardDone"].tap()
         XCTAssertTrue(app.buttons["saveBlogPoint"].isEnabled)
         capture(app, "30-blog-ort")
         app.buttons["saveBlogPoint"].tap()
@@ -239,11 +317,13 @@ final class DocumentationScreenshotsTests: XCTestCase {
         app.segmentedControls.buttons["Gefahren"].tap()
         let entry = app.cells.containing(.staticText, identifier: tourTitle).firstMatch
         XCTAssertTrue(entry.waitForExistence(timeout: 5)); entry.tap()
+        XCTAssertTrue(app.buttons["generateBlog"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["generateBlog"].isHittable)
         let journal = app.buttons["openBlogJournal"]
         for _ in 0..<5 { if journal.isHittable { break }; app.swipeUp() }
         XCTAssertTrue(journal.isHittable); journal.tap()
         XCTAssertTrue(app.staticTexts["1. Neckarblick · Beispieldaten"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["1 Orte · 1 zur Übertragung vorgemerkt"].exists)
+        XCTAssertTrue(app.staticTexts["1 Ort · 1 zur Übertragung vorgemerkt"].exists)
         capture(app, "31-tourtagebuch")
         app.terminate()
         app.launch()
