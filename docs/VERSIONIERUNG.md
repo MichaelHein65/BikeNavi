@@ -1,5 +1,11 @@
 # Versionierung und Releases
 
+## Aktueller Entwicklungsstand — 9. Oktober 2026
+
+App, Live-Aktivität und Backend bleiben **0.4.0**, iOS-Build **4**. Die Erweiterungen vom 7. und 9. Oktober sind unter [Unveröffentlicht im Änderungsprotokoll](../CHANGELOG.md) dokumentiert und als Entwicklungsstand auf `main` versioniert. Der unveränderte Release-Tag `v0.4.0` bezeichnet weiterhin den veröffentlichten Stand vom 7. Oktober; dieser Abgleich von Dokumentation/Git/GitHub erstellt keinen neuen Release.
+
+Aktueller Stand bereits auf Pi und iPhone installiert. **183 Backend-, 136 Swift-Kerntests und vier native UIKit-/MapLibre-Tests** sowie relevante Simulator-UI-Prüfungen und Builds erfolgreich. Die letzte Gerätefassung enthält zusätzlich den zentralen Wachhalteschutz; automatischer Start nach deren Installation wegen gesperrtem iPhone abgewiesen. Lange reale Fahrten, konkrete Karten-Ausfälle, ETA-Genauigkeit und automatische Sperrzeit bleiben Geräte-/Feldprüfungen. Bereitstellung und Einzelprüfungen stehen unten.
+
 ## Version 0.4.0
 
 Datum: 7. Oktober 2026. App und Live-Aktivität: **0.4.0 (4)**. Backend: **0.4.0**. Git-Tag: **v0.4.0**. Entwicklungsfassung vor 1.0, kein App-Store-Release.
@@ -120,3 +126,30 @@ Am 6. Oktober 2026 wurde die Blogfunktion in der Entwicklungsfassung 0.3.0 (3) a
 
 
 Am 6. Oktober 2026 anschließend nach Nutzer-Testfahrt die Blogtasten direkt in Fahrt und zugehöriger Planung ergänzt und GPS-Neuerfassung im Stand überarbeitet. 126 Swift-Kerntests, gezielte Simulator-UI-Tests (verzögerter frischer Beispiel-Fix, Offline-Neustart und Blogzugang), Simulator-/signierter Gerätebuild und Signaturprüfung erfolgreich. Korrigierte Entwicklungsfassung 0.3.0 (3) auf Michaels iPhone installiert und gestartet. Pi erhält große topografische Streckenkarte, m/km-Profilachsen und gehaltvollere Hintergrundkapitel mit gespeicherten Recherchequellen; abschließend 143 Backend-Tests erfolgreich. Private neueste Tour als weitere Blogfassung erhalten, Quellenzuordnung redaktionell geprüft. Abschließende Karte-/Profil-/Planungs-UI-Prüfung und visuelle Galerieprüfung erfolgreich. Kein weiterer Tag oder GitHub-Release; konkrete ursprüngliche Fehlermeldung der Ortserfassung nicht reproduziert, erneuter tatsächlicher GPS-/Kamerafeldtest noch offen.
+
+
+## Bereitstellung der unveröffentlichten Stationserweiterung — 7. Oktober 2026
+
+Nach der lokalen Funktionsprüfung (149 Backend-, 131 Swift-Kerntests, drei relevante Simulator-UI-Abläufe, Simulator-/signierter Gerätebuild) wurde die Stationserweiterung auf Nutzerwunsch auf Pi und Michaels iPhone 15 Pro installiert. Signierte Release-App weiterhin **0.4.0 (4)**, Installation und App-Start nach Entsperren erfolgreich. Keine neue Release-Version, kein Git-Tag und kein GitHub-Release.
+
+Aktuelle Pi-Datenbank gesichert und mit 231 Archivdatensätzen in einer separaten temporären PostgreSQL-Datenbank wiederhergestellt. Backend aktualisiert, vorhandene KI-Konfiguration erhalten; Backend und Datenbank gesund. Nachtrag, Bearbeitung, Reihenfolge, Wiederholung, Revisionsschutz und Änderungs-Cursor über die echte Pi-API erfolgreich geprüft. Öffentlicher synthetischer KI-Blog mit korrigierten Stationen in gewählter Reihenfolge: 16 Quellen, 62,7 Sekunden, ohne Ausfallhinweise; technische Pi-Daten danach entfernt. Reale Fotoauswahl/iCloud und GPS-Feldprüfung sind noch Bedienungsprüfungen am iPhone; keine Simulatorprüfung wird als Feldtest gewertet.
+
+Allgemeiner Pi-Verbindungstest ebenfalls erfolgreich: HTTPS/Zugangsschutz, öffentlicher Ortsname, E-Bike-Route mit 852 m und Kreuzungen, PostgreSQL-Speicherung/Abgleich und Wiederholung geprüft; technische Testplanung danach entfernt. Docker meldet die bestehende, vom Pi-Kernel nicht unterstützte Speicherbegrenzung; Backend und Datenbank laufen gesund.
+
+## Blogkorrektur nach 0.4.0 (7. Oktober 2026)
+
+Die Bild-/Ortsrecherche und der Schutz vor Standardtext-Fassungen bei KI-Ausfall wurden als unveröffentlichte Backend-Weiterentwicklung auf dem Pi bereitgestellt. Die Datenbank wurde vorher gesichert und durch Wiederherstellung einer temporären Datenbank mit 233 Archivdatensätzen geprüft. Backend-Containerbuild erfolgreich; laufenden Python-Quellstand per SHA-256 mit der geprüften lokalen Fassung abgeglichen. App-/Backend-Version bleiben 0.4.0, iOS-Buildnummer 4. Keine neue iPhone-Installation, kein Tag oder GitHub-Release. Abschließend 166 Backend-Tests erfolgreich; nach ergänzter Präzisionsregel 42 Blogtests erneut erfolgreich. Neuer echter Blog mit neun analysierten Fotos, 19 Quellen und drei Hintergrundkapiteln in 90,4 Sekunden, anschließend ausgewählte Sachangaben redaktionell korrigiert und aktuelle Fassung per API bestätigt. Konkrete Test- und Live-Blogergebnisse im [Änderungsprotokoll](../CHANGELOG.md).
+
+
+## Fahrtverbesserungen und Blogfortschritt — 9. Oktober 2026
+
+Unveröffentlichte Weiterentwicklung weiterhin **0.4.0 (4)**, kein Git-Tag/GitHub-Release. Routenannotation bleibt bei neuen Trackpunkten erhalten; belagsabhängige Bewegungszeit mit gemeinsam festgelegten Geschwindigkeiten und Höhenaufschlag, ETA in Fahrt sowie zentrale Blogfortschrittsanzeige und unabhängige Pi-Aufträge. Drei native MapLibre-Tests, 136 Swift-Kerntests, 171 Backend-Tests, Simulator-Testbuild und signierter Release-Gerätebuild samt strenger Signaturprüfung erfolgreich. Relevante Simulator-UI-Abläufe für Fahrt/Pause, Planung und Blogphasen einschließlich Ansichtswechsel/App-Neustart erfolgreich; öffentliche Galerie 01/12/14/42/43 visuell geprüft. Erste Testfassungen benötigten Korrekturen an Main-Thread-Ausführung und Scrollposition; finale Abläufe erfolgreich. Kein Feldtest.
+
+Pi-Datenbank vorher gesichert und in einer separaten temporären PostgreSQL-Datenbank mit **242 Archivdatensätzen** wiederhergestellt. Backend/Datenbank nach Deployment gesund. Echte HTTPS-Auftragsannahme, Wiederholung derselben ID, Status/Wiederaufnahme und exakter Fassungslader am Pi geprüft: öffentlicher synthetischer KI-Blog mit **25 Quellen in 56,8 Sekunden**, technische Tour/Orte/Blog danach gelöscht. Appinstallation und Start zunächst von CoreDevice wegen gesperrtem iPhone abgewiesen. Nach Entsperren im zweiten Versuch signierte Release-App 0.4.0 (4) auf Michaels iPhone 15 Pro erfolgreich installiert und gestartet. Keine Simulatorprüfung wird als Feldtest gewertet.
+
+Anschließend zusätzliche Blogredaktion auf Nutzerwunsch: einmalige Themenzuordnung, kurze Verbindungen für ähnliche Stationen, sparsamer Humor, vorsichtige separate Blogüberschriften und sichere Entfernung doppelter Markdown-Headings. **183 Backend-Tests erfolgreich**, aktualisiertes Backend erneut bereitgestellt, laufende Quellmodule per SHA-256 mit dem geprüften lokalen Stand abgeglichen. Die neue Fassung der letzten realen Nutzerfahrt wurde separat erzeugt, redaktionell geprüft und gespeichert; alte Blogfassungen bleiben erhalten. Private Fahrt-/Foto-/Blogdaten verbleiben ausschließlich in ignorierten Artefakten und auf dem Pi.
+
+
+Die erste neue reale KI-Fassung entstand mit 16 analysierten Fotos und 22 Quellen in 113,7 Sekunden. Die danach angeforderte automatische Redaktion wurde von der Qualitätsprüfung zurückgewiesen; dadurch keine weitere schlechte Fassung gespeichert. Originalzustand und erste neue Fassung blieben erhalten. Die Endfassung wurde durch Codex redaktionell nachgearbeitet und mit `BlogRepository.save` als eigene zusätzliche Fassung samt Revisionsschutz gespeichert. Vor dem Speichern aktuelle Stationstitel/Notizen und Fotobytes abgeglichen; nach dem Speichern exakte neue Fassung über HTTPS bestätigt, Originalfassung weiter bytegleich abrufbar. Rund **1.120 Erzählwörter**, alle **16 Fotos**, **22 Recherchequellen** und **drei Hintergrundkapitel**; Fotos, Karten und Originalnotizen unverändert. Private HTML-/Prüfdaten ausschließlich unter ignorierten Artefakten. Neue Fassung im lokalen Browser geöffnet und sichtbar geprüft.
+
+Zusätzlich auf Nutzerwunsch zentraler Wachhalteschutz während aktiver Navigation einschließlich Rückkehr in den Vordergrund. **Vier native UIKit-/MapLibre-Tests erfolgreich**, erneuter signierter Release-Gerätebuild und strenge Signaturprüfung erfolgreich. Aktualisierte App 0.4.0 (4) auf Michaels iPhone installiert. Automatischer Start danach wegen erneut gesperrtem Gerät abgelehnt; manuell nach Entsperren öffnen. Automatische Sperrzeit während einer echten Fahrt bleibt eine Geräteprüfung.

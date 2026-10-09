@@ -60,7 +60,9 @@ struct AppRoot: View {
                 do { try await Task.sleep(for: .seconds(60)) } catch { break }
             }
         }
+        .onAppear { state.updateScreenAwake(sceneActive: phase == .active) }
         .onChange(of: phase) { _, value in
+            state.updateScreenAwake(sceneActive: value == .active)
             if value == .active { state.becameActive(); Task { await state.sync() } }
             else { state.cancelRideStart() }
         }

@@ -15,7 +15,7 @@ def ident(name):
 
 def obj(name, body):
     key = ident(name)
-    objects.append(f"{key} = {{ {body} }};")
+    objects.append("\n".join(line.rstrip() for line in f"{key} = {{ {body} }};".splitlines()))
     return key
 
 
@@ -32,6 +32,13 @@ app = obj("app", 'isa = PBXFileReference; explicitFileType = wrapper.application
 test_app = obj("ui-test-product", 'isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = BikeNaviUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR;')
 test_ref = obj("ui-test-file", 'isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = tests/UI/PlannerUITests.swift; sourceTree = SOURCE_ROOT;')
 refs.append(test_ref)
+map_test_app = obj("map-test-product", 'isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = BikeNaviMapTests.xctest; sourceTree = BUILT_PRODUCTS_DIR;')
+map_test_builds = []
+for path in sorted((ROOT / "tests/iOS").glob("*.swift")):
+    relative = path.relative_to(ROOT).as_posix()
+    ref = obj(relative, f'isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "{relative}"; sourceTree = SOURCE_ROOT;')
+    refs.append(ref)
+    map_test_builds.append(obj(relative + "/build", f"isa = PBXBuildFile; fileRef = {ref};"))
 widget_files = sorted((ROOT / "ios/BikeNaviWidget").rglob("*.swift"))
 widget_builds = []
 for path in widget_files:
@@ -62,7 +69,14 @@ widget_app = obj("widget-product", 'isa = PBXFileReference; explicitFileType = w
 widget_sources = obj("widget-sources", f"isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ({','.join(widget_builds)},); runOnlyForDeploymentPostprocessing = 0;")
 widget_frameworks = obj("widget-frameworks", "isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;")
 widget_resources = obj("widget-resources", "isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;")
-products = obj("products", f"isa = PBXGroup; children = ({app},{widget_app},{test_app},); name = Products; sourceTree = \"<group>\";")
+map_test_app = obj("map-test-product", 'isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = BikeNaviMapTests.xctest; sourceTree = BUILT_PRODUCTS_DIR;')
+map_test_builds = []
+for path in sorted((ROOT / "tests/iOS").glob("*.swift")):
+    relative = path.relative_to(ROOT).as_posix()
+    ref = obj(relative, f'isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "{relative}"; sourceTree = SOURCE_ROOT;')
+    refs.append(ref)
+    map_test_builds.append(obj(relative + "/build", f"isa = PBXBuildFile; fileRef = {ref};"))
+products = obj("products", f"isa = PBXGroup; children = ({app},{widget_app},{test_app},{map_test_app},); name = Products; sourceTree = \"<group>\";")
 group = obj("group", f"isa = PBXGroup; children = ({','.join(refs + [products])},); sourceTree = \"<group>\";")
 settings = '''
     CLANG_ENABLE_MODULES = YES;
@@ -86,12 +100,12 @@ settings = '''
 settings = settings.replace("__VERSION__", VERSION)
 configs = []
 for name in ["Debug", "Release"]:
-    extra = 'SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = dwarf; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;' if name == "Debug" else 'SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";'
+    extra = 'SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = dwarf; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; ENABLE_TESTABILITY = YES; ENABLE_TESTABILITY = YES;' if name == "Debug" else 'SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";'
     configs.append(obj("config" + name, f"isa = XCBuildConfiguration; name = {name}; buildSettings = {{{settings} {extra} }};"))
 config_list = obj("config-list", f"isa = XCConfigurationList; buildConfigurations = ({','.join(configs)},); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;")
 widget_configs = []
 for name in ["Debug", "Release"]:
-    widget_extra = 'SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = dwarf; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;' if name == "Debug" else 'SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";'
+    widget_extra = 'SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = dwarf; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; ENABLE_TESTABILITY = YES; ENABLE_TESTABILITY = YES;' if name == "Debug" else 'SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";'
     widget_configs.append(obj("widget-config-" + name, f'''isa = XCBuildConfiguration; name = {name}; buildSettings = {{
         PRODUCT_BUNDLE_IDENTIFIER = de.michaelhein.BikeNavi.LiveActivity;
         PRODUCT_NAME = BikeNaviLiveActivity;
@@ -136,7 +150,45 @@ test_config_list = obj("ui-config-list", f"isa = XCConfigurationList; buildConfi
 proxy = obj("ui-test-proxy", f"isa = PBXContainerItemProxy; containerPortal = {ident('project')}; proxyType = 1; remoteGlobalIDString = {target}; remoteInfo = BikeNavi;")
 dependency = obj("ui-test-dependency", f"isa = PBXTargetDependency; target = {target}; targetProxy = {proxy};")
 test_target = obj("ui-test-target", f'isa = PBXNativeTarget; buildConfigurationList = {test_config_list}; buildPhases = ({test_sources},); buildRules = (); dependencies = ({dependency},); name = BikeNaviUITests; productName = BikeNaviUITests; productReference = {test_app}; productType = "com.apple.product-type.bundle.ui-testing";')
-root = obj("project", f'isa = PBXProject; attributes = {{ LastUpgradeCheck = 2610; }}; buildConfigurationList = {config_list}; compatibilityVersion = "Xcode 14.0"; developmentRegion = de; hasScannedForEncodings = 0; knownRegions = (de,en,Base); mainGroup = {group}; packageReferences = ({package},); productRefGroup = {products}; projectDirPath = ""; projectRoot = ""; targets = ({target},{widget_target},{test_target},);')
+map_test_sources = obj("map-test-sources", f"isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ({','.join(map_test_builds)},); runOnlyForDeploymentPostprocessing = 0;")
+map_test_framework_build = obj("map-test-framework-build", f"isa = PBXBuildFile; productRef = {product};")
+map_test_frameworks = obj("map-test-frameworks", f"isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ({map_test_framework_build},); runOnlyForDeploymentPostprocessing = 0;")
+map_test_configs = []
+for name in ["Debug", "Release"]:
+    map_test_configs.append(obj("map-test-config" + name, f'''isa = XCBuildConfiguration; name = {name}; buildSettings = {{
+        {settings}
+        PRODUCT_BUNDLE_IDENTIFIER = de.michaelhein.BikeNavi.MapTests;
+        PRODUCT_NAME = BikeNaviMapTests;
+        INFOPLIST_FILE = "";
+        GENERATE_INFOPLIST_FILE = YES;
+        ASSETCATALOG_COMPILER_APPICON_NAME = "";
+        TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BikeNavi.app/BikeNavi";
+        BUNDLE_LOADER = "$(TEST_HOST)";
+    }};'''))
+map_test_config_list = obj("map-test-config-list", f"isa = XCConfigurationList; buildConfigurations = ({','.join(map_test_configs)},); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug;")
+map_test_target = obj("map-test-target", f'isa = PBXNativeTarget; buildConfigurationList = {map_test_config_list}; buildPhases = ({map_test_sources},{map_test_frameworks},); buildRules = (); dependencies = ({dependency},); name = BikeNaviMapTests; productName = BikeNaviMapTests; productReference = {map_test_app}; packageProductDependencies = ({product},); productType = "com.apple.product-type.bundle.unit-test";')
+map_test_sources = obj("map-test-sources", f"isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ({','.join(map_test_builds)},); runOnlyForDeploymentPostprocessing = 0;")
+map_test_framework = obj("map-test-maplibre-build", f"isa = PBXBuildFile; productRef = {product};")
+map_test_frameworks = obj("map-test-frameworks", f"isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ({map_test_framework},); runOnlyForDeploymentPostprocessing = 0;")
+map_test_configs = []
+for name in ["Debug", "Release"]:
+    map_test_configs.append(obj("map-test-config-" + name, f'''isa = XCBuildConfiguration; name = {name}; buildSettings = {{
+        PRODUCT_BUNDLE_IDENTIFIER = de.michaelhein.BikeNavi.MapTests;
+        PRODUCT_NAME = BikeNaviMapTests;
+        GENERATE_INFOPLIST_FILE = YES;
+        SWIFT_VERSION = 5.0;
+        IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+        SDKROOT = iphoneos;
+        TARGETED_DEVICE_FAMILY = 1;
+        CODE_SIGN_STYLE = Automatic;
+        DEVELOPMENT_TEAM = 4JDC67R76Q;
+        TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BikeNavi.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/BikeNavi";
+        BUNDLE_LOADER = "$(TEST_HOST)";
+        LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+        }};'''))
+map_test_config_list = obj("map-test-config-list", f"isa = XCConfigurationList; buildConfigurations = ({','.join(map_test_configs)},); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug;")
+map_test_target = obj("map-test-target", f'isa = PBXNativeTarget; buildConfigurationList = {map_test_config_list}; buildPhases = ({map_test_sources},{map_test_frameworks},); buildRules = (); dependencies = ({dependency},); packageProductDependencies = ({product},); name = BikeNaviMapTests; productName = BikeNaviMapTests; productReference = {map_test_app}; productType = "com.apple.product-type.bundle.unit-test";')
+root = obj("project", f'isa = PBXProject; attributes = {{ LastUpgradeCheck = 2610; }}; buildConfigurationList = {config_list}; compatibilityVersion = "Xcode 14.0"; developmentRegion = de; hasScannedForEncodings = 0; knownRegions = (de,en,Base); mainGroup = {group}; packageReferences = ({package},); productRefGroup = {products}; projectDirPath = ""; projectRoot = ""; targets = ({target},{widget_target},{test_target},{map_test_target},);')
 (PROJECT / "project.pbxproj").write_text("// !$*UTF8*$!\n{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {\n" + "\n".join(objects) + f"\n}}; rootObject = {root}; }}\n")
 scheme_dir = PROJECT / "xcshareddata/xcschemes"
 scheme_dir.mkdir(parents=True, exist_ok=True)
@@ -144,7 +196,7 @@ scheme_dir.mkdir(parents=True, exist_ok=True)
 <Scheme LastUpgradeVersion="2610" version="1.3">
  <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES"><BuildActionEntries><BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{target}" BuildableName="BikeNavi.app" BlueprintName="BikeNavi" ReferencedContainer="container:BikeNavi.xcodeproj"/></BuildActionEntry></BuildActionEntries></BuildAction>
  <LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" allowLocationSimulation="YES"><BuildableProductRunnable runnableDebuggingMode="0"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{target}" BuildableName="BikeNavi.app" BlueprintName="BikeNavi" ReferencedContainer="container:BikeNavi.xcodeproj"/></BuildableProductRunnable></LaunchAction>
- <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="NO"><Testables><TestableReference skipped="NO"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{test_target}" BuildableName="BikeNaviUITests.xctest" BlueprintName="BikeNaviUITests" ReferencedContainer="container:BikeNavi.xcodeproj"/></TestableReference></Testables></TestAction>
+ <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="NO"><Testables><TestableReference skipped="NO"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{test_target}" BuildableName="BikeNaviUITests.xctest" BlueprintName="BikeNaviUITests" ReferencedContainer="container:BikeNavi.xcodeproj"/></TestableReference><TestableReference skipped="NO"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{map_test_target}" BuildableName="BikeNaviMapTests.xctest" BlueprintName="BikeNaviMapTests" ReferencedContainer="container:BikeNavi.xcodeproj"/></TestableReference><TestableReference skipped="NO"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{map_test_target}" BuildableName="BikeNaviMapTests.xctest" BlueprintName="BikeNaviMapTests" ReferencedContainer="container:BikeNavi.xcodeproj"/></TestableReference></Testables></TestAction>
  <ProfileAction buildConfiguration="Release" shouldUseLaunchSchemeArgsEnv="YES" savedToolIdentifier="" useCustomWorkingDirectory="NO" debugDocumentVersioning="YES"/>
  <AnalyzeAction buildConfiguration="Debug"/><ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/>
 </Scheme>''')

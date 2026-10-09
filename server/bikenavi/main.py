@@ -14,6 +14,7 @@ from .elevation import ElevationRequest, ElevationResponse, elevations
 from .storage import Storage
 from .blog_store import BlogPoint, BlogRepository
 from .blog import BlogGenerator
+from .blog_jobs import BlogJobs
 
 
 def create_app(database_url: str | None = None, token: str | None = None,
@@ -34,7 +35,11 @@ def create_app(database_url: str | None = None, token: str | None = None,
             app.state.offline = OfflineTiles(client, app.state.storage, context_url)
             app.state.blogs = BlogRepository(app.state.storage)
             app.state.blog_generator = BlogGenerator(client, app.state.blogs)
-            yield
+            app.state.blog_jobs = BlogJobs(app.state.blog_generator)
+            try:
+                yield
+            finally:
+                await app.state.blog_jobs.close()
         app.state.storage.engine.dispose()
 
     app = FastAPI(title="BikeNavi", version=__version__, lifespan=lifespan,
@@ -87,17 +92,40 @@ def create_app(database_url: str | None = None, token: str | None = None,
     def blog_point(body: BlogPoint):
         return app.state.blogs.append(body)
 
+    @app.put("/v1/blog-points/{point_id}", dependencies=[Depends(authenticate)])
+    def update_blog_point(point_id: UUID, body: BlogPoint):
+        return app.state.blogs.put(str(point_id), body)
+
     @app.get("/v1/rides/{ride_id}/blog-points", dependencies=[Depends(authenticate)])
     def blog_points(ride_id: UUID, after: int = Query(default=0, ge=0)):
         return app.state.blogs.points(str(ride_id), after)
 
     @app.post("/v1/rides/{ride_id}/blog", dependencies=[Depends(authenticate)])
     async def generate_blog(ride_id: UUID):
+        if app.state.blog_jobs.active_id is not None:
+            raise HTTPException(409, "Der Pi erstellt gerade einen Blog. Der laufende Auftrag bleibt erhalten.")
         return await app.state.blog_generator.generate(str(ride_id))
 
     @app.get("/v1/rides/{ride_id}/blog", dependencies=[Depends(authenticate)])
-    def read_blog(ride_id: UUID):
-        return app.state.blogs.latest(str(ride_id))
+    def read_blog(ride_id: UUID, draft_id: UUID | None = None):
+        return app.state.blogs.latest(str(ride_id), str(draft_id) if draft_id else None)
+
+    @app.post("/v1/rides/{ride_id}/blog-jobs", status_code=202, dependencies=[Depends(authenticate)])
+    async def start_blog_job(ride_id: UUID, generation_id: UUID):
+        return app.state.blog_jobs.start(str(ride_id), str(generation_id))
+
+    @app.get("/v1/rides/{ride_id}/blog-jobs", dependencies=[Depends(authenticate)])
+    def current_blog_job(ride_id: UUID):
+        # Preserve the same ride access/deletion check as reading a blog.
+        with app.state.blogs.sessions() as session:
+            app.state.blogs.ride(session, str(ride_id))
+        return app.state.blog_jobs.current(str(ride_id))
+
+    @app.get("/v1/rides/{ride_id}/blog-jobs/{generation_id}", dependencies=[Depends(authenticate)])
+    def read_blog_job(ride_id: UUID, generation_id: UUID):
+        with app.state.blogs.sessions() as session:
+            app.state.blogs.ride(session, str(ride_id))
+        return app.state.blog_jobs.get(str(ride_id), str(generation_id))
 
     @app.post("/v1/route", response_model=Route, dependencies=[Depends(authenticate)])
     async def route(body: RouteRequest, include_context: bool = True):

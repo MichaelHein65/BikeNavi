@@ -124,6 +124,7 @@ final class LocalStore {
                 var copyPoint = point
                 copyPoint.id = UUID()
                 copyPoint.rideID = copy.id
+                copyPoint.revision = 0
                 try appendBlogPoint(copyPoint)
             }
             var original = record
@@ -210,7 +211,14 @@ final class LocalStore {
         }
         let existing = try blogPoints(rideID: point.rideID)
         if let same = existing.first(where: { $0.id == point.id }) {
-            guard same == point else { throw failure() }
+            if same != point {
+                guard uploaded else { throw failure() }
+                // A download must never overwrite an unsent local edit.
+                if try blogPoints(rideID: point.rideID, pendingOnly: true).contains(where: { $0.id == point.id }) { return }
+                guard point.revision > same.revision else { return }
+                try putBlogPoint(point, uploaded: true)
+                return
+            }
             if uploaded { try acknowledgeBlogPoints([point.id]) }
             return
         }
@@ -218,9 +226,13 @@ final class LocalStore {
               (point.photo?.count ?? 0) <= 768 * 1024 else {
             throw NSError(domain: "BikeNavi.Blog", code: 2, userInfo: [NSLocalizedDescriptionKey: "Pro Fahrt sind bis zu 50 Blog-Orte und 20 MB Fotos möglich."])
         }
+        try putBlogPoint(point, uploaded: uploaded)
+    }
+
+    private func putBlogPoint(_ point: BlogPoint, uploaded: Bool) throws {
         let data = try encoder.encode(point)
         var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, "INSERT INTO blog_points(id,ride_id,payload,uploaded) VALUES(?,?,?,?)", -1, &statement, nil) == SQLITE_OK else { throw failure() }
+        guard sqlite3_prepare_v2(db, "INSERT INTO blog_points(id,ride_id,payload,uploaded) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload, uploaded=excluded.uploaded", -1, &statement, nil) == SQLITE_OK else { throw failure() }
         defer { sqlite3_finalize(statement) }
         sqlite3_bind_text(statement, 1, point.id.uuidString, -1, transient)
         sqlite3_bind_text(statement, 2, point.rideID.uuidString, -1, transient)
@@ -238,10 +250,46 @@ final class LocalStore {
         var points: [BlogPoint] = []
         while true {
             let result = sqlite3_step(statement)
-            if result == SQLITE_DONE { return points.sorted { $0.capturedAt < $1.capturedAt } }
+            if result == SQLITE_DONE { return BlogPoint.ordered(points) }
             guard result == SQLITE_ROW, let bytes = sqlite3_column_blob(statement, 0) else { throw failure() }
             points.append(try decoder.decode(BlogPoint.self, from: Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, 0)))))
         }
+    }
+
+    /// Save content and the chosen position together; repeated offline edits keep the Pi base revision.
+    func saveBlogPoint(_ point: BlogPoint, at position: Int, original: BlogPoint? = nil) throws {
+        guard let ride = try record(id: point.rideID), !ride.deleted, ride.document.kind == .ride else { throw failure() }
+        let previous = try blogPoints(rideID: point.rideID)
+        if let original, var current = previous.first(where: { $0.id == point.id }) {
+            current.revision = original.revision // An acknowledgement alone does not change the form content.
+            guard current == original else {
+                throw NSError(domain: "BikeNavi.Blog", code: 3, userInfo: [NSLocalizedDescriptionKey: "Diese Station wurde zwischenzeitlich geändert. Deine Eingaben bleiben hier erhalten. Bitte die aktuelle Station erneut öffnen und abgleichen."])
+            }
+        }
+        var ordered = previous.filter { $0.id != point.id }
+        var edited = point
+        edited.revision = previous.first(where: { $0.id == point.id })?.revision ?? 0
+        ordered.insert(edited, at: min(max(0, position), ordered.count))
+        guard ordered.count <= 50, ordered.reduce(0, { $0 + ($1.photo?.count ?? 0) }) <= 20 * 1024 * 1024,
+              (point.photo?.count ?? 0) <= 768 * 1024 else {
+            throw NSError(domain: "BikeNavi.Blog", code: 2, userInfo: [NSLocalizedDescriptionKey: "Pro Fahrt sind bis zu 50 Blog-Orte und 20 MB Fotos möglich."])
+        }
+        try execute("BEGIN IMMEDIATE")
+        do {
+            for (index, var value) in ordered.enumerated() {
+                value.sortOrder = Double(index)
+                if previous.first(where: { $0.id == value.id }) != value { try putBlogPoint(value, uploaded: false) }
+            }
+            try execute("COMMIT")
+        } catch { try? execute("ROLLBACK"); throw error }
+    }
+
+    func acknowledgeBlogPoint(_ sent: BlogPoint, remote: BlogPoint) throws {
+        guard var current = try blogPoints(rideID: sent.rideID).first(where: { $0.id == sent.id }) else { return }
+        guard remote.id == sent.id, remote.rideID == sent.rideID else { throw failure() }
+        let unchanged = current == sent
+        current.revision = remote.revision
+        try putBlogPoint(current, uploaded: unchanged)
     }
 
     func blogPointCounts(rideID: UUID) throws -> (total: Int, pending: Int) {

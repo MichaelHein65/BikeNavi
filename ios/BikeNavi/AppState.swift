@@ -206,7 +206,10 @@ final class AppState: ObservableObject {
     func becameActive() { location.request() }
     @Published var records: [SavedRecord] = []
     @Published var savedPlaces: [SavedPlace] = []
-    @Published var activeRide: TourDocument?
+    @Published var activeRide: TourDocument? {
+        didSet { updateScreenAwake() }
+    }
+    private var sceneActive = true
     @Published var progress: RouteProgress?
     @Published var errorMessage: String?
     @Published var notice: String?
@@ -216,6 +219,8 @@ final class AppState: ObservableObject {
     private var elevationRequestID: UUID?
     @Published var calculating = false
     @Published var planningError: String?
+    @Published var blogGeneration: [UUID: BlogGenerationProgress] = [:]
+    private var blogGenerationTasks: [UUID: Task<BlogDraft, Error>] = [:]
     @Published var rerouting = false
     @Published var waypointSkipProposal: [Int] = []
     private var declinedWaypointSkips: Set<Int> = []
@@ -378,7 +383,7 @@ final class AppState: ObservableObject {
 
     func restoreLocalRouting() {
         if let ride = activeRide, let route = ride.route {
-            navigationRoute = LocalRouteMetrics.combined(original: route, state: ride.localNavigation)
+            navigationRoute = LocalRouteMetrics.combined(original: route, state: ride.localNavigation, profile: ride.profile)
             tracker = RouteTracker(lastProgress: ride.localNavigation?.routeProgress ?? 0, lastTimestamp: Date().timeIntervalSince1970)
             originalTracker = RouteTracker(lastProgress: ride.localNavigation?.originalProgress ?? 0, lastTimestamp: Date().timeIntervalSince1970)
             if ride.profile.mode == .cycling {
@@ -391,7 +396,7 @@ final class AppState: ObservableObject {
                         current.route = route.repairingLocalSurfaces(graph: graph)
                         try store.save(current)
                         activeRide = current
-                        navigationRoute = LocalRouteMetrics.combined(original: current.route!, state: current.localNavigation)
+                        navigationRoute = LocalRouteMetrics.combined(original: current.route!, state: current.localNavigation, profile: current.profile)
                     }
                     localRideStatus = nil
                 } catch { if activeRide?.id == ride.id { localRideStatus = "Lokale Rückführung noch nicht vorbereitet" } }
@@ -795,7 +800,7 @@ final class AppState: ObservableObject {
             activeRide = paused
             segment += 1
             cancelNeighborhood(); location.setRiding(false)
-            UIApplication.shared.isIdleTimerDisabled = false
+
             try? store.save(paused)
             rideActivity.update(progress: progress, route: paused.route, paused: true, rerouting: false)
             errorMessage = "Bike-Daten konnten nicht gespeichert werden. Die Fahrt wurde pausiert: " + error.localizedDescription
@@ -841,9 +846,8 @@ final class AppState: ObservableObject {
             // New GPS samples can keep the document dirty while its points upload.
             for record in try store.all() where !record.deleted && record.document.kind == .ride && record.revision > 0 {
                 for point in try store.blogPoints(rideID: record.id, pendingOnly: true) {
-                    let receipt: BikeSampleReceipt = try await api.request("/v1/blog-points", method: "POST", body: JSONEncoder().encode(point))
-                    guard receipt.accepted == [point.id] else { throw APIError(status: 0, message: "Der Pi hat den Blog-Ort noch nicht bestätigt.") }
-                    try store.acknowledgeBlogPoints(receipt.accepted)
+                    let remote: BlogPoint = try await api.request("/v1/blog-points/\(point.id.uuidString)", method: "PUT", body: JSONEncoder().encode(point))
+                    try store.acknowledgeBlogPoint(point, remote: remote)
                 }
             }
             var hasMore = true
@@ -892,27 +896,103 @@ final class AppState: ObservableObject {
             await sync()
         } catch { errorMessage = error.localizedDescription }
     }
-    func saveBlogPoint(_ point: BlogPoint) throws {
-        guard let ride = activeRide, ride.id == point.rideID else {
-            throw APIError(status: 0, message: "Diese Fahrt wurde bereits beendet. Bitte den Ort in einer laufenden Fahrt speichern.")
-        }
-        try store.appendBlogPoint(point)
+    func saveBlogPoint(_ point: BlogPoint, at position: Int? = nil, original: BlogPoint? = nil) throws {
+        let points = try store.blogPoints(rideID: point.rideID)
+        try store.saveBlogPoint(point, at: position ?? points.count, original: original)
         reload()
         Task { await sync() }
     }
 
     func generateBlog(rideID: UUID) async throws -> BlogDraft {
+        if let existing = blogGenerationTasks[rideID] { return try await existing.value }
         guard let api else { throw APIError(status: 0, message: "Verbinde den Pi in den Einstellungen, um einen Blog zu erstellen.") }
-        while synchronizing { try await Task.sleep(for: .milliseconds(200)) }
-        await sync()
-        guard let record = try store.record(id: rideID), !record.deleted, !record.dirty,
-              record.document.recordingState == .finished,
-              try store.blogPoints(rideID: rideID, pendingOnly: true).isEmpty else {
-            throw APIError(status: 0, message: "Bitte die Fahrt beenden und alle Blog-Orte zum Pi übertragen. Der Abgleich ist noch ausstehend.")
+        let generationID = UUID()
+        let now = Date().timeIntervalSince1970
+        blogGeneration[rideID] = BlogGenerationProgress(generationID: generationID, rideID: rideID,
+            phase: "synchronizing", startedAt: now, updatedAt: now)
+        let task = Task { [self] in
+            defer { blogGenerationTasks[rideID] = nil }
+            do {
+                while synchronizing { try await Task.sleep(for: .milliseconds(200)) }
+                await sync()
+                guard let record = try store.record(id: rideID), !record.deleted, !record.dirty,
+                      record.document.recordingState == .finished,
+                      try store.blogPoints(rideID: rideID, pendingOnly: true).isEmpty else {
+                    throw APIError(status: 0, message: "Bitte die Fahrt beenden und alle Blog-Orte zum Pi übertragen. Der Abgleich ist noch ausstehend.")
+                }
+                let job: BlogGenerationProgress
+                do {
+                    job = try await api.request("/v1/rides/\(rideID.uuidString)/blog-jobs?generation_id=\(generationID.uuidString)", method: "POST", timeout: 15)
+                } catch {
+                    // Recover a lost acceptance response without creating another job.
+                    guard let accepted: BlogGenerationProgress = try? await api.request("/v1/rides/\(rideID.uuidString)/blog-jobs/\(generationID.uuidString)", timeout: 10) else { throw error }
+                    job = accepted
+                }
+                return try await followBlogJob(job, api: api)
+            } catch {
+                failBlogJob(rideID: rideID, error: error)
+                throw error
+            }
         }
-        let draft: BlogDraft = try await api.request("/v1/rides/\(rideID.uuidString)/blog", method: "POST", timeout: 180)
-        try store.saveBlogDraft(draft)
-        return draft
+        blogGenerationTasks[rideID] = task
+        return try await task.value
+    }
+
+    func resumeBlogGeneration(rideID: UUID) async {
+        guard blogGenerationTasks[rideID] == nil, let api else { return }
+        guard let job: BlogGenerationProgress = (try? await api.request("/v1/rides/\(rideID.uuidString)/blog-jobs", timeout: 10)) ?? nil else { return }
+        // Another view may have started following the job while this GET awaited.
+        guard blogGenerationTasks[rideID] == nil else { return }
+        if job.phase == "failed" { blogGeneration[rideID] = job; return }
+        let task = Task { [self] in
+            defer { blogGenerationTasks[rideID] = nil }
+            do { return try await followBlogJob(job, api: api) }
+            catch { failBlogJob(rideID: rideID, error: error); throw error }
+        }
+        blogGenerationTasks[rideID] = task
+        _ = try? await task.value
+    }
+
+    private func followBlogJob(_ initial: BlogGenerationProgress, api: APIClient) async throws -> BlogDraft {
+        var job = initial
+        let rideID = job.rideID
+        let deadline = ContinuousClock.now.advanced(by: .seconds(300))
+        while true {
+            blogGeneration[rideID] = job
+            if job.phase == "failed" {
+                throw APIError(status: 502, message: job.message ?? "Der Pi konnte den Blog nicht fertigstellen.")
+            }
+            if job.phase == "completed", let draftID = job.draftID {
+                blogGeneration[rideID]?.phase = "downloading"
+                let draft: BlogDraft = try await api.request("/v1/rides/\(rideID.uuidString)/blog?draft_id=\(draftID.uuidString)")
+                try store.saveBlogDraft(draft)
+                blogGeneration[rideID] = job
+                return draft
+            }
+            guard ContinuousClock.now < deadline else {
+                throw APIError(status: 0, message: "Der Pi-Auftrag ist noch nicht abgeschlossen oder gerade nicht erreichbar. Öffne den Blogbereich erneut, um den bestehenden Auftrag abzurufen.")
+            }
+            try await Task.sleep(for: .seconds(2))
+            do {
+                job = try await api.request("/v1/rides/\(rideID.uuidString)/blog-jobs/\(job.generationID.uuidString)", timeout: 10)
+            } catch let error as APIError where [401, 404].contains(error.status) { throw error }
+            catch {
+                job.connectionInterrupted = true
+                blogGeneration[rideID] = job
+            }
+        }
+    }
+
+    private func failBlogJob(rideID: UUID, error: Error) {
+        blogGeneration[rideID]?.phase = (error as? APIError)?.status == 0 ? "unreachable" : "failed"
+        blogGeneration[rideID]?.message = error.localizedDescription
+    }
+
+    /// Reapply after foreground transitions; recording state is the source of
+    /// truth across tabs, sheets, pauses and storage-error recovery.
+    func updateScreenAwake(sceneActive: Bool? = nil) {
+        if let sceneActive { self.sceneActive = sceneActive }
+        UIApplication.shared.isIdleTimerDisabled = self.sceneActive && activeRide?.recordingState == .recording
     }
 
     func startRide() {
@@ -1001,7 +1081,7 @@ final class AppState: ObservableObject {
             segment = 0
             lastAnnouncement = nil
             location.setRiding(true)
-            UIApplication.shared.isIdleTimerDisabled = true
+
             rideActivity.start(tourName: ride.title)
             tab = 1
             reload()
@@ -1031,7 +1111,7 @@ final class AppState: ObservableObject {
             localRideStatus = nil
             progress = nil
             cancelNeighborhood(); location.setRiding(false)
-            UIApplication.shared.isIdleTimerDisabled = false
+
             rideActivity.end()
             reload()
             notice = "Die vorherige unterbrochene Fahrt wurde in Touren gespeichert."
@@ -1047,7 +1127,7 @@ final class AppState: ObservableObject {
             try store.save(ride)
             activeRide = ride
             location.setRiding(ride.recordingState == .recording)
-            UIApplication.shared.isIdleTimerDisabled = ride.recordingState == .recording
+
             if ride.recordingState == .recording { rideActivity.start(tourName: ride.title) }
             else { rideActivity.update(progress: progress, route: ridingRoute, paused: true, rerouting: false); Task { await sync() } }
             reload()
@@ -1078,7 +1158,7 @@ final class AppState: ObservableObject {
             localRideStatus = nil
             progress = nil
             cancelNeighborhood(); location.setRiding(false)
-            UIApplication.shared.isIdleTimerDisabled = false
+
             rideActivity.end()
             reload()
             tab = 2
@@ -1099,7 +1179,7 @@ final class AppState: ObservableObject {
             localRideStatus = nil
             progress = nil
             cancelNeighborhood(); location.setRiding(false)
-            UIApplication.shared.isIdleTimerDisabled = false
+
             rideActivity.end()
             reload()
             tab = 2
@@ -1145,7 +1225,7 @@ final class AppState: ObservableObject {
                       let latest = location.latestSample, abs(latest.timestamp.timeIntervalSinceNow) < 5, latest.horizontalAccuracy <= 25,
                       let connector = LocalRouteMetrics.trim(connection.connector,
                         to: Coordinate(latitude: latest.coordinate.latitude, longitude: latest.coordinate.longitude),
-                        heading: latest.speed >= 1 && latest.course >= 0 ? latest.course : nil),
+                        heading: latest.speed >= 1 && latest.course >= 0 ? latest.course : nil, profile: current.profile),
                       (progress?.distanceFromRoute ?? .infinity) >= 25 else { return }
                 var nav = current.localNavigation ?? LocalNavigationState()
                 nav.connector = connector
@@ -1157,7 +1237,7 @@ final class AppState: ObservableObject {
                 current.localNavigation = nav
                 try store.save(current)
                 activeRide = current
-                navigationRoute = LocalRouteMetrics.combined(original: original, state: nav)
+                navigationRoute = LocalRouteMetrics.combined(original: original, state: nav, profile: current.profile)
                 tracker = RouteTracker(lastProgress: 0, lastTimestamp: latest.timestamp.timeIntervalSince1970)
                 progress = nil
                 lastAnnouncement = nil

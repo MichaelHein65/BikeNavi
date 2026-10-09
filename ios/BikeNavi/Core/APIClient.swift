@@ -44,8 +44,10 @@ struct APIClient {
     }
 
     func route(_ document: TourDocument, timeout: TimeInterval = 90, includeContext: Bool = true) async throws -> CalculatedRoute {
-        try await request("/v1/route" + (includeContext ? "" : "?include_context=false"), method: "POST", body: JSONEncoder().encode(
+        var route: CalculatedRoute = try await request("/v1/route" + (includeContext ? "" : "?include_context=false"), method: "POST", body: JSONEncoder().encode(
             RouteRequest(waypoints: document.waypoints, profile: document.profile)), timeout: timeout)
+        route.duration = RouteTravelTime(route: route, profile: document.profile).total
+        return route
     }
 
     func search(_ text: String, near coordinate: Coordinate?) async throws -> [Waypoint] {

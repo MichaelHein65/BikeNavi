@@ -1,4 +1,6 @@
 import XCTest
+import ImageIO
+import CoreGraphics
 @testable import BikeNaviCore
 
 final class BlogJournalTests: XCTestCase {
@@ -52,6 +54,88 @@ final class BlogJournalTests: XCTestCase {
         try store.deleteBlogData(rideID: ride.id)
         for url in urls { XCTAssertFalse(FileManager.default.fileExists(atPath: url.path)) }
         XCTAssertNil(try store.blogDraft(rideID: ride.id))
+    }
+
+    func testEditInsertReorderPreserveIDsAndPendingContent() throws {
+        let (store, ride) = try fixture()
+        let a = BlogPoint(rideID: ride.id, coordinate: .init(latitude: 49.41, longitude: 8.68), capturedAt: 10, title: "A", note: "Alt")
+        let b = BlogPoint(rideID: ride.id, coordinate: a.coordinate, capturedAt: 20, title: "B", note: "Zweiter")
+        try store.appendBlogPoint(a, uploaded: true); try store.appendBlogPoint(b, uploaded: true)
+        let added = BlogPoint(rideID: ride.id, coordinate: a.coordinate, capturedAt: 1000, title: "Nachtrag", note: "Später ergänzt")
+        try store.saveBlogPoint(added, at: 1)
+        XCTAssertEqual(try store.blogPoints(rideID: ride.id).map(\.title), ["A", "Nachtrag", "B"])
+        var edit = try XCTUnwrap(store.blogPoints(rideID: ride.id).first)
+        edit.title = "Korrigiert"; edit.note = "Neue Notiz"
+        try store.saveBlogPoint(edit, at: 2)
+        XCTAssertEqual(try store.blogPoints(rideID: ride.id).map(\.title), ["Nachtrag", "B", "Korrigiert"])
+        XCTAssertEqual(try store.blogPoints(rideID: ride.id).last?.id, a.id)
+        // The cursor download of an old version must preserve the local correction.
+        try store.appendBlogPoint(a, uploaded: true)
+        XCTAssertEqual(try store.blogPoints(rideID: ride.id).last?.note, "Neue Notiz")
+        XCTAssertEqual(try store.blogPoints(rideID: ride.id, pendingOnly: true).count, 3)
+    }
+
+    func testAcknowledgementDuringAnotherOfflineEditRetainsPendingRevision() throws {
+        let (store, ride) = try fixture()
+        let point = BlogPoint(rideID: ride.id, coordinate: .init(latitude: 49.41, longitude: 8.68), title: "Ort", note: "Alt")
+        try store.saveBlogPoint(point, at: 0)
+        let sent = try XCTUnwrap(store.blogPoints(rideID: ride.id).first)
+        var changed = sent; changed.note = "Während Upload geändert"
+        try store.saveBlogPoint(changed, at: 0)
+        var remote = sent; remote.revision = 1
+        try store.acknowledgeBlogPoint(sent, remote: remote)
+        let pending = try XCTUnwrap(store.blogPoints(rideID: ride.id, pendingOnly: true).first)
+        XCTAssertEqual(pending.note, changed.note); XCTAssertEqual(pending.revision, 1)
+        remote = pending; remote.revision = 2
+        try store.acknowledgeBlogPoint(pending, remote: remote)
+        XCTAssertTrue(try store.blogPoints(rideID: ride.id, pendingOnly: true).isEmpty)
+    }
+
+    func testOpenEditorCannotOverwriteChangedStationButAllowsAcknowledgement() throws {
+        let (store, ride) = try fixture()
+        let point = BlogPoint(rideID: ride.id, coordinate: .init(latitude: 49.41, longitude: 8.68), title: "Ort", note: "Alt", sortOrder: 0)
+        try store.appendBlogPoint(point, uploaded: true)
+        var remote = point; remote.revision = 1
+        try store.appendBlogPoint(remote, uploaded: true)
+        var edit = point; edit.note = "Formulareingabe"
+        try store.saveBlogPoint(edit, at: 0, original: point)
+        let saved = try XCTUnwrap(store.blogPoints(rideID: ride.id).first)
+        var other = saved; other.note = "Zwischenzeitliche Änderung"
+        try store.saveBlogPoint(other, at: 0)
+        XCTAssertThrowsError(try store.saveBlogPoint(edit, at: 0, original: saved))
+        XCTAssertEqual(try store.blogPoints(rideID: ride.id).first?.note, other.note)
+    }
+
+    func testLegacyPointDecodesWithoutOrderOrRevision() throws {
+        let (store, ride) = try fixture()
+        let point = BlogPoint(rideID: ride.id, coordinate: .init(latitude: 49.41, longitude: 8.68), title: "Alt", note: "Notiz")
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(point)) as? [String: Any])
+        json.removeValue(forKey: "revision"); json.removeValue(forKey: "sortOrder")
+        let legacy = try JSONDecoder().decode(BlogPoint.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertEqual(legacy.revision, 0); XCTAssertNil(legacy.sortOrder)
+        try store.appendBlogPoint(legacy)
+        XCTAssertEqual(try store.blogPoints(rideID: ride.id), [point])
+    }
+
+    func testPhotoGPSBeforeReencodingAndMissingGPS() throws {
+        let context = try XCTUnwrap(CGContext(data: nil, width: 8, height: 8, bitsPerComponent: 8, bytesPerRow: 0,
+                                             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        let image = try XCTUnwrap(context.makeImage())
+        func jpeg(_ gps: [String: Any]?) throws -> Data {
+            let data = NSMutableData()
+            let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, "public.jpeg" as CFString, 1, nil))
+            let properties: [String: Any] = gps.map { [kCGImagePropertyGPSDictionary as String: $0] } ?? [:]
+            CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+            XCTAssertTrue(CGImageDestinationFinalize(destination))
+            return data as Data
+        }
+        let gps: [String: Any] = [kCGImagePropertyGPSLatitude as String: 49.41, kCGImagePropertyGPSLatitudeRef as String: "S",
+                                 kCGImagePropertyGPSLongitude as String: 8.68, kCGImagePropertyGPSLongitudeRef as String: "W"]
+        XCTAssertEqual(BlogPhotoLocation.coordinate(in: try jpeg(gps)), .init(latitude: -49.41, longitude: -8.68))
+        XCTAssertNil(BlogPhotoLocation.coordinate(in: try jpeg(nil)))
+        XCTAssertNil(BlogPhotoLocation.coordinate(in: Data("kein Foto".utf8)))
+        var invalid = gps; invalid[kCGImagePropertyGPSLatitude as String] = 91.0
+        XCTAssertNil(BlogPhotoLocation.coordinate(in: try jpeg(invalid)))
     }
 
     func testCursorAndExportPersist() throws {

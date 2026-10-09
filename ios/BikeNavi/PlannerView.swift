@@ -185,7 +185,7 @@ struct PlannerView: View {
                 if let route = state.plan.route {
                     HStack {
                         Metric(label: "Strecke", value: Format.distance(route.distance))
-                        Metric(label: "Fahrzeit ca.", value: Format.duration(route.duration))
+                        Metric(label: "Fahrzeit ca.", value: Format.duration(RouteTravelTime(route: route, profile: state.plan.profile).total))
                         Metric(label: "Anstieg", value: route.hasElevation ? "\(Int(route.ascent.rounded())) m" : "–")
                     }
                     if let missing = route.unmappedDestinationDistance {

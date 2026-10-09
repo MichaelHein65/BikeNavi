@@ -283,6 +283,66 @@ final class DocumentationScreenshotsTests: XCTestCase {
         app.terminate()
     }
 
+    func testBlogStationInsertEditOrderAndOfflineRestart() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://beispiel.invalid"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        func openJournal() {
+            app.tabBars.buttons["Touren"].tap()
+            app.segmentedControls.buttons["Gefahren"].tap()
+            let entry = app.cells.containing(.staticText, identifier: "Heidelberg · Beispielaufzeichnung").firstMatch
+            XCTAssertTrue(entry.waitForExistence(timeout: 10)); entry.tap()
+            for _ in 0..<5 { if app.buttons["openBlogJournal"].isHittable { break }; app.swipeUp() }
+            app.buttons["openBlogJournal"].tap()
+        }
+        app.launch(); openJournal()
+        for _ in 0..<5 { if app.buttons["addBlogPoint"].isHittable { break }; app.swipeUp() }
+        capture(app, "31-tourtagebuch")
+        app.buttons["addBlogPoint"].tap()
+        XCTAssertTrue(app.textFields["blogPointTitle"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["saveBlogPoint"].isEnabled)
+        capture(app, "39-blog-station-hinzufuegen")
+        app.buttons["Foto auswählen"].tap()
+        let cell = app.images.matching(identifier: "PXGGridLayout-Info").firstMatch
+        XCTAssertTrue(cell.waitForExistence(timeout: 10), app.debugDescription)
+        cell.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let titleReady = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: app.textFields["blogPointTitle"])
+        XCTAssertEqual(XCTWaiter.wait(for: [titleReady], timeout: 15), .completed)
+        let title = app.textFields["blogPointTitle"]
+        title.tap(); title.typeText("Foto-Nachtrag · Beispieldaten")
+        app.buttons["blogKeyboardDone"].tap()
+        XCTAssertTrue(app.buttons["saveBlogPoint"].isEnabled, app.debugDescription)
+        let position = app.buttons["blogPointPosition"]
+        for _ in 0..<4 { if position.isHittable { break }; app.swipeUp() }
+        position.tap()
+        app.buttons["2 · Nach Neckarblick · Beispieldaten"].tap()
+        capture(app, "40-blog-station-position")
+        app.buttons["saveBlogPoint"].tap()
+        let inserted = app.staticTexts["2. Foto-Nachtrag · Beispieldaten"]
+        for _ in 0..<5 { if inserted.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(inserted.exists)
+        app.buttons["editBlogPoint-1"].tap()
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap()
+        let old = title.value as? String ?? ""
+        title.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count) + "Korrigierter Nachtrag · Beispieldaten")
+        let note = app.descendants(matching: .any).matching(identifier: "blogPointNote").firstMatch
+        note.tap(); note.typeText("Korrigierte synthetische Beispielnotiz.")
+        app.buttons["blogKeyboardDone"].tap()
+        for _ in 0..<4 { if position.isHittable { break }; app.swipeUp() }
+        position.tap(); app.buttons["1 · An den Anfang"].tap()
+        capture(app, "41-blog-station-bearbeiten")
+        app.buttons["saveBlogPoint"].tap()
+        app.terminate(); app.launch(); openJournal()
+        let corrected = app.staticTexts["1. Korrigierter Nachtrag · Beispieldaten"]
+        for _ in 0..<6 { if corrected.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(corrected.exists)
+        XCTAssertTrue(app.staticTexts["Korrigierte synthetische Beispielnotiz."].exists)
+        app.terminate()
+    }
+
     func testBlogPointOfflineAndJournalScreens() throws {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -472,11 +532,17 @@ final class DocumentationScreenshotsTests: XCTestCase {
             app.buttons["Tour starten"].tap()
         }
         XCTAssertTrue(app.buttons["Pause"].waitForExistence(timeout: 15))
+        // Fresh synthetic movement produces navigation progress and an ETA.
+        XCUIDevice.shared.location = XCUILocation(location: CLLocation(latitude: 49.41465, longitude: 8.68160))
+        let eta = app.descendants(matching: .any).matching(identifier: "rideETA").firstMatch
+        XCTAssertTrue(eta.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["ETA"].exists)
         capture(app, "12-fahren", delay: 5)
         app.buttons["bikeConnection"].tap()
         capture(app, "13-bike")
         app.buttons["Fertig"].tap()
         app.buttons["Pause"].tap()
+        XCTAssertTrue(app.staticTexts["—"].exists)
         capture(app, "14-pause")
     }
 
@@ -759,5 +825,64 @@ final class MapStyleTests: XCTestCase {
         attachment.name = "Gallery-" + name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+}
+
+
+/// Run with the disposable HTTPS example server from the navigation QA workflow.
+final class BlogProgressUITests: XCTestCase {
+    @MainActor
+    func testRealPiJobProgressSurvivesNavigationAndAppRestart() async throws {
+        let health = URL(string: "https://127.0.0.1:18443/health")!
+        var request = URLRequest(url: health)
+        request.timeoutInterval = 3
+        guard let (_, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw XCTSkip("Start the disposable HTTPS blog-progress example server first.")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://127.0.0.1:18443"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = "example-progress-token-" + String(repeating: "x", count: 40)
+        func openRide() {
+            app.tabBars.buttons["Touren"].tap()
+            app.segmentedControls.buttons["Gefahren"].tap()
+            let entry = app.cells.containing(.staticText, identifier: "Heidelberg · Beispielaufzeichnung").firstMatch
+            XCTAssertTrue(entry.waitForExistence(timeout: 10)); entry.tap()
+            XCTAssertTrue(app.buttons["generateBlog"].waitForExistence(timeout: 5))
+        }
+        func capture(_ name: String) {
+            let attachment = XCTAttachment(screenshot: app.screenshot())
+            attachment.name = "Gallery-" + name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+        app.launch()
+        openRide()
+        app.buttons["generateBlog"].tap()
+        XCTAssertTrue(app.staticTexts["Bilder und Karten vorbereiten …"].waitForExistence(timeout: 20))
+        XCTAssertFalse(app.buttons["generateBlog"].isEnabled)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75)).press(forDuration: 0.1,
+            thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.50)))
+        capture("42-blog-fortschritt")
+        XCTAssertTrue(app.staticTexts["Ortsquellen recherchieren …"].waitForExistence(timeout: 15))
+        let journal = app.buttons["openBlogJournal"]
+        for _ in 0..<5 { if journal.isHittable { break }; app.swipeUp() }
+        journal.tap()
+        XCTAssertTrue(app.staticTexts["Ortsquellen recherchieren …"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["generateBlog"].isEnabled)
+        app.terminate()
+        app.launch()
+        openRide()
+        XCTAssertTrue(app.staticTexts["Deinen Blog schreiben …"].waitForExistence(timeout: 40))
+        XCTAssertFalse(app.buttons["generateBlog"].isEnabled)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75)).press(forDuration: 0.1,
+            thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.50)))
+        capture("43-blog-schreiben")
+        XCTAssertTrue(app.staticTexts["Dein Blog ist fertig."].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.buttons["generateBlog"].isEnabled)
+        XCTAssertTrue(app.buttons["previewBlog"].exists)
+        app.terminate()
     }
 }

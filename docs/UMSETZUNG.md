@@ -1,6 +1,17 @@
 # Umsetzungsstand – Version 0.4.0
 
-Stand: 7. Oktober 2026. Dies ist eine Entwicklungsfassung vor 1.0, keine für lange Touren freigegebene Navigations-App.
+Stand: 9. Oktober 2026. Dies ist eine Entwicklungsfassung vor 1.0, keine für lange Touren freigegebene Navigations-App.
+
+## Entwicklungsstand nach 0.4.0 (9. Oktober 2026)
+
+Unveröffentlichte Weiterentwicklung bei **0.4.0 (4)**, bereits auf Pi und iPhone installiert. Dokumentation, öffentliche Galerie und Quellstand gemeinsam gepflegt; bestehender Release-Tag bleibt unverändert. **183 Backend-, 136 Swift-Kerntests und vier native UIKit-/MapLibre-Tests** erfolgreich. Relevante Simulator-UI-Abläufe, Simulator-Testbuild, signierter Gerätebuild und Signaturprüfung erfolgreich. Automatischer Start der letzten Gerätefassung wegen gesperrtem iPhone abgewiesen; nach Entsperren manuell öffnen. Kein neuer Feldtest. [Einzelprüfungen und Bereitstellung](VERSIONIERUNG.md).
+
+- Blogstationen mit GPS-Fotos nachtragen, bearbeiten und umordnen; lokale Speicherung und revisionsgeprüfter Abgleich.
+- Bild-/Ortsanalyse und Recherche in lokalen Sprachen, geschützte vorhandene Fassungen bei KI-Ausfall, abwechslungsreiche Texte mit weniger Wiederholungen und sicherer Überschriftenbereinigung.
+- Sichtbare Blogphasen und Laufzeit; unabhängiger Pi-Auftrag mit Wiederaufnahme nach Ansichtswechsel/App-Neustart. Auftragsstatus überlebt einen Pi-Neustart nicht, gespeicherte Blogs bleiben erhalten.
+- Unveränderte Routenlinie bei GPS-Aufzeichnungsupdates erhalten. Ob dies die gemeldeten Feldausfälle vollständig erklärt, bleibt offen.
+- Belagsabhängige Fahrzeitschätzung nach gemeinsam gewählten Geschwindigkeiten und ETA direkt hinter Fahrzeit. Pausen und fehlender frischer Standort werden berücksichtigt; zukünftige Pausen nicht prognostiziert.
+- Automatische Bildschirmsperre während aktiver Navigation im Vordergrund verhindern und nach Rückkehr erneut setzen; Pause/Ende geben die normale Sperrzeit frei.
 
 ## Releaseprüfung 0.4.0 (7. Oktober 2026)
 
@@ -22,7 +33,7 @@ Stand: 7. Oktober 2026. Dies ist eine Entwicklungsfassung vor 1.0, keine für la
 - Der Datenbereich lässt sich nach unten auf den Tourtitel einklappen und nach oben wieder vollständig öffnen. Ein Pfeil bietet dieselbe Funktion ohne Wischgeste; die gewählte Darstellung bleibt beim nächsten Start erhalten.
 - Ein eigenes App-Icon mit Fahrrad und Navigationspfeil ist im Asset-Katalog eingebunden.
 - Lokale Speicherung von Planungen und Fahrtaufzeichnungen in SQLite, Tourenarchiv, erneute Planung aus einer alten Fahrt und GPX-Export.
-- Fahrtansicht mit GPS-Aufzeichnung, Pause/Fortsetzen/Beenden, lokalen Abbiegehinweisen, optionaler Sprachausgabe und Abweichungsanzeige. Der Tab „Fahren“ startet eine berechnete Planung direkt. Die Karte folgt der Fahrtrichtung, hält den Standort unten, zeigt 500 m voraus in maximal möglicher Perspektive und stellt diese Ansicht zehn Sekunden nach manuellen Änderungen wieder her und verwendet die Belagsfarben auch bei Fahrten und gespeicherten Touren. Eine Live-Aktivität hält eine fahrtrichtungsorientierte Routengrafik mit Position, Abbiegestelle, echten OSM-Nebenstraßen, Belagsfarben, Entfernung und verbleibender Strecke auf dem Sperrbildschirm aktuell; die Dynamic Island zeigt eine kompakte Fassung. Der Pi lädt die Kreuzungsarme beim Berechnen und speichert sie in der Route für die Offline-Fahrt.
+- Fahrtansicht mit GPS-Aufzeichnung, Pause/Fortsetzen/Beenden, lokalen Abbiegehinweisen, optionaler Sprachausgabe und Abweichungsanzeige. Der Tab „Fahren“ startet eine berechnete Planung direkt. Die Karte folgt der Fahrtrichtung, hält den Standort unten, zeigt 500 m voraus in maximal möglicher Perspektive und stellt diese Ansicht zehn Sekunden nach manuellen Änderungen wieder her und verwendet die Belagsfarben auch bei Fahrten und gespeicherten Touren. Eine Live-Aktivität hält eine fahrtrichtungsorientierte Routengrafik mit Position, Abbiegestelle, echten OSM-Nebenstraßen, Belagsfarben, Entfernung und verbleibender Strecke auf dem Sperrbildschirm aktuell; die Dynamic Island zeigt eine kompakte Fassung. Neue Serverplanungen laden keine Kreuzungsumfelder mehr; vorhandene Daten älterer Touren bleiben in der Live-Aktivität nutzbar. Die lokale Rückführung lädt davon unabhängig ein mitwanderndes Standortumfeld.
 - Ab etwa 35 m Abweichung bestätigen drei genaue Messungen über mindestens fünf Sekunden den Bedarf für eine lokale Rückführung. Noch offene Zwischenziele bleiben erhalten; zwischen Berechnungen liegen mindestens zehn Sekunden.
 - Gespeicherte Orte mit frei wählbaren Namen wie „Zuhause“ oder „Arbeit“. Sie stehen bei der Ortssuche zur Auswahl und können dort umbenannt oder gelöscht werden.
 - Nach einem App-Neustart kann eine gespeicherte unterbrochene Fahrt aus einem pausierten Zustand fortgesetzt werden. Während der Unterbrechung werden keine GPS-Punkte erfunden.

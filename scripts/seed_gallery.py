@@ -29,6 +29,7 @@ def main():
     parser.add_argument("--bike-and-hike", action="store_true", help="Synthetic cycle/walk split of the public route, for UI illustration only")
     parser.add_argument("--unmapped-destination", action="store_true", help="Synthetic POI beyond the mapped network, UI illustration only")
     parser.add_argument("--blog", type=Path, help="Public labelled HTML example from scripts/smoke_blog.py")
+    parser.add_argument("--journal", action="store_true", help="Two labelled synthetic blog stations and a GPS test photo in the simulator library")
     args = parser.parse_args()
     subprocess.run(["xcrun", "simctl", "terminate", args.device, BUNDLE], capture_output=True)
     container = Path(subprocess.check_output(
@@ -79,6 +80,13 @@ def main():
             db.execute("CREATE TABLE IF NOT EXISTS blog_drafts (ride_id TEXT PRIMARY KEY, payload BLOB NOT NULL)")
             draft = dict(id=identifier("example-blog"), rideID=RIDE, createdAt=STAMP, html=html, warnings=["Öffentlicher KI-Beispielblog mit synthetischen Erinnerungen und BikeNavi-Icon als Beispielbild; keine tatsächliche Fahrt."], mode="openai", sourceCount=html.count('id="source-'))
             db.execute("INSERT INTO blog_drafts(ride_id,payload) VALUES(?,?) ON CONFLICT(ride_id) DO UPDATE SET payload=excluded.payload", (RIDE, json.dumps(draft).encode()))
+        if args.journal:
+            db.execute("CREATE TABLE IF NOT EXISTS blog_points (id TEXT PRIMARY KEY, ride_id TEXT NOT NULL, payload BLOB NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0)")
+            db.execute("DELETE FROM blog_points WHERE ride_id=?", (RIDE,))
+            for i, title in enumerate(["Neckarblick · Beispieldaten", "Tourziel · Beispieldaten"]):
+                point = dict(id=identifier(title), rideID=RIDE, coordinate=route["coordinates"][[0, -1][i]], capturedAt=STAMP + i*600,
+                             title=title, note="Synthetische Beispielnotiz für die Blogbearbeitung.")
+                db.execute("INSERT INTO blog_points VALUES(?,?,?,0)", (point["id"], RIDE, json.dumps(point).encode()))
         db.execute("CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, payload BLOB NOT NULL)")
         db.execute("CREATE TABLE IF NOT EXISTS places (id TEXT PRIMARY KEY, payload BLOB NOT NULL)")
         db.execute("CREATE TABLE IF NOT EXISTS bike_samples (id TEXT PRIMARY KEY, ride_id TEXT NOT NULL, payload BLOB NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0)")
@@ -104,6 +112,8 @@ def main():
                                            motorPowerWatts=180+(i%25)*6, assistMode=1+(i//34)%4))
             db.execute("INSERT OR REPLACE INTO bike_samples VALUES (?, ?, ?, 0)",
                        (sample["id"], RIDE, json.dumps(sample).encode()))
+    if args.journal:
+        subprocess.run(["xcrun", "simctl", "addmedia", args.device, str(ROOT / "tests/fixtures/blog-photo-gps-example.jpg")], check=True)
     print("Public Heidelberg route and labelled synthetic example ride prepared in simulator.")
 
 

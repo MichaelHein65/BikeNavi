@@ -57,11 +57,14 @@ struct RideView: View {
                         if let status = state.localRideStatus, state.progress?.distanceFromRoute ?? 0 <= 35 {
                             Text(status).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
                         }
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: typeSize.isAccessibilitySize ? 2 : 4), alignment: .leading, spacing: 6) {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: typeSize.isAccessibilitySize ? 2 : 5), alignment: .leading, spacing: 6) {
                             rideMetric("Reststrecke", Format.distance(state.progress?.remaining ?? state.ridingRoute?.distance ?? 0))
                             rideMetric("Gefahren", Format.distance(ride.recordedDistance))
                             rideMetric("Tempo", "\(Int((ride.track.last?.speed ?? 0) * 3.6)) km/h")
                             rideMetric("Fahrzeit", Format.duration(ride.movingDuration))
+                            TimelineView(.periodic(from: .now, by: 15)) { context in
+                                rideMetric("ETA", arrivalTime(ride: ride, now: context.date))
+                            }.accessibilityIdentifier("rideETA")
                         }
                         Button { showBlogPoint = true } label: {
                             Label("Blog-Ort festhalten", systemImage: "camera.fill").font(.subheadline.bold())
@@ -136,6 +139,19 @@ struct RideView: View {
                     .navigationTitle("Fahren")
             }
         }
+    }
+
+    private func arrivalTime(ride: TourDocument, now: Date) -> String {
+        guard ride.recordingState == .recording, !state.rerouting,
+              state.location.freshCoordinate != nil,
+              let route = state.ridingRoute, let progress = state.progress,
+              progress.distanceFromRoute <= 35 else { return "—" }
+        let seconds = RouteTravelTime(route: route, profile: ride.profile).remaining(after: progress.traveled)
+        let arrival = now.addingTimeInterval(seconds)
+        if Calendar.current.isDate(arrival, inSameDayAs: now) {
+            return arrival.formatted(.dateTime.hour().minute())
+        }
+        return arrival.formatted(.dateTime.day().month().hour().minute())
     }
 
     private func rideMetric(_ title: String, _ value: String) -> some View {

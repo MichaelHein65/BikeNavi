@@ -79,7 +79,7 @@ struct TourDetailView: View {
                 }
                 HStack {
                     Metric(label: document.kind == .ride ? "Gefahren" : "Strecke", value: Format.distance(document.kind == .ride ? document.recordedDistance : document.route?.distance ?? 0))
-                    Metric(label: document.kind == .ride ? "Aufgezeichnet" : "Fahrzeit ca.", value: Format.duration(document.kind == .ride ? document.movingDuration : document.route?.duration ?? 0))
+                    Metric(label: document.kind == .ride ? "Aufgezeichnet" : "Fahrzeit ca.", value: Format.duration(document.kind == .ride ? document.movingDuration : document.route.map { RouteTravelTime(route: $0, profile: document.profile).total } ?? 0))
                 }
                 if let blogRideID {
                     VStack(alignment: .leading, spacing: 8) {

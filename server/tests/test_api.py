@@ -74,7 +74,7 @@ def test_blog_points_require_a_synced_ride_and_are_idempotent(client):
     assert first.status_code == 200 and first.json() == {"accepted": [str(point_id)]}
     assert client.post("/v1/blog-points", headers=AUTH, json=point).status_code == 200
     page = client.get(f"/v1/rides/{ride_id}/blog-points", headers=AUTH).json()
-    assert page["points"] == [point] and page["hasMore"] is False and page["cursor"] > 0
+    assert page["points"] == [{**point, "revision": 0}] and page["hasMore"] is False and page["cursor"] > 0
 
 
 def test_reusing_mutation_id_with_different_content_is_rejected(client):

@@ -60,7 +60,7 @@ enum LocalRouteMetrics {
         let pending = pendingWaypoints(route: route, waypoints: waypoints, traveled: traveled, skipped: skipped)
         return pending.first.map { indices[$0] } ?? route.coordinates.count - 1
     }
-    static func combined(original: CalculatedRoute, state: LocalNavigationState?) -> CalculatedRoute {
+    static func combined(original: CalculatedRoute, state: LocalNavigationState?, profile: RidingProfile = RidingProfile()) -> CalculatedRoute {
         guard let connector = state?.connector, let join = state?.rejoinIndex,
               original.coordinates.indices.contains(join), connector.coordinates.count > 1 else { return original }
         var result = connector
@@ -90,11 +90,10 @@ enum LocalRouteMetrics {
         result.intersectionContexts = (original.intersectionContexts ?? []).filter { $0.coordinateIndex >= join }.map {
             IntersectionContext(coordinateIndex: offset + $0.coordinateIndex - join, roads: $0.roads)
         }
-        let originalDistance = distances(original)
         result.distance = distances(result).last ?? 0
-        result.duration = connector.duration + original.duration * max(0, (originalDistance.last! - originalDistance[join]) / max(1, originalDistance.last!))
         result.elevationProfile = nil; result.elevationSource = nil
         result.ascent = 0; result.descent = 0
+        result.duration = RouteTravelTime(route: result, profile: profile).total
         result.surfaces = [] // Totals from the original tour are not valid for the connector.
         result.warnings = original.warnings
         return result
@@ -297,7 +296,7 @@ enum LocalRouter {
             maneuvers: maneuvers, surfaces: [], warnings: [], provider: "BikeNavi lokal · OpenStreetMap", calculatedAt: Date().timeIntervalSince1970,
             surfaceSections: sections)
         connector.distance = LocalRouteMetrics.distances(connector).last ?? 0
-        connector.duration = connector.distance / 4.5
+        connector.duration = RouteTravelTime(route: connector, profile: profile).total
         let off = LocalRouteMetrics.unpaved(connector) + position.distance(to: points[0])
         guard legalBudget(off, goal: best.goal) else { throw LocalRoutingError.noConnection }
         return LocalConnection(connector: connector, rejoinIndex: best.goal.index, unpavedDistance: off,
@@ -308,7 +307,7 @@ enum LocalRouter {
 extension LocalRouteMetrics {
     /// Accept movement along the fresh connector, cutting its travelled prefix.
     /// A different road/direction rejects the result instead of applying an old start.
-    static func trim(_ route: CalculatedRoute, to position: Coordinate, heading: Double?) -> CalculatedRoute? {
+    static func trim(_ route: CalculatedRoute, to position: Coordinate, heading: Double?, profile: RidingProfile = RidingProfile()) -> CalculatedRoute? {
         let cumulative = distances(route)
         var best: (i: Int, point: Coordinate, distance: Double)?
         for i in 0..<(route.coordinates.count-1) where cumulative[i] <= 250 {
@@ -329,7 +328,7 @@ extension LocalRouteMetrics {
             RouteSurfaceSection(startIndex: max(0,$0.startIndex-best.i), endIndex: $0.endIndex-best.i, surface: $0.surface)
         }
         result.distance = distances(result).last ?? 0
-        result.duration = result.distance / 4.5
+        result.duration = RouteTravelTime(route: result, profile: profile).total
         return result
     }
 }
@@ -398,7 +397,7 @@ extension LocalRouter {
         route.waypointIndices = indices
         route.provider = "BikeNavi iPhone · OpenStreetMap"
         route.distance = LocalRouteMetrics.distances(route).last ?? 0
-        route.duration = route.distance / 4.5
+        route.duration = RouteTravelTime(route: route, profile: document.profile).total
         route.maneuvers[route.maneuvers.count-1] = Maneuver(instruction: "Ziel erreicht", distance: 0, coordinateIndex: route.coordinates.count-1, type: 10)
         let cumulative = LocalRouteMetrics.distances(route)
         var totals: [String: Double] = [:]

@@ -1,10 +1,17 @@
 # BikeNavi – Bildschirmgalerie
 
-Version **0.3.0 (3)** · iPhone-Simulator, helle Darstellung. Planung und Routendetails am 24. September 2026 mit Höhenprofil und getrenntem lokalem Umfeld aktualisiert; Planungs-/Fahrtkarten und Einstellungen am 5. Oktober 2026 mit Kartenansichten aktualisiert; Ortssuche am 1. Oktober 2026 mit lokaler Koordinatenerkennung aktualisiert; Fahrprofil am 5. Oktober 2026 mit Rad-/Wanderoptionen aktualisiert; übrige Bilder vom 23. September 2026.
+Version **0.4.0 (4)** · iPhone-Simulator, helle Darstellung. Planung und Routendetails am 24. September 2026 mit Höhenprofil und getrenntem lokalem Umfeld aktualisiert; Planungs-/Fahrtkarten und Einstellungen am 5. Oktober 2026 mit Kartenansichten aktualisiert; Ortssuche am 1. Oktober 2026 mit lokaler Koordinatenerkennung aktualisiert; Fahrprofil am 5. Oktober 2026 mit Rad-/Wanderoptionen aktualisiert; übrige Bilder vom 23. September 2026.
 
 Die Bilder zeigen die tatsächlich laufende App. Die Route stammt aus dem öffentlichen Heidelberg-Beispiel von openrouteservice. Die gespeicherte **Beispielaufzeichnung**, ihre Zeit-/GPS-Samples und ihre Bike-Messwerte sind synthetische Demonstrationsdaten. In der Live-Fahrt ist kein echtes Bike verbunden: fehlende Messwerte bleiben leer. Persönliche Touren und Zugangsdaten sind nicht enthalten. Die Serveradresse `beispiel.invalid` ist ein nicht erreichbarer Platzhalter; ein vorbereitetes lokales Wegenetz ist für dieses alte ORS-Beispiel nicht vorhanden.
 
 Die aktualisierten Ansichten **01** und **07** zeigen die nachträglich über SRTM ergänzten und lokal gespeicherten Höhen der öffentlichen Heidelberg-Beispielgeometrie. Der UI-Test hat Anzeige und Wiederöffnen ohne konfigurierten Serverzugang geprüft. Das Beispiel enthält kein vorbereitetes Offline-Wegenetz; der entsprechende Hinweis in der Planung ist daher erwartet. Die Aufnahmen wurden nach der Umstellung auf das mitwandernde 3-km-Umfeld erneut erstellt und geprüft. Die gespeicherte Route und der Fahrtstart bleiben auch ohne Umfelddaten verfügbar.
+
+
+Am **9. Oktober 2026** wurden **01** (belagsabhängige Fahrzeit), **12/14** (ETA während Fahrt/Pause) und **42/43** (Blogfortschritt) aktualisiert bzw. ergänzt. Alle verwenden ausschließlich die öffentliche Heidelberger Beispielgeometrie und synthetische Aufzeichnungsdaten. **42/43** zeigen einen kontrolliert verzögerten lokalen HTTPS-Testserver, keinen echten Pi-/KI-Lauf. Die Anzeige „auf dem Pi gespeichert“ steht dort für den protokollgleichen lokalen Beispielserver. Der UI-Test prüft die echte HTTP-Auftragsannahme, Phasen, gesperrte Erstellungstaste und Wiederaufnahme nach Ansichtswechsel und App-Neustart; die Screenshots wurden visuell geprüft.
+
+| Blog: Vorbereitung mit Zeitrückmeldung | Blog: Schreibphase nach App-Neustart |
+| --- | --- |
+| <img src="images/42-blog-fortschritt.png" width="300" alt="Öffentliche Beispieltour mit sichtbarem ersten Arbeitsschritt und verstrichener Zeit"> | <img src="images/43-blog-schreiben.png" width="300" alt="Öffentliche Beispieltour mit drittem Arbeitsschritt beim Schreiben und gesperrter Erstellungstaste"> |
 
 ## Planung
 
@@ -147,11 +154,11 @@ Aufnahme **24** zeigt im Profil die Online-Ausnahme für fehlende Beläge zwisch
 
 ## Tourtagebuch und Blog
 
-Aufnahme **12** wurde mit der Taste **Blog-Ort festhalten** erneuert. **30** zeigt eine rein synthetische Notiz an einem öffentlichen Heidelberger Standort; im Simulator wird die Kameraaufnahme mangels Kamera nicht angeboten. **31** zeigt den gespeicherten, noch nicht übertragenen Beispielort im Tourtagebuch. Der UI-Test prüft Speicherung ohne Server, Erhalt nach Neustart und einen verständlichen Hinweis bei Blogerstellung ohne Pi-Konfiguration.
+Aufnahme **12** wurde mit der Taste **Blog-Ort festhalten** erneuert. **30** zeigt eine rein synthetische Notiz an einem öffentlichen Heidelberger Standort; im Simulator wird die Kameraaufnahme mangels Kamera nicht angeboten. **31** zeigt gespeicherte, noch nicht übertragene Beispielstationen sowie die neuen Aktionen zum Hinzufügen und Bearbeiten im Tourtagebuch. Der UI-Test prüft Speicherung ohne Server, Erhalt nach Neustart und einen verständlichen Hinweis bei Blogerstellung ohne Pi-Konfiguration.
 
 | Ort festhalten | Tourtagebuch |
 | --- | --- |
-| <img src="images/30-blog-ort.png" width="300" alt="Blog-Ort mit synthetischer Beispielnotiz und öffentlichem Heidelberger Standort"> | <img src="images/31-tourtagebuch.png" width="300" alt="Tourtagebuch mit lokal gespeichertem Beispielort und ausstehender Übertragung"> |
+| <img src="images/30-blog-ort.png" width="300" alt="Blog-Ort mit synthetischer Beispielnotiz und öffentlichem Heidelberger Standort"> | <img src="images/31-tourtagebuch.png" width="300" alt="Tourtagebuch mit synthetischen Beispielstationen, Hinzufügen, Bearbeiten und ausstehender Übertragung"> |
 
 Die Blogvorschau verwendet einen auf dem Pi tatsächlich erzeugten KI-Blog zu öffentlichen Heidelberger Orten. Die Erinnerungen und Fahrtaufzeichnung sind synthetisch; das als Beispielbild gekennzeichnete BikeNavi-Icon ist kein Reisefoto. Kartenkacheln und Recherchequellen sind real. Das [portable HTML-Beispiel](examples/heidelberg-blog.html) enthält alle Bilder und Karten direkt.
 
@@ -182,3 +189,13 @@ Alle Aufnahmen mit öffentlichen, gekennzeichneten Heidelberger Beispielen gepr�
 Die Blogaufnahmen 30–37 wurden für Release 0.4.0 (4) mit dem aktualisierten öffentlichen HTML-Beispiel erneuert. Die Einstellungen **11** wurden ebenfalls erneuert. **38** zeigt die tatsächliche Versions- und Buildnummer aus dem Simulator-App-Bundle. Kein Feldtest und keine echte Serveradresse/Zugangsdaten im Bild.
 
 <img src="images/38-version-0-4.png" width="300" alt="Einstellungen mit tatsächlicher App-Version 0.4.0 und Build 4 sowie öffentlichen Kartenquellen">
+
+## Stationen nachtragen und bearbeiten
+
+**39** zeigt den Nachtrag einer Station aus einem Bild mit GPS-Standort. **40** zeigt die gewählte Position nach einer vorhandenen Station; das sichtbare Bild ist ein ausdrücklich beschriftetes synthetisches GPS-Testbild am öffentlichen Heidelberger Standort. **41** zeigt die Positionswahl beim Bearbeiten einer bestehenden Station und deren Verschiebung an den Anfang. Nach **Speichern** bleiben die Änderungen offline und nach Neustart erhalten; eine neue Blogfassung übernimmt sie nach dem Pi-Abgleich.
+
+| Station hinzufügen | Position des Nachtrags | Station bearbeiten |
+| --- | --- | --- |
+| <img src="images/39-blog-station-hinzufuegen.png" width="250" alt="Nachträgliche Station aus einem GPS-Foto hinzufügen"> | <img src="images/40-blog-station-position.png" width="250" alt="Synthetischer GPS-Fotonachtrag wird nach dem ersten Beispielort eingefügt"> | <img src="images/41-blog-station-bearbeiten.png" width="250" alt="Position einer bearbeiteten Beispielstation an den Anfang ändern"> |
+
+Reproduzierbar mit `seed_gallery.py --device UUID --elevation --blog docs/examples/heidelberg-blog.html --journal` und `DocumentationScreenshotsTests/testBlogStationInsertEditOrderAndOfflineRestart`. Der Test verwendet den echten System-Fotopicker im Simulator. GPS-Extraktion, fehlende/ungültige Bildkoordinaten, alte Ortsdaten und revisionsgeprüfter Abgleich werden zusätzlich durch Swift-/Backendtests geprüft. Reale iPhone-/iCloud-Fotoauswahl bleibt separat zu prüfen; kein Feldtest.

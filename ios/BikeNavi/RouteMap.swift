@@ -88,9 +88,7 @@ struct RouteMap: UIViewRepresentable {
         if follow && !followHeading && map.showsUserLocation {
             map.userTrackingMode = .follow
         }
-        if c.routeID != route?.id || c.surfaceSections != route?.surfaceSections || c.points != waypoints || c.savedPlaces != savedPlaces || c.trackCount != track.count || c.modeSections != modeSections || c.colorBySurface != colorBySurface || c.hasStart != hasStart {
-            c.redraw()
-        }
+        c.redraw()
         c.updateNavigationPosition()
         if c.focus != focus, let focus {
             c.focus = focus
@@ -107,10 +105,16 @@ struct RouteMap: UIViewRepresentable {
         let navigationPin = MLNPointAnnotation()
         var surfaceSections: [RouteSurfaceSection]?
         var routeID: UUID?
+        var routeCoordinates: [Coordinate] = []
+        var bicycleParking: Coordinate?
+        private var routeAnnotations: [MLNAnnotation] = []
+        private var trackAnnotations: [MLNAnnotation] = []
+        private var waypointAnnotations: [MLNAnnotation] = []
+        private var placeAnnotations: [MLNAnnotation] = []
         var points: [Waypoint] = []
         var savedPlaces: [SavedPlace] = []
         var modeSections: [RideModeSection]?
-        var trackCount = -1
+        var track: [TrackPoint] = []
         var colorBySurface = false
         var hasStart = true
         var resumeNavigation: DispatchWorkItem?
@@ -136,64 +140,92 @@ struct RouteMap: UIViewRepresentable {
             let c = map.convert(location, toCoordinateFrom: map)
             parent.onTap?(Coordinate(latitude: c.latitude, longitude: c.longitude))
         }
-        func redraw() {
+        // Recording updates must never remove the unchanged navigation route.
+        // Style reloads explicitly refresh every group; ordinary updates only
+        // replace the group whose geometry or appearance actually changed.
+        func redraw(force: Bool = false) {
             guard let map else { return }
-            if let annotations = map.annotations { map.removeAnnotations(annotations) }
-            if let route = parent.route, route.coordinates.count > 1 {
-                if parent.colorBySurface {
-                    for section in route.coloredSections {
-                        var coordinates = route.coordinates[section.startIndex...section.endIndex].map(\.cl)
+            let routeChanged = force || routeID != parent.route?.id
+                || routeCoordinates != (parent.route?.coordinates ?? [])
+                || surfaceSections != parent.route?.surfaceSections
+                || colorBySurface != parent.colorBySurface
+                || bicycleParking != parent.route?.bicycleParking
+            if routeChanged {
+                var annotations: [MLNAnnotation] = []
+                if let route = parent.route, route.coordinates.count > 1 {
+                    if parent.colorBySurface {
+                        for section in route.coloredSections {
+                            var coordinates = route.coordinates[section.startIndex...section.endIndex].map(\.cl)
+                            let line = MLNPolyline(coordinates: &coordinates, count: UInt(coordinates.count))
+                            line.title = "surface:\(section.surface)"
+                            annotations.append(line)
+                        }
+                    } else {
+                        var coordinates = route.coordinates.map(\.cl)
                         let line = MLNPolyline(coordinates: &coordinates, count: UInt(coordinates.count))
-                        line.title = "surface:\(section.surface)"
-                        map.addAnnotation(line)
+                        line.title = "route"
+                        annotations.append(line)
+                    }
+                }
+                if let parking = parent.route?.bicycleParking {
+                    let pin = MLNPointAnnotation()
+                    pin.coordinate = parking.cl
+                    pin.title = "Rad abstellen"
+                    pin.subtitle = "Zu Fuß weiter zum Ziel"
+                    annotations.append(pin)
+                }
+                replace(&routeAnnotations, with: annotations, on: map)
+                surfaceSections = parent.route?.surfaceSections
+                routeID = parent.route?.id
+                routeCoordinates = parent.route?.coordinates ?? []
+                colorBySurface = parent.colorBySurface
+                bicycleParking = parent.route?.bicycleParking
+            }
+            if force || modeSections != parent.modeSections || track != parent.track {
+                var annotations: [MLNAnnotation] = []
+                if let sections = parent.modeSections {
+                    for section in sections where section.coordinates.count > 1 {
+                        var coordinates = section.coordinates.map(\.cl)
+                        let line = MLNPolyline(coordinates: &coordinates, count: UInt(coordinates.count))
+                        line.title = "mode:\(section.mode ?? -1)"
+                        annotations.append(line)
                     }
                 } else {
-                    var coordinates = route.coordinates.map(\.cl)
-                    let line = MLNPolyline(coordinates: &coordinates, count: UInt(coordinates.count))
-                    line.title = "route"
-                    map.addAnnotation(line)
+                    for group in Dictionary(grouping: parent.track, by: \.segment).values where group.count > 1 {
+                        var coordinates = group.map { $0.coordinate.cl }
+                        let line = MLNPolyline(coordinates: &coordinates, count: UInt(coordinates.count))
+                        line.title = "track"
+                        annotations.append(line)
+                    }
                 }
+                replace(&trackAnnotations, with: annotations, on: map)
+                modeSections = parent.modeSections
+                track = parent.track
             }
-            if let sections = parent.modeSections {
-                for section in sections where section.coordinates.count > 1 {
-                    var coordinates = section.coordinates.map(\.cl)
-                    let line = MLNPolyline(coordinates: &coordinates, count: UInt(coordinates.count))
-                    line.title = "mode:\(section.mode ?? -1)"
-                    map.addAnnotation(line)
+            if force || points != parent.waypoints || hasStart != parent.hasStart {
+                var annotations: [MLNAnnotation] = []
+                for (index, point) in parent.waypoints.enumerated() {
+                    let pin = MLNPointAnnotation()
+                    pin.coordinate = point.coordinate.cl
+                    pin.title = point.name
+                    pin.subtitle = index == 0 && parent.hasStart ? "Start" : (index == parent.waypoints.count - 1 ? "Ziel" : "\(index + (parent.hasStart ? 0 : 1))")
+                    annotations.append(pin)
                 }
-            } else {
-            for group in Dictionary(grouping: parent.track, by: \.segment).values where group.count > 1 {
-                var coordinates = group.map { $0.coordinate.cl }
-                let line = MLNPolyline(coordinates: &coordinates, count: UInt(coordinates.count))
-                line.title = "track"
-                map.addAnnotation(line)
+                replace(&waypointAnnotations, with: annotations, on: map)
+                points = parent.waypoints
+                hasStart = parent.hasStart
             }
+            if force || savedPlaces != parent.savedPlaces {
+                replace(&placeAnnotations, with: parent.savedPlaces.map { SavedPlaceAnnotation(place: $0) }, on: map)
+                savedPlaces = parent.savedPlaces
             }
-            if let parking = parent.route?.bicycleParking {
-                let pin = MLNPointAnnotation()
-                pin.coordinate = parking.cl
-                pin.title = "Rad abstellen"
-                pin.subtitle = "Zu Fuß weiter zum Ziel"
-                map.addAnnotation(pin)
-            }
-            for (index, point) in parent.waypoints.enumerated() {
-                let pin = MLNPointAnnotation()
-                pin.coordinate = point.coordinate.cl
-                pin.title = point.name
-                pin.subtitle = index == 0 && parent.hasStart ? "Start" : (index == parent.waypoints.count - 1 ? "Ziel" : "\(index + (parent.hasStart ? 0 : 1))")
-                map.addAnnotation(pin)
-            }
-            for place in parent.savedPlaces {
-                map.addAnnotation(SavedPlaceAnnotation(place: place))
-            }
-            surfaceSections = parent.route?.surfaceSections
-            routeID = parent.route?.id
-            points = parent.waypoints
-            savedPlaces = parent.savedPlaces
-            modeSections = parent.modeSections
-            trackCount = parent.track.count
-            colorBySurface = parent.colorBySurface
-            hasStart = parent.hasStart
+        }
+
+        private func replace(_ old: inout [MLNAnnotation], with new: [MLNAnnotation], on map: MLNMapView) {
+            // Register the replacement before retiring the previous geometry.
+            if !new.isEmpty { map.addAnnotations(new) }
+            if !old.isEmpty { map.removeAnnotations(old) }
+            old = new
         }
         func fit() {
             guard let map, let annotations = map.annotations, !annotations.isEmpty else { return }
@@ -294,7 +326,7 @@ struct RouteMap: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
-            redraw()
+            redraw(force: true)
             updateNavigationPosition()
             if !hasLoadedStyle && !(parent.follow && parent.followHeading) { fit() }
             hasLoadedStyle = true

@@ -1,4 +1,4 @@
-"""Private, immutable tour journal and versioned HTML drafts."""
+"""Private, editable tour journal and versioned HTML drafts."""
 import base64
 import binascii
 import re
@@ -8,7 +8,7 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from pydantic import Field, field_validator, model_validator
-from sqlalchemy import JSON, Integer, String, Text, select, update
+from sqlalchemy import JSON, Integer, String, Text, func, select, update
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .models import Coordinate, Model
@@ -26,6 +26,9 @@ class BlogPoint(Model):
     title: str = Field(min_length=1, max_length=200)
     note: str = Field(default="", max_length=4000)
     photo: str | None = Field(default=None, max_length=MAX_PHOTO_BYTES * 4 // 3 + 4)
+
+    sortOrder: float | None = Field(default=None, allow_inf_nan=False)
+    revision: int = Field(default=0, ge=0)
 
     @field_validator("photo")
     @classmethod
@@ -114,6 +117,15 @@ class BlogRepository:
             raise HTTPException(404, "Die Fahrt ist noch nicht auf dem Pi gespeichert.")
         return ride
 
+    def next_sequence(self, session):
+        # SyncLock is held by every writer, including ride deletion. Do not reuse deleted cursors.
+        generation = session.scalar(select(SyncLock.generation).where(SyncLock.id == 1))
+        maximum = session.scalar(select(func.max(JournalPoint.sequence))) or 0
+        sequence = max(generation, maximum + 1)
+        if sequence > generation:
+            session.execute(update(SyncLock).where(SyncLock.id == 1).values(generation=sequence))
+        return sequence
+
     def append(self, point):
         payload = point.model_dump(mode="json", exclude_none=True)
         with self.sessions.begin() as session:
@@ -121,14 +133,44 @@ class BlogRepository:
             self.ride(session, str(point.rideID))
             existing = session.scalar(select(JournalPoint).where(JournalPoint.id == str(point.id)))
             if existing:
-                if existing.payload != payload:
+                if BlogPoint.model_validate(existing.payload).model_dump(mode="json", exclude_none=True) != payload:
                     raise HTTPException(409, "Dieser Blog-Ort wurde bereits mit anderem Inhalt gespeichert.")
             else:
                 points = session.scalars(select(JournalPoint).where(JournalPoint.ride_id == str(point.rideID))).all()
                 if len(points) >= 50 or sum(len(p.payload.get("photo", "")) * 3 // 4 for p in points) + len(point.photo or "") * 3 // 4 > MAX_RIDE_PHOTO_BYTES:
                     raise HTTPException(413, "Diese Fahrt enthält bereits 50 Blog-Orte oder 20 MB Fotos.")
-                session.add(JournalPoint(id=str(point.id), ride_id=str(point.rideID), payload=payload))
+                session.add(JournalPoint(sequence=self.next_sequence(session), id=str(point.id), ride_id=str(point.rideID), payload=payload))
         return {"accepted": [str(point.id)]}
+
+    def put(self, point_id, point):
+        if str(point.id) != point_id:
+            raise HTTPException(422, "Die Orts-ID stimmt nicht überein.")
+        payload = point.model_dump(mode="json", exclude_none=True)
+        with self.sessions.begin() as session:
+            session.execute(update(SyncLock).where(SyncLock.id == 1).values(generation=SyncLock.generation + 1))
+            self.ride(session, str(point.rideID))
+            existing = session.scalar(select(JournalPoint).where(JournalPoint.id == point_id))
+            if existing:
+                current = BlogPoint.model_validate(existing.payload).model_dump(mode="json", exclude_none=True)
+                if existing.ride_id != str(point.rideID):
+                    raise HTTPException(409, "Dieser Blog-Ort gehört zu einer anderen Fahrt.")
+                # A lost response can be retried without creating another revision.
+                if {k: v for k, v in current.items() if k != "revision"} == {k: v for k, v in payload.items() if k != "revision"}:
+                    if point.revision in (current["revision"], current["revision"] - 1):
+                        return current
+                if point.revision != current["revision"]:
+                    raise HTTPException(409, "Dieser Blog-Ort wurde auf dem Pi geändert. Deine lokale Fassung bleibt erhalten; bitte die Fassungen abgleichen.")
+                payload["revision"] = current["revision"] + 1
+            others = session.scalars(select(JournalPoint).where(JournalPoint.ride_id == str(point.rideID), JournalPoint.id != point_id)).all()
+            if len(others) >= 50 or sum(len(p.payload.get("photo", "")) * 3 // 4 for p in others) + len(point.photo or "") * 3 // 4 > MAX_RIDE_PHOTO_BYTES:
+                raise HTTPException(413, "Diese Fahrt enthält bereits 50 Blog-Orte oder 20 MB Fotos.")
+            # Reinsert with a fresh global sequence so cursor readers receive edits, too.
+            sequence = self.next_sequence(session)
+            if existing:
+                session.delete(existing)
+                session.flush()
+            session.add(JournalPoint(sequence=sequence, id=point_id, ride_id=str(point.rideID), payload=payload))
+        return payload
 
     def points(self, ride_id, after=0):
         with self.sessions() as session:
@@ -144,14 +186,15 @@ class BlogRepository:
             if ride.document["recordingState"] != "finished":
                 raise HTTPException(409, "Bitte die Fahrt zuerst beenden und synchronisieren.")
             points = session.scalars(select(JournalPoint).where(JournalPoint.ride_id == ride_id)).all()
-            return dict(ride.document), sorted([p.payload for p in points], key=lambda p: (p["capturedAt"], p["id"])), ride.revision
+            return dict(ride.document), sorted([p.payload for p in points], key=lambda p: (p.get("sortOrder", p["capturedAt"]), p["id"])), ride.revision
 
-    def save(self, ride_id, revision, point_ids, draft_id, html, metadata):
+    def save(self, ride_id, revision, point_versions, draft_id, html, metadata):
         with self.sessions.begin() as session:
             session.execute(update(SyncLock).where(SyncLock.id == 1).values(generation=SyncLock.generation + 1))
             ride = self.ride(session, ride_id)
-            current_ids = set(session.scalars(select(JournalPoint.id).where(JournalPoint.ride_id == ride_id)).all())
-            if ride.revision != revision or current_ids != set(point_ids):
+            current = session.scalars(select(JournalPoint).where(JournalPoint.ride_id == ride_id)).all()
+            versions = {(p.id, p.payload.get("revision", 0)) for p in current}
+            if ride.revision != revision or versions != set(point_versions):
                 raise HTTPException(409, "Die Fahrt wurde während der Erstellung geändert. Bitte erneut erstellen.")
             session.add(BlogDraft(id=draft_id, ride_id=ride_id, html=html, metadata_json=metadata))
         return {**metadata, "id": draft_id, "html": html}
@@ -170,11 +213,13 @@ class BlogRepository:
             parser.feed(draft.html)
             return parser.sources[:28]
 
-    def latest(self, ride_id):
+    def latest(self, ride_id, draft_id=None):
         with self.sessions() as session:
             self.ride(session, ride_id)
-            draft = session.scalar(select(BlogDraft).where(BlogDraft.ride_id == ride_id)
-                                   .order_by(BlogDraft.metadata_json["createdAt"].as_float().desc()).limit(1))
+            query = select(BlogDraft).where(BlogDraft.ride_id == ride_id)
+            if draft_id is not None:
+                query = query.where(BlogDraft.id == draft_id)
+            draft = session.scalar(query.order_by(BlogDraft.metadata_json["createdAt"].as_float().desc()).limit(1))
             if draft is None:
                 raise HTTPException(404, "Für diese Fahrt gibt es noch keinen Blog.")
             return {**draft.metadata_json, "id": draft.id, "html": draft.html}
