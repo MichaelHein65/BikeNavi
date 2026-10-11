@@ -410,6 +410,7 @@ def test_ai_failure_does_not_replace_existing_blog(tmp_path, monkeypatch, failur
         reason = {'http': 'HTTP 503', 'incomplete': 'Ausgabelimit erreicht', 'invalid': 'Textformat', 'timeout': 'Zeitlimit erreicht'}[failure]
         assert reason in result.json()['detail'] and 'keine neue Blogfassung' in result.json()['detail']
         assert 'private message' not in result.text
+        if failure == 'timeout': assert 'Blogentwurf' in result.json()['detail']
         current = client.get(f'/v1/rides/{ride}/blog', headers=AUTH).json()
         assert current['id'] == previous_id and current['html'] == '<html>Vorhandener guter Blog</html>'
 
@@ -627,18 +628,23 @@ def test_corrected_blog_headings_preserve_original_journal_notes():
     assert '<h2>Der Staat am Haus</h2>' in render(ride, [p], [], {}, story, {'warnings': [], 'mode': 'openai', 'createdAt': 1})
 
 
-def test_editorial_prompt_and_heading_schema_are_sent_to_writer(monkeypatch):
+@pytest.mark.parametrize('model, reasoning', [('test-model', None), ('gpt-5.6-luna', {'effort': 'low'})])
+def test_editorial_prompt_and_heading_schema_are_sent_to_writer(monkeypatch, model, reasoning):
     import asyncio
     from bikenavi.blog import BlogGenerator
     monkeypatch.setenv('BLOG_OPENAI_API_KEY', 'test-secret')
-    monkeypatch.setenv('BLOG_OPENAI_MODEL', 'test-model')
+    monkeypatch.setenv('BLOG_OPENAI_MODEL', model)
     async def scenario():
         generator = BlogGenerator(None, None)
         async def fake_response(key, timeout, body):
             instructions = body['instructions']
             assert 'auch zwischen Stationen und Hintergrundkapiteln' in instructions
-            assert '20–50 Wörter' in instructions and 'höchstens drei bis vier' in instructions
+            assert 'drei bis vier vollständige' in instructions and 'Leichtes Augenzwinkern' in instructions
             assert 'stopTitles' in body['text']['format']['schema']['required']
+            assert body.get('reasoning') == reasoning
+            for field in ('stops', 'stopTitles'):
+                assert body['text']['format']['schema']['properties'][field]['minItems'] == 1
+                assert body['text']['format']['schema']['properties'][field]['maxItems'] == 1
             return {'status': 'completed', 'output': [{'type': 'message', 'content': [{'type': 'output_text', 'text': json.dumps({
                 'title': 'Klarer Titel', 'introduction': 'Einstieg.', 'stops': ['Ein Übergang.'],
                 'stopTitles': ['Start am Haus'], 'closing': 'Schluss.', 'backgrounds': []})}]}]}
@@ -667,9 +673,13 @@ def test_invalid_model_headings_do_not_become_a_new_blog(monkeypatch, headings):
     asyncio.run(scenario())
 
 
-def test_editorial_pass_removes_repeated_uncertainty_within_original_budget(monkeypatch):
+@pytest.mark.parametrize('elapsed', [2, 80])
+def test_editorial_pass_removes_repeated_uncertainty_within_shared_budget(monkeypatch, elapsed):
     import asyncio
     from bikenavi.blog import BlogGenerator
+    from types import SimpleNamespace
+    ticks = iter([0, elapsed])
+    monkeypatch.setattr('bikenavi.blog.time', SimpleNamespace(monotonic=lambda: next(ticks)))
     monkeypatch.setenv('BLOG_OPENAI_API_KEY', 'test-secret')
     monkeypatch.setenv('BLOG_OPENAI_MODEL', 'test-model')
     async def scenario():
@@ -683,7 +693,7 @@ def test_editorial_pass_removes_repeated_uncertainty_within_original_budget(monk
         generator.ai_response = fake_response
         story, mode = await generator.story({'title': 'Tour', 'track': []}, [point('unused')], [], [])
         assert mode == 'openai' and 'steinigen Weg' in story.stops[0]
-        assert len(calls) == 2 and calls[0][0] == 45 and 0 < calls[1][0] <= 25
+        assert len(calls) == 2 and calls[0][0] == 65 and calls[1][0] == min(45, 90-elapsed)
         context = json.loads(calls[1][1]['input'])
         assert context['originalContext']['stops'][0]['note'] == 'Eine Pause am Fluss.'
         assert 'niemals nur ihre einschränkenden Wörter entfernen' in calls[1][1]['instructions']
