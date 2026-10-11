@@ -15,6 +15,7 @@ from .storage import Storage
 from .blog_store import BlogPoint, BlogRepository
 from .blog import BlogGenerator
 from .blog_jobs import BlogJobs
+from .route_description import DescriptionGenerator, DescriptionJobs, DescriptionRequest
 
 
 def create_app(database_url: str | None = None, token: str | None = None,
@@ -36,10 +37,12 @@ def create_app(database_url: str | None = None, token: str | None = None,
             app.state.blogs = BlogRepository(app.state.storage)
             app.state.blog_generator = BlogGenerator(client, app.state.blogs)
             app.state.blog_jobs = BlogJobs(app.state.blog_generator)
+            app.state.description_jobs = DescriptionJobs(DescriptionGenerator(client))
             try:
                 yield
             finally:
                 await app.state.blog_jobs.close()
+                await app.state.description_jobs.close()
         app.state.storage.engine.dispose()
 
     app = FastAPI(title="BikeNavi", version=__version__, lifespan=lifespan,
@@ -126,6 +129,14 @@ def create_app(database_url: str | None = None, token: str | None = None,
         with app.state.blogs.sessions() as session:
             app.state.blogs.ride(session, str(ride_id))
         return app.state.blog_jobs.get(str(ride_id), str(generation_id))
+
+    @app.post("/v1/route-description-jobs", status_code=202, dependencies=[Depends(authenticate)])
+    async def start_description(body: DescriptionRequest, generation_id: UUID):
+        return app.state.description_jobs.start(str(generation_id), body)
+
+    @app.get("/v1/route-description-jobs/{generation_id}", dependencies=[Depends(authenticate)])
+    def read_description(generation_id: UUID):
+        return app.state.description_jobs.get(str(generation_id))
 
     @app.post("/v1/route", response_model=Route, dependencies=[Depends(authenticate)])
     async def route(body: RouteRequest, include_context: bool = True):

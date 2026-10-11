@@ -6,6 +6,7 @@ struct PlannerView: View {
     @State private var showSearch = false
     @State private var showProfile = false
     @State private var showDetails = false
+    @State private var showRouteDescription = false
     @State private var showWaypoints = false
     @State private var showSavedPlaces = false
     @State private var choosingPoint = false
@@ -87,6 +88,7 @@ struct PlannerView: View {
             .sheet(isPresented: $showSearch) { SearchView() }
             .sheet(isPresented: $showProfile) { ProfileView() }
             .sheet(isPresented: $showDetails) { if let route = state.plan.route { RouteDetailsView(route: route) } }
+            .sheet(isPresented: $showRouteDescription) { RouteDescriptionView() }
             .sheet(isPresented: $showWaypoints) { WaypointsView() }
             .sheet(isPresented: $showSavedPlaces) { SavedPlacesView() }
             .confirmationDialog("Punkt auf der Karte verwenden", isPresented: $choosingPoint, titleVisibility: .visible) {
@@ -214,14 +216,26 @@ struct PlannerView: View {
                             }.font(.caption)
                         }
                     }
-                    HStack {
-                        Button { showDetails = true } label: { Image(systemName: "chart.xyaxis.line").frame(width: 44, height: 44) }
-                            .buttonStyle(.bordered).accessibilityLabel("Höhenprofil und Wegbeläge")
+                    HStack(spacing: 8) {
+                        Button { showDetails = true } label: {
+                            Image(systemName: "chart.xyaxis.line").font(.system(size: 20, weight: .semibold))
+                                .frame(width: 52)
+                        }
+                            .buttonStyle(PlanningActionStyle(background: Theme.accent.opacity(0.10)))
+                            .accessibilityLabel("Höhenprofil und Wegbeläge")
+                        Button { showRouteDescription = true } label: {
+                            Label("Beschreibung", systemImage: "sparkles")
+                                .lineLimit(1).minimumScaleFactor(0.85)
+                                .padding(.horizontal, 8).frame(maxWidth: .infinity)
+                        }.buttonStyle(PlanningActionStyle(background: Theme.accent.opacity(0.22)))
+                            .accessibilityLabel("Routenbeschreibung")
+                            .accessibilityIdentifier("routeDescription")
                         Button { if state.waitingForRideLocation { state.cancelRideStart() } else { state.startRide() } } label: {
                             Label(state.waitingForRideLocation ? "Standortsuche abbrechen" : "Tour starten", systemImage: "location.north.fill")
-                                .frame(maxWidth: .infinity).padding(.vertical, 8)
+                                .lineLimit(2).minimumScaleFactor(0.85)
+                                .padding(.horizontal, 8).frame(maxWidth: .infinity)
                         }
-                            .buttonStyle(.borderedProminent).tint(Theme.forest).foregroundStyle(.white)
+                            .buttonStyle(PlanningActionStyle(background: Theme.forest, foreground: .white))
                     }
                 } else {
                     Button { Task { await state.calculateRoute() } } label: {
@@ -269,6 +283,21 @@ struct PlannerView: View {
     private func finishEditingName() {
         editingTourName = false
         state.finishRenamingPlan()
+    }
+}
+
+private struct PlanningActionStyle: ButtonStyle {
+    let background: Color
+    var foreground: Color = Theme.accent
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(foreground)
+            .frame(height: 52)
+            .background(background, in: Capsule())
+            .contentShape(Capsule())
+            .opacity(configuration.isPressed ? 0.82 : 1)
     }
 }
 

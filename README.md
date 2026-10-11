@@ -12,7 +12,7 @@
 
 Native iPhone-App für Fahrradtouren mit einem privaten Raspberry-Pi-Backend. Produktentscheidungen stehen in [docs/KONZEPT.md](docs/KONZEPT.md), die technische Struktur in [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) und der tatsächliche Entwicklungsstand in [docs/UMSETZUNG.md](docs/UMSETZUNG.md).
 
-Aktueller Entwicklungsstand vom **9. Oktober 2026**: stabile Routenaktualisierung, belagsabhängige Fahrzeit, ETA, Wachhalten während Navigation sowie bearbeitbare Blogstationen, sichtbarer Erstellungsfortschritt und überarbeitete Blogtexte. App und Pi sind aktualisiert; diese Weiterentwicklung ist unter **Unveröffentlicht** dokumentiert. Der Release-Tag `v0.4.0` bleibt unverändert. [Prüfergebnisse und Grenzen](docs/UMSETZUNG.md).
+Aktueller Entwicklungsstand vom **11. Oktober 2026**: eigenständige Routenbeschreibung mit Topografie und kurzen deutschen Ortskarten, Highlights als Zwischenziele mit Neuberechnung im Hintergrund sowie überarbeitete Blogtexte. Die bisherigen Verbesserungen an Routenaktualisierung, Fahrzeit/ETA und Wachhalten während Navigation bleiben enthalten. App und Pi sind aktualisiert; diese Weiterentwicklung ist unter **Unveröffentlicht** dokumentiert. Der Release-Tag `v0.4.0` bleibt unverändert. [Prüfergebnisse und Grenzen](docs/UMSETZUNG.md).
 
 ## Von Tribunj nach Skradin: BikeNavi erleben
 
@@ -44,6 +44,14 @@ Die [vollständige Galerie](docs/BILDSCHIRME.md) zeigt außerdem Karte, Wegpunkt
 5. **Speichern und Verbindung prüfen** antippen. Danach Start und Ziel auf der Karte setzen oder über die Suche auswählen.
 
 Die Streckenplanung erfolgt mit eingerichtetem Pi über openrouteservice und benötigt einen ORS-Schlüssel auf dem Pi. Dabei wird kein Wegenetz entlang der gesamten Tour heruntergeladen. Die lokale Rückführung lädt unabhängig davon das Umfeld um den Standort und hält während der Fahrt einen Suchradius von drei Kilometern bereit, soweit die Daten rechtzeitig verfügbar sind. Ohne eingerichteten API-Client bleibt die lokale Planung aus vorhandenen Gebietsdaten möglich.
+
+## Routenbeschreibung vor der Tour
+
+Nach der Planung **Beschreibung** (Funkel-Symbol) antippen: Gespeicherte Beschreibungen der aktuellen Routenfassung öffnen sich zum Lesen. Für neue oder geänderte Routen startet mit verbundenem Pi direkt die Erstellung. Der Pi analysiert die berechnete Strecke abschnittsweise, nennt anspruchsvollere oder unbekannte Beläge und steile Stellen und recherchiert Highlights mit frei lizenzierten Commons-Bildern. **Dein Weg im Überblick** legt Route und nummerierte Wegpunkte auf einen eingebetteten topografischen OpenTopoMap-Hintergrund. Beschreibung, Bilder und Karte bleiben offline lesbar und lassen sich als HTML exportieren. Highlights lassen sich mit **Als Zwischenziel einfügen** passend zwischen vorhandenen Zielen einplanen. Dabei bleibt die Beschreibung geöffnet; du kannst weiterlesen und weitere Orte auswählen, während die Route im Hintergrund mit allen neuen Zielen aktualisiert wird. Diese Funktion ist unabhängig von Fahrtaufzeichnung, Tagebuch und Blog.
+
+[Bedienung und Grenzen](docs/ROUTENBESCHREIBUNG.md) · [Öffentliches Routenbeispiel](docs/examples/heidelberg-routenbeschreibung.html)
+
+Ortskarten erhalten kurze deutsche Beschreibungen und Titel; fremdsprachige Quellen werden mit eingerichteter KI übersetzt. Ohne Übersetzer verwendet die Vorlagenfassung ausschließlich kurze deutsche Quellenauszüge. Symbole für Strecke, Anstieg, Abfahrt und Untergrund erleichtern das Lesen der kompakten technischen Hinweise. Bestehende gespeicherte HTML-Fassungen mit **Neu erstellen** aktualisieren.
 
 ## Tourtagebuch und Blog
 

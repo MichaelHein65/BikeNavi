@@ -18,6 +18,7 @@ final class LocalStore {
         try execute("CREATE TABLE IF NOT EXISTS blog_points (id TEXT PRIMARY KEY, ride_id TEXT NOT NULL, payload BLOB NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0)")
         try execute("CREATE INDEX IF NOT EXISTS blog_points_pending ON blog_points(ride_id, uploaded)")
         try execute("CREATE TABLE IF NOT EXISTS blog_drafts (ride_id TEXT PRIMARY KEY, payload BLOB NOT NULL)")
+        try execute("CREATE TABLE IF NOT EXISTS route_descriptions (plan_id TEXT PRIMARY KEY, payload BLOB NOT NULL)")
         try execute("CREATE TABLE IF NOT EXISTS places (id TEXT PRIMARY KEY, payload BLOB NOT NULL)")
         try execute("CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value INTEGER NOT NULL)")
     }
@@ -31,6 +32,31 @@ final class LocalStore {
 
     private func execute(_ sql: String) throws {
         guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else { throw failure() }
+    }
+
+    func saveRouteDescription(_ description: SavedRouteDescription) throws {
+        let data = try encoder.encode(description)
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "INSERT INTO route_descriptions(plan_id,payload) VALUES(?,?) ON CONFLICT(plan_id) DO UPDATE SET payload=excluded.payload", -1, &statement, nil) == SQLITE_OK else { throw failure() }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, description.planID.uuidString, -1, transient)
+        _ = data.withUnsafeBytes { sqlite3_bind_blob(statement, 2, $0.baseAddress, Int32(data.count), transient) }
+        guard sqlite3_step(statement) == SQLITE_DONE else { throw failure() }
+    }
+
+    func deleteRouteDescription(planID: UUID) throws {
+        try execute("DELETE FROM route_descriptions WHERE plan_id='\(planID.uuidString)'")
+    }
+
+    func routeDescription(planID: UUID) throws -> SavedRouteDescription? {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT payload FROM route_descriptions WHERE plan_id=?", -1, &statement, nil) == SQLITE_OK else { throw failure() }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, planID.uuidString, -1, transient)
+        let result = sqlite3_step(statement)
+        if result == SQLITE_DONE { return nil }
+        guard result == SQLITE_ROW, let bytes = sqlite3_column_blob(statement, 0) else { throw failure() }
+        return try decoder.decode(SavedRouteDescription.self, from: Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, 0))))
     }
 
     func all() throws -> [SavedRecord] {

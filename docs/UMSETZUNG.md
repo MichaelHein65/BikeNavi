@@ -1,10 +1,10 @@
 # Umsetzungsstand – Version 0.4.0
 
-Stand: 9. Oktober 2026. Dies ist eine Entwicklungsfassung vor 1.0, keine für lange Touren freigegebene Navigations-App.
+Stand: 11. Oktober 2026. Dies ist eine Entwicklungsfassung vor 1.0, keine für lange Touren freigegebene Navigations-App.
 
-## Entwicklungsstand nach 0.4.0 (9. Oktober 2026)
+## Entwicklungsstand nach 0.4.0 (11. Oktober 2026)
 
-Unveröffentlichte Weiterentwicklung bei **0.4.0 (4)**, bereits auf Pi und iPhone installiert. Dokumentation, öffentliche Galerie und Quellstand gemeinsam gepflegt; bestehender Release-Tag bleibt unverändert. **183 Backend-, 136 Swift-Kerntests und vier native UIKit-/MapLibre-Tests** erfolgreich. Relevante Simulator-UI-Abläufe, Simulator-Testbuild, signierter Gerätebuild und Signaturprüfung erfolgreich. Automatischer Start der letzten Gerätefassung wegen gesperrtem iPhone abgewiesen; nach Entsperren manuell öffnen. Kein neuer Feldtest. [Einzelprüfungen und Bereitstellung](VERSIONIERUNG.md).
+Unveröffentlichte Weiterentwicklung bei **0.4.0 (4)**, bereits auf Pi und iPhone installiert. Dokumentation, öffentliche Galerie und Quellstand gemeinsam gepflegt; bestehender Release-Tag bleibt unverändert. **223 Backend- und 147 Swift-Kerntests** sowie die dokumentierten nativen UIKit-/MapLibre- und relevanten Simulator-UI-Prüfungen erfolgreich. Simulator-Testbuild, signierter Gerätebuild und Signaturprüfung erfolgreich. Automatischer Start der letzten Gerätefassung wegen gesperrtem iPhone abgewiesen; nach Entsperren manuell öffnen. Anschließend kurze deutsche Routenbeschreibungen und Symbole als reine Backendänderung installiert; gespeicherte Berichte über **Neu erstellen** aktualisieren. Kein neuer Feldtest. [Einzelprüfungen und Bereitstellung](VERSIONIERUNG.md).
 
 - Blogstationen mit GPS-Fotos nachtragen, bearbeiten und umordnen; lokale Speicherung und revisionsgeprüfter Abgleich.
 - Bild-/Ortsanalyse und Recherche in lokalen Sprachen, geschützte vorhandene Fassungen bei KI-Ausfall, abwechslungsreiche Texte mit weniger Wiederholungen und sicherer Überschriftenbereinigung.
@@ -12,6 +12,9 @@ Unveröffentlichte Weiterentwicklung bei **0.4.0 (4)**, bereits auf Pi und iPhon
 - Unveränderte Routenlinie bei GPS-Aufzeichnungsupdates erhalten. Ob dies die gemeldeten Feldausfälle vollständig erklärt, bleibt offen.
 - Belagsabhängige Fahrzeitschätzung nach gemeinsam gewählten Geschwindigkeiten und ETA direkt hinter Fahrzeit. Pausen und fehlender frischer Standort werden berücksichtigt; zukünftige Pausen nicht prognostiziert.
 - Automatische Bildschirmsperre während aktiver Navigation im Vordergrund verhindern und nach Rückkehr erneut setzen; Pause/Ende geben die normale Sperrzeit frei.
+- Eigenständige Routenbeschreibung vor der Tour mit vollständiger Abschnittsanalyse, präzisen Untergrund-/Höhenhinweisen, topografischer Übersicht, kurzen deutschen Ortskarten und Commons-Bildern; passende Symbole und Offline-HTML-Export. Beim Öffnen an die aktuelle Routenfassung gebunden, getrennt vom Blog nach der Fahrt.
+- Recherchierte Highlights mit einem Tippen als passend geordnete Zwischenziele einfügen. Währenddessen weiterlesen und weitere Orte auswählen; lokale Speicherung vor asynchroner Neuberechnung, ausstehende Ziele und Scrollposition erhalten.
+- Gehaltvolle Bloghintergründe mit drei bis vier Sätzen je Fotostation, fester Stationszahl im Schreibformat und begrenztem gemeinsamen Schreib-/Redaktionsbudget.
 
 ## Releaseprüfung 0.4.0 (7. Oktober 2026)
 
@@ -19,6 +22,7 @@ Unveröffentlichte Weiterentwicklung bei **0.4.0 (4)**, bereits auf Pi und iPhon
 
 ## Implementiert
 
+- Routenbeschreibung vor dem Start, recherchierte Highlights als Zwischenziele und Neuberechnung im Hintergrund. [Bedienung, Bildquellen und Grenzen](ROUTENBESCHREIBUNG.md).
 - Tourtagebuch mit offline gespeicherten Foto-/Notizorten, Übertragung zum Pi während einer Fahrt, Quellenrecherche, optionaler KI-Websuche und buntem portablem HTML-Blog mit Export. [Ablauf und Grenzen](BLOG.md).
 
 - Xcode-Projekt für iPhone ab iOS 17 mit SwiftUI und MapLibre Native.
@@ -45,7 +49,7 @@ Unveröffentlichte Weiterentwicklung bei **0.4.0 (4)**, bereits auf Pi und iPhon
 
 - Eigene Protomaps-Kartenpakete auf dem Pi sind noch einzurichten. Die Online-Karte funktioniert; der Offline-Downloadcode ist vorhanden, aber bis zur Einrichtung einer erlaubten eigenen Quelle deaktiviert.
 - Gespeicherte Orte liegen derzeit nur auf dem iPhone; ihr zentraler Abgleich mit dem Pi folgt.
-- Touristisches Suchen nach Namen funktioniert. Eigene POI-Kategorien, eine Liste entlang der Strecke und der zusätzliche Fahrweg zu einem POI folgen noch.
+- Touristisches Suchen nach Namen und recherchierte Highlights im Umfeld der geplanten Strecke funktionieren. Eigene POI-Kategorien, eine vollständige kuratierte Streckenliste und eine vorab berechnete Abstecherlänge je Vorschlag folgen noch. Die vorhandene Auswahl berechnet die gesamte Route erst nach dem Einfügen neu; sie bestätigt keine reale Zufahrt.
 - Für ältere, serverseitig berechnete Routen gilt: Die öffentliche ORS-API unterstützt keine frei definierbaren Belagsgewichtungen. „Befestigte Wege bevorzugen“ vergleicht die erhaltene Fahrradroute mit einer Rennradroute und bewertet bekannte unbefestigte bzw. unbekannte Abschnitte schlechter. Das ist keine vollständige Suche über alle möglichen Wege.
 - „Nur bekannte befestigte Wege“ erlaubt nach Michaels Vorgabe insgesamt maximal 100 m unbefestigte oder unbekannte Abschnitte über die gesamte Route (nicht je Abschnitt oder Zwischenziel). Größere Abweichungen werden verworfen; akzeptierte Abweichungen werden in den Routenhinweisen genannt. Vollständig fehlende Belagsdaten bleiben ein Ablehnungsgrund. Befestigt umfasst auch Pflaster und ist keine Garantie für Asphalt oder den tatsächlichen Zustand vor Ort.
 - Für den Legacy-Server gilt: Gravel verwendet zunächst das Tourenradprofil. E-Unterstützung wählt beim Tourenrad das ORS-E-Bike-Profil; Kombinationen für alle Fahrradarten sind noch zu verfeinern.
@@ -68,7 +72,7 @@ Unveröffentlichte Weiterentwicklung bei **0.4.0 (4)**, bereits auf Pi und iPhon
 
 ## Nächster fachlicher Schritt
 
-Eine bekannte kurze Tour auf einem echten iPhone planen und abfahren. Parallel die gewünschte erste Kartenregion für den Pi festlegen und daraus die vollständigen Offline-Pakete aufbauen. Danach touristische POIs entlang der Route ergänzen und die Wegpräferenzen mit vertrauten Asphalt-, Schotter- und Waldstrecken bewerten.
+Eine bekannte kurze Tour auf einem echten iPhone planen und abfahren. Routenbeschreibung, Highlight-Auswahl und tatsächliche Zufahrten dabei am Gerät prüfen. Parallel die gewünschte erste Kartenregion für den Pi festlegen und daraus vollständige Offline-Pakete aufbauen. POI-Kategorien und vorab berechnete Abstecher vertiefen und die Wegpräferenzen mit vertrauten Asphalt-, Schotter- und Waldstrecken bewerten.
 
 ### Bike-Messungen je Fahrt
 

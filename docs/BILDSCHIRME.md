@@ -15,6 +15,8 @@ Am **9. Oktober 2026** wurden **01** (belagsabhängige Fahrzeit), **12/14** (ETA
 
 ## Planung
 
+Die drei Aktionen am unteren Kartenrand haben eine gemeinsame Höhe und Kapsel-Form. Höhenprofil als kompakte Symboltaste, **Beschreibung** und **Tour starten** als gleich breite Texttasten; abgestufte Grüntöne verdeutlichen die Hauptaktion. Bild 01 am 11. Oktober 2026 mit öffentlichen Beispieldaten erneuert, per Simulator-UI-Lauf erfasst und visuell geprüft.
+
 | Tour planen | Karte mit eingeklappten Daten |
 | --- | --- |
 | <img src="images/01-planen.png" width="300" alt="Planungsansicht mit einer Heidelberger Beispielroute"> | <img src="images/02-karte.png" width="300" alt="Große Karte mit eingeklapptem Tourdatenbereich"> |
@@ -199,3 +201,37 @@ Die Blogaufnahmen 30–37 wurden für Release 0.4.0 (4) mit dem aktualisierten �
 | <img src="images/39-blog-station-hinzufuegen.png" width="250" alt="Nachträgliche Station aus einem GPS-Foto hinzufügen"> | <img src="images/40-blog-station-position.png" width="250" alt="Synthetischer GPS-Fotonachtrag wird nach dem ersten Beispielort eingefügt"> | <img src="images/41-blog-station-bearbeiten.png" width="250" alt="Position einer bearbeiteten Beispielstation an den Anfang ändern"> |
 
 Reproduzierbar mit `seed_gallery.py --device UUID --elevation --blog docs/examples/heidelberg-blog.html --journal` und `DocumentationScreenshotsTests/testBlogStationInsertEditOrderAndOfflineRestart`. Der Test verwendet den echten System-Fotopicker im Simulator. GPS-Extraktion, fehlende/ungültige Bildkoordinaten, alte Ortsdaten und revisionsgeprüfter Abgleich werden zusätzlich durch Swift-/Backendtests geprüft. Reale iPhone-/iCloud-Fotoauswahl bleibt separat zu prüfen; kein Feldtest.
+
+## Routenbeschreibung vor der Tour
+
+**01** wurde mit der neuen Taste **Beschreibung** mit Funkel-Symbol in der Planung erneuert. Sie öffnet eine gespeicherte Beschreibung der aktuellen Routenfassung; für neue oder geänderte Routen startet mit Pi direkt die Erstellung. **44** zeigt den Einstieg ohne eingerichteten Pi, **45** die offline gelesene Beschreibung der gekennzeichneten öffentlichen Heidelberger Planung mit Strecken-/Anstiegssymbolen. **46** zeigt kompakte Belags-/Steigungshinweise mit Symbolen und Streckenpositionen. **47** zeigt ein eingebettetes Commons-Bild mit Quellen-/Lizenzhinweis. Die Erstellung verwendet echte Wikipedia-/Commons-/OpenTopoMap-Abfragen und einen ausdrücklich gekennzeichneten Vorlagentext; ohne KI nur kurze deutsche Ortsauszüge, kein Feldtest.
+
+| Einstieg vor dem Start | Gespeicherte Routenbeschreibung |
+| --- | --- |
+| <img src="images/44-routenbeschreibung.png" width="300" alt="Eigenständige Routenbeschreibung vor der Tour mit Hinweis auf die benötigte Pi-Verbindung"> | <img src="images/45-routenbeschreibung-vorschau.png" width="300" alt="Offline gelesene Routenbeschreibung einer öffentlichen Heidelberger Beispielplanung"> |
+
+| Streckenhinweise | Bild am Wegesrand |
+| --- | --- |
+| <img src="images/46-routenbeschreibung-abschnitt.png" width="300" alt="Kompakte Hinweise mit Symbolen für Untergrund, Anstieg und Abfahrt im öffentlichen Beispiel"> | <img src="images/47-routenbeschreibung-bild.png" width="300" alt="Eingebettetes Commons-Bild zur Pädagogischen Hochschule Heidelberg mit Quellen- und Lizenzangaben"> |
+
+Die Simulatorprüfung verwendet einen separaten lokalen HTTPS-Testserver und öffentliche Beispieldaten. Geprüft werden Erstellung durch die Planungstaste, Fortschritt, Schließen der Ansicht/App während des Pi-Auftrags, Wiederaufnahme nach Neustart, Speicherung und Lesen ohne Pi-Zugang sowie der Hinweis nach Änderung des Tourtitels. Der echte Pi wird nicht angesprochen; kein iPhone-Deployment. Quelle und Lizenz stehen bei jedem Bild im HTML, zusätzlich Wikipedia-Auszüge unter CC BY-SA 4.0. [Portables Beispiel](examples/heidelberg-routenbeschreibung.html) · [Bedienung und Grenzen](ROUTENBESCHREIBUNG.md).
+
+Zur Reproduktion den separaten Dokumentationssimulator mit `seed_gallery.py --device UUID --elevation` vorbereiten und lokale Beispieldaten in `route_descriptions` zurücksetzen. `tests/fixtures/route_description_server.py` mit temporärem, ausschließlich im Testsimulator vertrautem TLS-Zertifikat auf `https://127.0.0.1:18444` starten. Danach `RouteDescriptionUITests` ausführen und die `Gallery-01`-/`Gallery-44`–`47`-Anhänge exportieren. Server, temporäre Datenbank, Zertifikat und Protokolle bleiben außerhalb von Git. Ohne Testserver nur `testPreTourDescriptionWithoutPiAndPlanningScreenshot` ausführen.
+
+| Topografische Übersicht | Geänderte Route ohne alten Text | Neue Beschreibung zur aktuellen Fassung |
+| --- | --- | --- |
+| <img src="images/51-routenbeschreibung-topografie.png" width="250" alt="Geplante Heidelberger Route und nummerierte Wegpunkte auf eingebettetem OpenTopoMap-Hintergrund"> | <img src="images/52-routenbeschreibung-neue-route.png" width="250" alt="Nach Änderung des öffentlichen Planungssnapshots wird der vorige Routentext nicht mehr angezeigt"> | <img src="images/53-routenbeschreibung-aktuelle-route.png" width="250" alt="Automatisch erzeugte Beschreibung mit dem geänderten Titel der öffentlichen Beispielplanung"> |
+
+**51** zeigt die topografische Übersicht offline nach App-Neustart; Quellen- und Lizenzangaben sind im HTML direkt unter der Karte eingebettet. **52** zeigt den Einstieg nach geänderter Planung ohne eine unpassende alte Vorschau. **53** zeigt die anschließend zur aktuellen Fassung neu erzeugte Beschreibung. Topografie-/Offline-Lauf und fokussierter Wechseltest `testChangedRouteOpensFreshDescriptionInsteadOfPreviousText` mit lokalem HTTPS-Testserver erfolgreich; alle Bilder visuell geprüft. Der neue Titel dient im UI-Lauf als sichtbarer Snapshotwechsel, Änderungen an Geometrie/Route-ID und anderen Plandaten werden zusätzlich im Swift-Kern geprüft. Kein Feldtest.
+
+## Highlights einfügen und weiterlesen
+
+**48** zeigt **Als Zwischenziel einfügen** an einem recherchierten öffentlichen Heidelberger Ort. **49** zeigt zwei ausgewählte Orte während der Neuberechnung: Die Beschreibung bleibt an der gelesenen Stelle geöffnet, weitere Highlight-Aktionen bleiben bedienbar. **50** zeigt beide Ziele zwischen dem unveränderten Beispielstart und -ziel; die Reihenfolge bleibt nach App-Neustart erhalten.
+
+| Ort auswählen | Weiterlesen während der Berechnung | Eingefügte Zwischenziele |
+| --- | --- | --- |
+| <img src="images/48-highlight-einfuegen.png" width="250" alt="Ein recherchierter öffentlicher Heidelberger Ort lässt sich mit einem Tippen einplanen"> | <img src="images/49-highlights-hintergrund.png" width="250" alt="Weitere Highlights lesen und auswählen, während die Route im Hintergrund aktualisiert wird"> | <img src="images/50-highlight-zwischenziele.png" width="250" alt="Zwei neue Zwischenziele zwischen unverändertem Beispielstart und Beispielziel"> |
+
+Der Simulatorlauf `RouteDescriptionUITests/testHighlightsInsertAndRouteInBackgroundWithoutLeavingTheArticle` verwendet echte Wikipedia-Ortsrecherche und einen kontrollierten Router mit 25 Sekunden Verzögerung, damit Auswahlen während der Berechnung geprüft werden können. Seine Verbindungen sind ausdrücklich synthetisch, keine echte Straßenroute oder bestätigte POI-Zufahrt. Kein ORS-, Pi-, iPhone- oder Feldtest. Geprüft sind zwei Einfügungen ohne Verlassen der Beschreibung, erhaltene Start-/Zielpunkte, nicht modale Rückmeldung, fertig berechneter letzter Planungsstand und Speicherung nach Neustart. Die Bilder wurden visuell kontrolliert.
+
+Zur Reproduktion den öffentlichen Bestand und `route_descriptions` wie oben zurücksetzen, denselben HTTPS-Testserver starten und gezielt diesen Test ausführen. Der Testserver enthält seit dieser Erweiterung einen ausdrücklich synthetischen Router und ruft keine externen Routing-/Wegenetzdienste auf.

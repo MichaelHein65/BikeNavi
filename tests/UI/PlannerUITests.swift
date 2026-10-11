@@ -886,3 +886,177 @@ final class BlogProgressUITests: XCTestCase {
         app.terminate()
     }
 }
+
+final class RouteDescriptionUITests: XCTestCase {
+    private func launch() -> XCUIApplication {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://beispiel.invalid"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launchEnvironment["BIKENAVI_PLAN_ID"] = "123C7446-B126-41E7-82E3-64D572AFA78B"
+        app.launch()
+        XCTAssertTrue(app.buttons["togglePlanningDetails"].waitForExistence(timeout: 20))
+        if !app.buttons["routeDescription"].exists { app.buttons["togglePlanningDetails"].tap() }
+        XCTAssertTrue(app.buttons["routeDescription"].waitForExistence(timeout: 5))
+        return app
+    }
+    private func capture(_ app: XCUIApplication, _ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Gallery-" + name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+    func testPreTourDescriptionWithoutPiAndPlanningScreenshot() {
+        let app = launch()
+        XCTAssertTrue(app.textFields["tourName"].value as? String == "Heidelberg · Höhenbeispiel")
+        _ = XCTWaiter.wait(for: [XCTestExpectation(description: "Map tiles and route camera")], timeout: 12)
+        capture(app, "01-planen")
+        app.buttons["routeDescription"].tap()
+        XCTAssertTrue(app.buttons["generateRouteDescription"].waitForExistence(timeout: 5))
+        capture(app, "44-routenbeschreibung")
+        app.buttons["generateRouteDescription"].tap()
+        XCTAssertTrue(app.staticTexts["routeDescriptionError"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["routeDescriptionError"].label.contains("Pi"))
+        XCTAssertFalse(app.buttons["generateBlog"].exists)
+    }
+    func testSavedDescriptionOfflineRestartAndStalePlan() {
+        let app = launch()
+        app.terminate()
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://127.0.0.1:18444"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = "example-description-token-" + String(repeating: "x", count: 40)
+        app.launch()
+        XCTAssertTrue(app.buttons["routeDescription"].waitForExistence(timeout: 20))
+        app.buttons["routeDescription"].tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "routeDescriptionProgress").firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Fertig"].tap()
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["routeDescription"].waitForExistence(timeout: 20))
+        app.buttons["routeDescription"].tap()
+        XCTAssertTrue(app.webViews["routeDescriptionHTML"].waitForExistence(timeout: 90))
+        app.terminate()
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://beispiel.invalid"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launch()
+        XCTAssertTrue(app.buttons["routeDescription"].waitForExistence(timeout: 20))
+        app.buttons["routeDescription"].tap()
+        XCTAssertTrue(app.webViews["routeDescriptionHTML"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.webViews.staticTexts["Heidelberg · Höhenbeispiel"].waitForExistence(timeout: 10))
+        capture(app, "45-routenbeschreibung-vorschau")
+        let overview = app.webViews.images.matching(NSPredicate(format: "label BEGINSWITH %@", "Topografische Streckenübersicht")).firstMatch
+        for _ in 0..<10 {
+            if overview.isHittable && overview.frame.minY > app.webViews.firstMatch.frame.minY + 10 && overview.frame.maxY < app.webViews.firstMatch.frame.maxY - 35 { break }
+            let web = app.webViews.firstMatch
+            web.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75)).press(forDuration: 0.05,
+                thenDragTo: web.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.60)))
+        }
+        XCTAssertTrue(overview.isHittable)
+        capture(app, "51-routenbeschreibung-topografie")
+        app.webViews.firstMatch.swipeUp()
+        app.webViews.firstMatch.swipeUp()
+        capture(app, "46-routenbeschreibung-abschnitt")
+        let photo = app.webViews.images.matching(NSPredicate(format: "NOT (label CONTAINS %@) AND NOT (label BEGINSWITH %@)", "Streckenübersicht", "Höhenprofil")).firstMatch
+        for _ in 0..<36 {
+            if photo.isHittable && photo.frame.minY > app.webViews.firstMatch.frame.minY + 15 && photo.frame.maxY < app.webViews.firstMatch.frame.maxY - 60 { break }
+            let web = app.webViews.firstMatch
+            web.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75)).press(forDuration: 0.05,
+                thenDragTo: web.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55)))
+        }
+        XCTAssertTrue(photo.isHittable)
+        capture(app, "47-routenbeschreibung-bild")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["routeDescription"].waitForExistence(timeout: 20))
+        app.buttons["routeDescription"].tap()
+        XCTAssertTrue(app.webViews["routeDescriptionHTML"].waitForExistence(timeout: 10))
+        app.buttons["Fertig"].tap()
+        let name = app.textFields["tourName"]
+        name.tap(); name.typeText(" · geändert\n")
+        app.buttons["routeDescription"].tap()
+        XCTAssertFalse(app.webViews["routeDescriptionHTML"].exists)
+        XCTAssertFalse(app.staticTexts["routeDescriptionStale"].exists)
+        XCTAssertTrue(app.buttons["generateRouteDescription"].exists)
+        capture(app, "52-routenbeschreibung-neue-route")
+        app.buttons["Fertig"].tap()
+        app.terminate()
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://127.0.0.1:18444"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = "example-description-token-" + String(repeating: "x", count: 40)
+        app.launch()
+        XCTAssertTrue(app.buttons["routeDescription"].waitForExistence(timeout: 20))
+        app.buttons["routeDescription"].tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "routeDescriptionProgress").firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.webViews["routeDescriptionHTML"].exists)
+        XCTAssertTrue(app.webViews["routeDescriptionHTML"].waitForExistence(timeout: 90))
+        XCTAssertTrue(app.webViews.staticTexts["Heidelberg · Höhenbeispiel · geändert"].waitForExistence(timeout: 15))
+    }
+    func testChangedRouteOpensFreshDescriptionInsteadOfPreviousText() {
+        let app = launch()
+        app.terminate()
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://127.0.0.1:18444"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = "example-description-token-" + String(repeating: "x", count: 40)
+        app.launch()
+        XCTAssertTrue(app.buttons["routeDescription"].waitForExistence(timeout: 20))
+        let oldTitle = app.textFields["tourName"].value as! String
+        app.buttons["routeDescription"].tap()
+        XCTAssertTrue(app.webViews.staticTexts[oldTitle].waitForExistence(timeout: 90))
+        app.buttons["Fertig"].tap()
+        let name = app.textFields["tourName"]
+        name.tap(); name.typeText(" · neue Route\n")
+        let newTitle = name.value as! String
+        XCTAssertNotEqual(newTitle, oldTitle)
+        app.buttons["routeDescription"].tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "routeDescriptionProgress").firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.webViews["routeDescriptionHTML"].exists)
+        XCTAssertTrue(app.webViews.staticTexts[newTitle].waitForExistence(timeout: 90))
+        XCTAssertFalse(app.webViews.staticTexts[oldTitle].exists)
+        capture(app, "53-routenbeschreibung-aktuelle-route")
+    }
+    func testHighlightsInsertAndRouteInBackgroundWithoutLeavingTheArticle() {
+        let app = launch()
+        app.terminate()
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://127.0.0.1:18444"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = "example-description-token-" + String(repeating: "x", count: 40)
+        app.launch()
+        XCTAssertTrue(app.buttons["routeDescription"].waitForExistence(timeout: 20))
+        app.buttons["routeDescription"].tap()
+        XCTAssertTrue(app.webViews["routeDescriptionHTML"].waitForExistence(timeout: 90))
+        let web = app.webViews["routeDescriptionHTML"]
+        func show(_ element: XCUIElement) {
+            for _ in 0..<50 {
+                if element.isHittable && element.frame.midY > web.frame.minY + 30 && element.frame.midY < web.frame.maxY - 30 { return }
+                web.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8)).press(forDuration: 0.05,
+                    thenDragTo: web.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
+            }
+        }
+        let first = web.links.matching(identifier: "Als Zwischenziel einfügen").element(boundBy: 0)
+        show(first)
+        XCTAssertTrue(first.isHittable)
+        capture(app, "48-highlight-einfuegen")
+        first.tap()
+        XCTAssertTrue(app.staticTexts["routeHighlightInserted"].waitForExistence(timeout: 5))
+        XCTAssertTrue(web.exists)
+        XCTAssertFalse(app.alerts.firstMatch.exists)
+        let second = web.links.matching(identifier: "Als Zwischenziel einfügen").element(boundBy: 1)
+        show(second)
+        XCTAssertTrue(second.isHittable)
+        second.tap()
+        XCTAssertTrue(web.exists)
+        XCTAssertFalse(app.alerts.firstMatch.exists)
+        let progress = app.descendants(matching: .any).matching(identifier: "routeHighlightRouting").firstMatch
+        XCTAssertTrue(progress.waitForExistence(timeout: 5))
+        capture(app, "49-highlights-hintergrund")
+        let finished = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: progress)
+        XCTAssertEqual(XCTWaiter.wait(for: [finished], timeout: 60), .completed)
+        XCTAssertFalse(app.alerts.firstMatch.exists)
+        app.buttons["Fertig"].tap()
+        XCTAssertTrue(app.staticTexts["+2"].waitForExistence(timeout: 5))
+        app.buttons["waypoints"].tap()
+        XCTAssertTrue(app.staticTexts["Start am Neckar"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Ziel der Beispieltour"].exists)
+        capture(app, "50-highlight-zwischenziele")
+        app.buttons["Fertig"].tap()
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["+2"].waitForExistence(timeout: 20))
+    }
+
+}

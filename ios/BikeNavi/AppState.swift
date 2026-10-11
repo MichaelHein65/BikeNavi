@@ -306,6 +306,142 @@ final class AppState: ObservableObject {
     }
     let location = LocationService()
     let store: LocalStore
+    @Published var routeDescriptions: [UUID: SavedRouteDescription] = [:]
+    private var routeDescriptionTasks: [UUID: Task<Void, Never>] = [:]
+
+    func insertRouteDescriptionHighlight(_ id: UUID) async throws -> String {
+        guard let report = routeDescriptions[plan.id]?.report, report.planID == plan.id,
+              let highlight = report.highlights?.first(where: { $0.id == id }) else {
+            throw APIError(status: 0, message: "Dieses Highlight gehört nicht zur geöffneten Planung.")
+        }
+        while true {
+            let snapshot = plan
+            guard snapshot.id == report.planID else {
+                throw APIError(status: 0, message: "Die geöffnete Planung wurde gewechselt.")
+            }
+            var referencePlan = snapshot
+            referencePlan.route = routeDescriptions[snapshot.id]?.reportRoute ?? snapshot.route
+            let referenceIndices = routeDescriptions[snapshot.id]?.reportRoute != nil ? routeDescriptions[snapshot.id]?.reportWaypointIndices : nil
+            let updated = try await Task.detached(priority: .userInitiated) { [referencePlan] in
+                try RouteDescriptionInsertion.inserting(highlight, into: referencePlan, referenceIndices: referenceIndices)
+            }.value
+            guard plan.id == snapshot.id else { throw APIError(status: 0, message: "Die geöffnete Planung wurde gewechselt.") }
+            // A simultaneous selection or routing response must never lose another goal.
+            if plan.waypoints != snapshot.waypoints || plan.profile != snapshot.profile || plan.route?.id != snapshot.route?.id { continue }
+            var latest = updated
+            latest.title = plan.title
+            latest.usesAutomaticTitle = plan.usesAutomaticTitle
+            try store.save(latest)
+            plan = latest
+            mapFocus = highlight.coordinate
+            invalidateRoute(showErrorAlert: false)
+            return highlight.title
+        }
+    }
+
+    func openRouteDescription() async throws {
+        resumeRouteDescription()
+        guard api != nil, !calculating, let request = RouteDescriptionRequest(plan: plan) else { return }
+        let id = plan.id
+        let fingerprint = try request.fingerprint
+        guard routeDescriptions[id]?.needsCreationOnOpen(plan) ?? true else { return }
+        // Finish observing an older accepted Pi job before submitting this route.
+        if let task = routeDescriptionTasks[id] { await task.value }
+        try Task.checkCancellation()
+        guard plan.id == id, !calculating,
+              (try? RouteDescriptionRequest(plan: plan)?.fingerprint) == fingerprint,
+              routeDescriptions[id]?.needsCreationOnOpen(plan) ?? true else { return }
+        try startRouteDescription()
+    }
+
+    func startRouteDescription() throws {
+        guard let api else { throw APIError(status: 0, message: "Bitte zuerst den Pi unter Einstellungen verbinden.") }
+        guard !calculating, let request = RouteDescriptionRequest(plan: plan) else {
+            throw APIError(status: 0, message: "Bitte zuerst eine Route mit Start und Ziel berechnen.")
+        }
+        let id = request.planID
+        guard routeDescriptionTasks[id] == nil else { return }
+        let previous = try routeDescriptions[id] ?? store.routeDescription(planID: id)
+        let fingerprint = try request.fingerprint
+        if let previous, previous.job.running { resumeRouteDescription(); return }
+        if let previous, previous.job.phase == "interrupted", previous.fingerprint == fingerprint {
+            followRouteDescription(previous, api: api, request: nil)
+            return
+        }
+        let saved = SavedRouteDescription(planID: id, routeID: request.route.id, fingerprint: fingerprint,
+            job: RouteDescriptionJob(generationID: UUID(), planID: id, phase: "analysing"),
+            report: previous?.report, reportFingerprint: previous?.reportFingerprint,
+            requestRoute: request.route, reportRoute: previous?.reportRoute,
+            requestWaypointIndices: request.route.waypointIndices?.count == request.waypoints.count && Set(request.waypoints.map(\.id)).count == request.waypoints.count
+                ? Dictionary(uniqueKeysWithValues: zip(request.waypoints.map { $0.id.uuidString }, request.route.waypointIndices!)) : nil,
+            reportWaypointIndices: previous?.reportWaypointIndices)
+        try store.saveRouteDescription(saved)
+        routeDescriptions[id] = saved
+        followRouteDescription(saved, api: api, request: request)
+    }
+
+    func resumeRouteDescription() {
+        let id = plan.id
+        do {
+            if routeDescriptions[id] == nil { routeDescriptions[id] = try store.routeDescription(planID: id) }
+            if plan.route == nil, !calculating, let saved = routeDescriptions[id], saved.reportRoute != nil,
+               plan.waypoints.contains(where: { point in saved.report?.highlights?.contains(where: { $0.id == point.id }) == true }) {
+                invalidateRoute(showErrorAlert: false)
+            }
+            guard let saved = routeDescriptions[id], saved.job.running || saved.job.phase == "interrupted", let api, routeDescriptionTasks[id] == nil else { return }
+            followRouteDescription(saved, api: api, request: nil)
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    private func followRouteDescription(_ initial: SavedRouteDescription, api: APIClient, request: RouteDescriptionRequest?) {
+        let id = initial.planID
+        routeDescriptionTasks[id] = Task { @MainActor in
+            defer { routeDescriptionTasks[id] = nil }
+            var saved = initial
+            do {
+                var job = initial.job
+                if let request { job = try await api.startRouteDescription(request, generationID: initial.job.generationID) }
+                else { job = try await api.routeDescriptionJob(initial.job.generationID) }
+                while true {
+                    guard job.planID == id, job.generationID == initial.job.generationID else {
+                        throw APIError(status: 502, message: "Der Pi hat eine Beschreibung zu einer anderen Planung geliefert.")
+                    }
+                    saved.job = job
+                    if job.phase == "completed" {
+                        guard let report = job.report, report.planID == id,
+                              initial.routeID == nil || report.routeID == initial.routeID else {
+                            throw APIError(status: 502, message: "Die fertige Routenbeschreibung ist unvollständig.")
+                        }
+                        saved.report = report
+                        saved.reportFingerprint = initial.fingerprint
+                        saved.reportRoute = initial.requestRoute
+                        saved.requestRoute = nil
+                        saved.reportWaypointIndices = initial.requestWaypointIndices
+                        saved.requestWaypointIndices = nil
+                        saved.job.report = nil
+                    }
+                    try Task.checkCancellation()
+                    try store.saveRouteDescription(saved)
+                    routeDescriptions[id] = saved
+                    if !job.running { return }
+                    try await Task.sleep(for: .seconds(2))
+                    job = try await api.routeDescriptionJob(initial.job.generationID)
+                }
+            } catch {
+                if Task.isCancelled { return }
+                saved.report = initial.report
+                saved.reportFingerprint = initial.reportFingerprint
+                saved.reportRoute = initial.reportRoute
+                saved.requestRoute = initial.requestRoute
+                saved.reportWaypointIndices = initial.reportWaypointIndices
+                saved.requestWaypointIndices = initial.requestWaypointIndices
+                saved.job.phase = (error as? APIError).map { $0.status == 0 ? "interrupted" : "failed" } ?? "interrupted"
+                saved.job.message = error.localizedDescription
+                try? store.saveRouteDescription(saved)
+                routeDescriptions[id] = saved
+            }
+        }
+    }
     private var routeTask: Task<Void, Never>?
     private var routeCalculationID: UUID?
     private var rerouteTask: Task<Void, Never>?
@@ -649,7 +785,7 @@ final class AppState: ObservableObject {
             invalidateRoute()
         }
     }
-    func invalidateRoute() {
+    func invalidateRoute(showErrorAlert: Bool = true) {
         cancelElevation()
         planningError = nil
         preparationTask?.cancel()
@@ -663,14 +799,14 @@ final class AppState: ObservableObject {
         refreshPlanName()
         guard plan.canCalculateRoute else { calculating = false; return }
         routeTask = Task {
-            do { try await Task.sleep(for: .milliseconds(650)); await calculateRoute() } catch { }
+            do { try await Task.sleep(for: .milliseconds(650)); await calculateRoute(showErrorAlert: showErrorAlert) } catch { }
         }
     }
     private func reportPlanning(id: UUID, done: Int, total: Int) {
         guard routeCalculationID == id else { return }
         localRoutingStatus = done < total ? "Wegedaten: \(done) von \(total) Bereichen geladen" : "Das iPhone berechnet die Route …"
     }
-    func calculateRoute() async {
+    func calculateRoute(showErrorAlert: Bool = true) async {
         guard plan.canCalculateRoute else { return }
         cancelElevation()
         preparationTask?.cancel(); preparationID = nil; preparingLocalRouting = false
@@ -711,7 +847,7 @@ final class AppState: ObservableObject {
                 default: message = error.localizedDescription
                 }
                 planningError = message
-                errorMessage = message
+                if showErrorAlert { errorMessage = message }
             }
         }
     }
@@ -775,6 +911,9 @@ final class AppState: ObservableObject {
             deleted.mutationID = UUID()
             try store.put(deleted)
             try store.deleteBlogData(rideID: record.id)
+            routeDescriptionTasks[record.id]?.cancel()
+            routeDescriptions[record.id] = nil
+            try store.deleteRouteDescription(planID: record.id)
             if plan.id == record.id {
                 cancelElevation()
                 routeTask?.cancel()
