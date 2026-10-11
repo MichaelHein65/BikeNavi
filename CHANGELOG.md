@@ -4,6 +4,12 @@ Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release
 
 ## Unveröffentlicht
 
+### BikeNavi auf GitHub entdecken (11.10.2026)
+
+- Clay-Werbetafel als großer Einstieg in der README; Schautafel und achtseitigen Tourleitfaden mit sichtbaren Vorschauen und direkten PDF-Links ergänzen. Eigener Präsentationsbereich führt durch Planung, Navigation, Bike-Daten, Tagebuch, Blog und Auswertung.
+- Drei vom Projektinhaber ausdrücklich zur Veröffentlichung freigegebene Dokumente zum echten Tourbeispiel Tribunj–Skradin aufnehmen. Clay-Gestaltung als KI-Illustration mit schematischer Karte kennzeichnen; die bildliche Tourplanung als neuen Entwicklungsstand einordnen. Rohaufzeichnungen, Messungsdateien, Zugangsdaten und lokale Artefakte bleiben außerhalb des Repositorys.
+- Prüfung: lokale Dokument- und Bildverweise, drei lesbare PDFs mit 1/1/8 Seiten, Vorschaubilder und unveränderte Kopien der freigegebenen Dokumente kontrolliert. Reine Präsentationsänderung; App-Version 0.4.0 und Build 4 sowie bestehende Release-Einträge unverändert.
+
 ### Dokumentations- und Git-Abgleich (09.10.2026)
 
 - README, Umsetzungsstand, Bedienung, Architektur, Versionierung und öffentliche Bildschirmgalerie auf den tatsächlichen Stand nach 0.4.0 abgestimmt. Unabhängige Blogaufträge statt veralteter Anfragebindung, tatsächliche Installations-/Prüfergebnisse und offene Feldprüfungen dokumentiert. Ältere Release-Einträge bleiben erhalten.

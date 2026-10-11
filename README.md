@@ -1,6 +1,10 @@
-<p align="center"><img src="ios/BikeNavi/Assets.xcassets/AppIcon.appiconset/AppIcon.png" width="144" alt="BikeNavi-Logo: Fahrrad mit Navigationspfeil"></p>
+<p align="center"><a href="docs/praesentation/README.md"><img src="docs/praesentation/werbetafel-clay.png" width="1100" alt="BikeNavi: Deine Tour. Dein Abenteuer. Clay-Werbetafel mit Fotos und schematischer Strecke der Tour Tribunj nach Skradin"></a></p>
 
 # BikeNavi
+
+**Deine Tour. Dein Abenteuer.** Fahrradtouren auf dem iPhone planen, unterwegs navigieren und mit Fotos, Messwerten und einem Reiseblog in Erinnerung behalten.
+
+**[BikeNavi entdecken →](docs/praesentation/README.md)** · **[Werbetafel als PDF](docs/praesentation/BikeNavi-Werbetafel-Clay-Tribunj-Skradin-A2.pdf)** · **[Alle Funktionen auf einer Schautafel](docs/praesentation/BikeNavi-Schautafel-Tribunj-Skradin-A2.pdf)** · **[Tourleitfaden lesen](docs/praesentation/BikeNavi-Tourleitfaden-Tribunj-Skradin-A4.pdf)**
 
 **Version 0.4.0 · iOS-Build 4 · Entwicklungsfassung vor 1.0**
 
@@ -9,6 +13,17 @@
 Native iPhone-App für Fahrradtouren mit einem privaten Raspberry-Pi-Backend. Produktentscheidungen stehen in [docs/KONZEPT.md](docs/KONZEPT.md), die technische Struktur in [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) und der tatsächliche Entwicklungsstand in [docs/UMSETZUNG.md](docs/UMSETZUNG.md).
 
 Aktueller Entwicklungsstand vom **9. Oktober 2026**: stabile Routenaktualisierung, belagsabhängige Fahrzeit, ETA, Wachhalten während Navigation sowie bearbeitbare Blogstationen, sichtbarer Erstellungsfortschritt und überarbeitete Blogtexte. App und Pi sind aktualisiert; diese Weiterentwicklung ist unter **Unveröffentlicht** dokumentiert. Der Release-Tag `v0.4.0` bleibt unverändert. [Prüfergebnisse und Grenzen](docs/UMSETZUNG.md).
+
+## Von Tribunj nach Skradin: BikeNavi erleben
+
+**29,43 km aufgezeichnete Strecke · 16 Fotostationen · 2 h 06 min aufgezeichnete Zeit.** Das vom Projektinhaber für die Veröffentlichung freigegebene Tourbeispiel vom 9. Oktober 2026 zeigt, wie Planung, Navigation, Bike-Daten, Tagebuch und Auswertung zusammenspielen.
+
+| Lust auf die nächste Tour | Alle Funktionen im Überblick | Schritt für Schritt durch die App |
+| --- | --- | --- |
+| [<img src="docs/praesentation/werbetafel-clay.png" width="330" alt="Plastische Clay-Werbetafel mit großen Tourbildern">](docs/praesentation/BikeNavi-Werbetafel-Clay-Tribunj-Skradin-A2.pdf) | [<img src="docs/praesentation/schautafel-vorschau.png" width="330" alt="Schautafel mit Tourablauf, Strecke und Auswertungen">](docs/praesentation/BikeNavi-Schautafel-Tribunj-Skradin-A2.pdf) | [<img src="docs/praesentation/tourleitfaden-vorschau.png" width="155" alt="Erste Seite des achtseitigen Tourleitfadens">](docs/praesentation/BikeNavi-Tourleitfaden-Tribunj-Skradin-A4.pdf) |
+| **[Clay-Werbetafel · A2-PDF](docs/praesentation/BikeNavi-Werbetafel-Clay-Tribunj-Skradin-A2.pdf)** | **[Schautafel · A2-PDF](docs/praesentation/BikeNavi-Schautafel-Tribunj-Skradin-A2.pdf)** | **[Tourleitfaden · 8 Seiten A4](docs/praesentation/BikeNavi-Tourleitfaden-Tribunj-Skradin-A4.pdf)** |
+
+Die **bildliche Tourplanung** ist ein neuer Entwicklungsstand vom 11. Oktober 2026: Routenabschnitte, Beläge, Höhenhinweise und bebilderte Highlights vor der Fahrt entdecken. Die Dokumente erläutern diese Weiterentwicklung zusätzlich zur veröffentlichten App-Version 0.4.0. Die Clay-Tafel ist eine KI-gestaltete Werbeillustration auf Basis der Tourfotos; ihre Karte ist schematisch.
 
 ## Einblicke in die App
 
