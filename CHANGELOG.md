@@ -4,6 +4,27 @@ Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release
 
 ## Unveröffentlicht
 
+### Dokumentation, Git und GitHub abgeglichen (13.10.2026)
+
+- Freie Fahrt, erfolgreiche iPhone-Installation, Prüfstand und offene Feldprüfungen in README, Umsetzungsstand, Bedienung, Architektur, Versionierung und öffentlicher Galerie zusammenführen. Neues Bildschirmbild 54 zeigt ausdrücklich synthetische öffentliche Heidelberg-Beispieldaten. Vorherige Release-Einträge erhalten.
+- Appänderung, iOS-/UI-Tests, generiertes Xcode-Projekt und Dokumentation gemeinsam auf `main` in Git/GitHub versionieren. Geprüfte Test-/Buildnachweise aus dem Funktions- und Installationslauf übernehmen; Projektgenerator reproduzierbar, lokale Dokument-/Bildverweise und vorgesehene Dateien vor Commit kontrolliert. Zugangswerte, private Fahrtaufzeichnungen, Datenbanken, Diagnoseprotokolle und Buildprodukte bleiben außerhalb des Commits.
+- Weiterhin **0.4.0 (4)**; Release-Tag `v0.4.0` und GitHub-Release unverändert. Installation und erfolgreicher App-Start auf Michaels iPhone stehen im folgenden Eintrag. Dieser Git-Abgleich erzeugt keinen weiteren Geräte-/Pi-Deployment-Schritt.
+
+
+### Freie Fahrt auf dem iPhone installiert (13.10.2026)
+
+- Auf Nutzerwunsch die aktuelle App mit freier Fahrt ohne berechnete Strecke als signierte Debug-Fassung auf Michaels iPhone 15 Pro installiert und erfolgreich gestartet. Gerätebuild, strenge Signaturprüfung einschließlich Live-Aktivität und erneute Prüfung des installierten App-Eintrags erfolgreich; App und Live-Aktivität weiterhin **0.4.0 (4)**. Bestehenden App-Zugang beim Start verwenden, keine neue Zugangskonfiguration.
+- Funktions-/Simulatorprüfungen stehen im folgenden Eintrag. Reale GPS-Aufzeichnung, Kompass und Hintergrundbetrieb unterwegs bleiben Geräte-/Feldprüfungen. Kein Pi-Deployment, Git-Tag oder GitHub-Release.
+
+
+### Freie Fahrt ohne gewählte Strecke (13.10.2026)
+
+- **Fahren** startet ohne berechnete Route eine freie Fahrt mit aktueller Karte und GPS-Aufzeichnung. Die Karte bleibt schon während der Standortsuche sichtbar; nach Abbruch oder Zeitlimit lässt sich die Aufnahme direkt erneut starten. Gefahrene Strecke, Tempo und Fahrzeit sowie Pause, Fortsetzen, Blog-Orte, Speichern und Verwerfen bleiben verfügbar. Routenabhängige Hinweise, Reststrecke, ETA, Höhenprofil und Sprachsteuerung entfallen. Die Live-Aktivität kennzeichnet die freie Aufnahme ebenfalls.
+- Freie Fahrten sind eigenständige Fahrtdokumente ohne geplante Route, Wegpunkte oder Planverknüpfung. Eine unvollständige Planung und vorhandene aktive/pausierte Fahrt bleiben erhalten. Beide Fahrtarten prüfen den vorhandenen frischen GPS-Fix sofort mit dem bestehenden Trackfilter und verwenden weiterhin die bisherige Aufzeichnung mit Pausensegmenten, lokaler Speicherung und Wiederherstellung. Datenformat und Backend unverändert.
+- Prüfung: **147 Swift-Kerntests**, fünf native iOS-Tests und sieben Standort-/Fahrtstart-UI-Szenarien erfolgreich. Freie GPS-Aufzeichnung, Pausensegmente, unveränderte Planung, Mehrfachöffnung, Wiederherstellung und Abschluss lokal geprüft; Karte während GPS-Suche, freie Fahrt, Pause/Fortsetzen sowie Speichern unter „Gefahren“ im Simulator geprüft. Simulator-Testbuild und unsignierter Release-Gerätebuild erfolgreich. Erste UI-Läufe scheiterten an sofortiger Tabprüfung bzw. Suche im Standardfilter „Geplant“; Prüfung wartet nun auf den Tabwechsel und öffnet „Gefahren“. Freie Karte behält ihre ausgeblendete Navigationsleiste. Ein Simulator-Ereigniszeitlimit beim Tippen nach Fortsetzen durch Neustart und erfolgreiche Wiederholung abgeklärt. Ersten Lauf vor dem Neustarttest abgebrochen, um diesen ausdrücklich ohne Serververbindung zu isolieren. Projektgenerator reproduzierbar, lokale Dokumentverweise und Diff geprüft; Bild 54 visuell kontrolliert.
+- Bedienung, Architektur und öffentliche Bildschirmgalerie mit Heidelberg-Beispieldaten aktualisiert. Version/Build bleiben 0.4.0 (4); kein Release oder Pi-/iPhone-Deployment. GPS-Aufzeichnung, Kompass und Hintergrundbetrieb am realen iPhone bleiben Geräte-/Feldprüfungen.
+
+
 ### Dokumentation, Git und GitHub abgeglichen (11.10.2026)
 
 - README, Umsetzungsstand, Architektur, Bedienung, Versionierung und öffentliche Galerie mit Routenbeschreibung, Highlight-Zwischenzielen, deutschen Kurztexten, Topografie und Symbolen auf den aktuellen Stand bringen. Bloghintergründe mitführen; bereits auf GitHub vorhandene Präsentationsdokumente erhalten. Historische Release-Einträge unverändert.

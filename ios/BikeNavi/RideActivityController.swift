@@ -6,18 +6,18 @@ final class RideActivityController {
     private var activity: Activity<RideActivityAttributes>?
     private var lastState: RideActivityAttributes.ContentState?
 
-    func start(tourName: String) {
+    func start(tourName: String, route: CalculatedRoute?) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         Task {
             for old in Activity<RideActivityAttributes>.activities {
                 await old.end(nil, dismissalPolicy: .immediate)
             }
             let state = RideActivityAttributes.ContentState(
-                instruction: "Position auf der Route wird ermittelt",
+                instruction: route == nil ? "Dein Weg wird aufgezeichnet" : "Position auf der Route wird ermittelt",
                 distanceMeters: 0,
                 remainingMeters: 0,
                 symbol: "location.north.fill",
-                status: "Navigation läuft"
+                status: route == nil ? "Freie Fahrt" : "Navigation läuft"
             )
             do {
                 activity = try Activity.request(
@@ -47,6 +47,9 @@ final class RideActivityController {
         if paused {
             state = .init(instruction: "Fahrt pausiert", distanceMeters: 0,
                           remainingMeters: rounded(progress?.remaining ?? 0), symbol: "pause.fill", status: "Pause")
+        } else if route == nil {
+            state = .init(instruction: "Dein Weg wird aufgezeichnet", distanceMeters: 0,
+                          remainingMeters: 0, symbol: "location.north.fill", status: "Freie Fahrt")
         } else if rerouting {
             state = .init(instruction: "Route wird angepasst", distanceMeters: 0,
                           remainingMeters: rounded(progress?.remaining ?? 0), symbol: "arrow.triangle.2.circlepath", status: "Neue Route")

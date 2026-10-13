@@ -569,6 +569,38 @@ final class RideLocationTests: XCTestCase {
         app.tabBars.buttons["Fahren"].tap()
         return app
     }
+    func testFreeRideShowsMapWaitsForGPSAndCanBeSaved() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_START_LOCATION_TEST"] = "delayed"
+        app.launchEnvironment["BIKENAVI_FREE_RIDE_TEST"] = "1"
+        app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Fahren"].waitForExistence(timeout: 20))
+        app.tabBars.buttons["Fahren"].tap()
+        XCTAssertTrue(app.buttons["Standortsuche abbrechen"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.otherElements["rideMap"].exists)
+        XCTAssertTrue(app.buttons["Pause"].waitForExistence(timeout: 12))
+        XCTAssertTrue(app.staticTexts["Dein Weg wird aufgezeichnet"].exists)
+        XCTAssertFalse(app.otherElements["rideETA"].exists)
+        XCTAssertFalse(app.buttons["Höhenprofil"].exists)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Gallery-54-freie-fahrt"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        app.buttons["Pause"].tap()
+        XCTAssertTrue(app.buttons["Fortsetzen"].waitForExistence(timeout: 3))
+        app.buttons["Fortsetzen"].tap()
+        XCTAssertTrue(app.buttons["Pause"].waitForExistence(timeout: 3))
+        app.buttons["Tour beenden"].tap()
+        app.buttons["Speichern und beenden"].tap()
+        let toursSelected = expectation(for: NSPredicate(format: "isSelected == true"),
+                                        evaluatedWith: app.tabBars.buttons["Touren"])
+        wait(for: [toursSelected], timeout: 5)
+        app.buttons["Gefahren"].tap()
+        XCTAssertTrue(app.staticTexts["Freie Fahrt"].firstMatch.waitForExistence(timeout: 5))
+    }
+
     func testDelayedFixRecoversStaleDenialAndStartsRide() {
         let app = launch("delayed")
         XCTAssertTrue(app.buttons["Standortsuche abbrechen"].waitForExistence(timeout: 3))

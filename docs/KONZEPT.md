@@ -34,7 +34,7 @@ POIs werden nach Kategorien und entlang der Route angeboten. Ein ausgewählter O
 
 ### Fahren
 
-Oben steht die nächste Abbiegeanweisung mit Entfernung, in der Mitte die Karte, unten eine kleine Auswahl relevanter Werte. Höhenprofil und weitere Daten sind bei Bedarf abrufbar. Pause, Fortsetzen und Beenden sind gut erreichbar. Navigation und Aufzeichnung arbeiten mit den lokal gespeicherten Daten.
+Oben steht die nächste Abbiegeanweisung mit Entfernung, in der Mitte die Karte, unten eine kleine Auswahl relevanter Werte. Höhenprofil und weitere Daten sind bei Bedarf abrufbar. Pause, Fortsetzen und Beenden sind gut erreichbar. Navigation und Aufzeichnung arbeiten mit den lokal gespeicherten Daten. Ohne gewählte Strecke startet „Fahren“ eine freie Fahrt mit aktueller Karte und GPS-Aufzeichnung; Pause, Fortsetzen und Speichern bleiben verfügbar, routenabhängige Angaben entfallen.
 
 ### Touren
 

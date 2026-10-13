@@ -71,6 +71,14 @@ Satellitenbilder: Esri World Imagery · Source: Esri, Vantor, Earthstar Geograph
 
 ## Unterwegs
 
+### Freie Fahrt ohne Strecke
+
+Seit 13. Oktober 2026 startet **Fahren** auch ohne berechnete Strecke die Aufzeichnung. Die aktuelle Karte folgt dem Standort, die gefahrene Spur erscheint orange. Gefahrene Strecke, Tempo und Fahrzeit bleiben sichtbar; Pause, Fortsetzen und Beenden funktionieren wie bei einer geplanten Tour. Ohne Route entfallen Abbiegehinweise, Reststrecke, ETA, Höhenprofil und Sprachsteuerung. Während der GPS-Suche bleibt die Karte sichtbar.
+
+<img src="images/54-freie-fahrt.png" width="300" alt="Beispieldaten Heidelberg: freie Fahrt ohne Route mit aktueller Karte und Aufzeichnung">
+
+Aufnahme aus dem Simulator mit ausdrücklich synthetischen öffentlichen Heidelberg-Beispielkoordinaten; kein GPS-Feldtest.
+
 ### Standort beim Fahrtstart
 
 Neu am 25. September 2026: Der Fahrtstart wartet bis zu 15 Sekunden auf eine frische Position. Die Standortsuche kann abgebrochen werden. Aufnahme aus dem Simulator mit ausdrücklich synthetischen Standort-Testdaten einer **Beispieltour** in Heidelberg; kein GPS-Feldtest. Die UI-Prüfung liefert den Beispielstandort verzögert und prüft den anschließenden automatischen Fahrtstart.

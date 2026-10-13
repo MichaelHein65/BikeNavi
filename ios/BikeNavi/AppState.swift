@@ -504,6 +504,9 @@ final class AppState: ObservableObject {
             plan.waypoints = [Waypoint(name: "Beispielstart", coordinate: a), Waypoint(name: "Beispielziel", coordinate: b)]
             plan.route = CalculatedRoute(id: UUID(), coordinates: [a, b], distance: 60, duration: 30,
                 ascent: 0, descent: 0, maneuvers: [], surfaces: [], warnings: [], provider: "Beispieldaten", calculatedAt: 0)
+            if ProcessInfo.processInfo.environment["BIKENAVI_FREE_RIDE_TEST"] == "1" {
+                plan.route = nil
+            }
             activeRide = nil
             location.denied = true // Simulate a stale error from a previous callback.
             serverURL = ""
@@ -1136,7 +1139,6 @@ final class AppState: ObservableObject {
 
     func startRide() {
         guard activeRide == nil else { tab = 1; return }
-        guard plan.canCalculateRoute, plan.route != nil else { errorMessage = "Bitte zuerst eine Route berechnen."; return }
         guard !waitingForRideLocation else { return }
         location.request()
         guard !location.denied else {
@@ -1183,11 +1185,16 @@ final class AppState: ObservableObject {
             }
             return
         }
-        var ride = plan
+        let followsRoute = plan.canCalculateRoute && plan.route != nil
+        var ride = followsRoute ? plan : TourDocument()
         ride.id = UUID()
         ride.kind = .ride
-        ride.sourcePlanID = plan.id
-        ride.localNavigation = LocalNavigationState()
+        ride.sourcePlanID = followsRoute ? plan.id : nil
+        ride.localNavigation = followsRoute ? LocalNavigationState() : nil
+        if !followsRoute {
+            ride.title = "Freie Fahrt"
+            ride.profile = plan.profile
+        }
         ride.track = []
         ride.movingDuration = 0
         ride.endedAt = nil
@@ -1206,8 +1213,9 @@ final class AppState: ObservableObject {
             try store.save(ride)
             activeRide = ride
             navigationRoute = ride.route
-            rideGraph = localRoutingReady ? preparedGraph : nil
-            localRideStatus = ride.profile.mode == .cycling
+            progress = nil
+            rideGraph = followsRoute && localRoutingReady ? preparedGraph : nil
+            localRideStatus = !followsRoute ? nil : ride.profile.mode == .cycling
                 ? (rideGraph == nil ? "Lokale Rückführung noch nicht vorbereitet" : nil)
                 : "Gespeicherte Wanderroute · keine lokale Rückführung"
             originalTracker = RouteTracker(lastProgress: 0, lastTimestamp: Date().timeIntervalSince1970)
@@ -1221,7 +1229,8 @@ final class AppState: ObservableObject {
             lastAnnouncement = nil
             location.setRiding(true)
 
-            rideActivity.start(tourName: ride.title)
+            rideActivity.start(tourName: ride.title, route: ride.route)
+            if let sample = location.latestSample { receive(sample) }
             tab = 1
             reload()
         } catch { errorMessage = error.localizedDescription }
@@ -1234,7 +1243,7 @@ final class AppState: ObservableObject {
            activeRide?.route?.id != plan.route?.id {
             archivePreviousRideIfNeeded()
         }
-        guard activeRide == nil, plan.canCalculateRoute, plan.route != nil else { return }
+        guard activeRide == nil else { return }
         startRide()
     }
     private func archivePreviousRideIfNeeded() {
@@ -1267,7 +1276,7 @@ final class AppState: ObservableObject {
             activeRide = ride
             location.setRiding(ride.recordingState == .recording)
 
-            if ride.recordingState == .recording { rideActivity.start(tourName: ride.title) }
+            if ride.recordingState == .recording { rideActivity.start(tourName: ride.title, route: ride.route) }
             else { rideActivity.update(progress: progress, route: ridingRoute, paused: true, rerouting: false); Task { await sync() } }
             reload()
         } catch { errorMessage = error.localizedDescription }

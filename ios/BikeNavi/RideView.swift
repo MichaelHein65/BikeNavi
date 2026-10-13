@@ -18,6 +18,9 @@ struct RideView: View {
                             if ride.recordingState == .paused {
                                 Text("Deine Pause").font(.headline)
                                 Text("Fortsetzen, wenn du bereit bist").font(.subheadline)
+                            } else if ride.route == nil {
+                                Text("Freie Fahrt").font(.headline)
+                                Text("Dein Weg wird aufgezeichnet").font(.subheadline)
                             } else if state.rerouting {
                                 Text("Route wird angepasst").font(.headline)
                                 Text("Das iPhone sucht einen kurzen Anschluss zur Tour.").font(.subheadline).lineLimit(2)
@@ -52,19 +55,24 @@ struct RideView: View {
                                     .background(Theme.paper, in: RoundedRectangle(cornerRadius: 8)).padding(8)
                             }
                         }
+                        .accessibilityIdentifier("rideMap")
                         .onChange(of: state.mapStyleURL) { _, _ in mapError = nil }
                     VStack(spacing: 8) {
                         if let status = state.localRideStatus, state.progress?.distanceFromRoute ?? 0 <= 35 {
                             Text(status).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
                         }
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: typeSize.isAccessibilitySize ? 2 : 5), alignment: .leading, spacing: 6) {
-                            rideMetric("Reststrecke", Format.distance(state.progress?.remaining ?? state.ridingRoute?.distance ?? 0))
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: typeSize.isAccessibilitySize ? 2 : (ride.route == nil ? 3 : 5)), alignment: .leading, spacing: 6) {
+                            if ride.route != nil {
+                                rideMetric("Reststrecke", Format.distance(state.progress?.remaining ?? state.ridingRoute?.distance ?? 0))
+                            }
                             rideMetric("Gefahren", Format.distance(ride.recordedDistance))
                             rideMetric("Tempo", "\(Int((ride.track.last?.speed ?? 0) * 3.6)) km/h")
                             rideMetric("Fahrzeit", Format.duration(ride.movingDuration))
-                            TimelineView(.periodic(from: .now, by: 15)) { context in
-                                rideMetric("ETA", arrivalTime(ride: ride, now: context.date))
-                            }.accessibilityIdentifier("rideETA")
+                            if ride.route != nil {
+                                TimelineView(.periodic(from: .now, by: 15)) { context in
+                                    rideMetric("ETA", arrivalTime(ride: ride, now: context.date))
+                                }.accessibilityIdentifier("rideETA")
+                            }
                         }
                         Button { showBlogPoint = true } label: {
                             Label("Blog-Ort festhalten", systemImage: "camera.fill").font(.subheadline.bold())
@@ -78,10 +86,12 @@ struct RideView: View {
                                     .font(.subheadline.bold()).frame(maxWidth: .infinity, minHeight: 44)
                                     .background(Theme.forest, in: RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
                             }.buttonStyle(.plain)
-                            Button { showElevation = true } label: { controlIcon("chart.xyaxis.line") }
-                                .accessibilityLabel("Höhenprofil")
-                            Button { state.voice.toggle() } label: { controlIcon(state.voice ? "speaker.wave.2" : "speaker.slash") }
-                                .accessibilityLabel(state.voice ? "Sprachausgabe ausschalten" : "Sprachausgabe einschalten")
+                            if ride.route != nil {
+                                Button { showElevation = true } label: { controlIcon("chart.xyaxis.line") }
+                                    .accessibilityLabel("Höhenprofil")
+                                Button { state.voice.toggle() } label: { controlIcon(state.voice ? "speaker.wave.2" : "speaker.slash") }
+                                    .accessibilityLabel(state.voice ? "Sprachausgabe ausschalten" : "Sprachausgabe einschalten")
+                            }
                             Button { confirmFinish = true } label: { controlIcon("stop.fill") }
                                 .accessibilityLabel("Tour beenden")
                         }.buttonStyle(.plain)
@@ -121,6 +131,36 @@ struct RideView: View {
                 }
                 .sheet(isPresented: $showBlogPoint) { BlogPointEditor(rideID: ride.id) }
                 .sheet(isPresented: $showElevation) { if let route = ride.route { RouteDetailsView(route: route) } }
+            } else if !state.plan.canCalculateRoute || state.plan.route == nil {
+                VStack(spacing: 0) {
+                    RouteMap(styleURL: state.mapStyleURL, route: nil, focus: state.location.coordinate ?? state.mapFocus,
+                             follow: true, navigationPosition: state.location.coordinate,
+                             onError: { mapError = $0 })
+                        .accessibilityIdentifier("rideMap")
+                        .overlay(alignment: .topLeading) {
+                            MapStyleMenu().background(Theme.paper, in: Circle()).padding(8)
+                        }
+                        .overlay(alignment: .bottom) {
+                            if let mapError {
+                                Text(mapError).font(.caption).padding(8)
+                                    .background(Theme.paper, in: RoundedRectangle(cornerRadius: 8)).padding(8)
+                            }
+                        }
+                        .onChange(of: state.mapStyleURL) { _, _ in mapError = nil }
+                    VStack(spacing: 12) {
+                        Text(state.waitingForRideLocation ? "Standort wird ermittelt …" : "Freie Fahrt")
+                            .font(.headline)
+                        Text("Dein Weg wird ab der aktuellen GPS-Position aufgezeichnet.")
+                            .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        if state.waitingForRideLocation {
+                            ProgressView()
+                            Button("Standortsuche abbrechen") { state.cancelRideStart() }
+                        } else {
+                            Button("Aufzeichnung starten") { state.startRide() }
+                                .buttonStyle(.borderedProminent).tint(Theme.forest)
+                        }
+                    }.padding(16).frame(maxWidth: .infinity).background(Theme.paper)
+                }.toolbar(.hidden, for: .navigationBar)
             } else {
                 ScrollView {
                   VStack(spacing: 22) {
