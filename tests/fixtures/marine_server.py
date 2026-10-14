@@ -5,7 +5,7 @@ a mocked route. Start with uvicorn and a temporary test certificate on port 1844
 """
 import gzip
 import re
-from urllib.parse import unquote
+from urllib.parse import unquote, parse_qs
 import json
 import tempfile
 from pathlib import Path
@@ -27,7 +27,7 @@ def upstream(request):
             key = f"{round(float(matches[0][0])*10)},{round(float(matches[1][0])*10)}"
             if key in DEPTHS: return httpx.Response(200,json=DEPTHS[key])
         return httpx.Response(404)
-    if request.method == "GET" and "coastline" in request.url.params.get("data", ""):
+    if request.method == "POST" and "coastline" in parse_qs(request.content.decode()).get("data", [""])[0]:
         return httpx.Response(200, json=DATA)
     return httpx.Response(503, json={"detail": "No external services in the public example server."})
 

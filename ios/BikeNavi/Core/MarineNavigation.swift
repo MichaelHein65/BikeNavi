@@ -9,6 +9,12 @@ struct MarineLeg: Equatable, Identifiable {
 }
 
 enum MarineNavigation {
+    static let routingRevision = 2
+    static let outdatedRouteWarning = "Dieser Seeweg wurde ohne die aktuelle Prüfung kartierter Gefahrenstellen berechnet. Vor der Verwendung neu berechnen."
+    static func current(_ route: CalculatedRoute?) -> Bool {
+        route?.marineRoutingRevision == routingRevision
+    }
+
     static let depthWarning = "EMODnet · nicht zur Navigation geeignet. Grobe Rastertiefen; keine Prüfung von Wasserstand, Hindernissen oder aktueller Befahrbarkeit."
     static let warning = "Wasserweg anhand erfasster OSM-Küsten; erfasste Fahrwasser und empfohlene Kurse werden leicht bevorzugt. Fährlinien erhalten keinen Vorteil. Strömung, Sperrungen und nautische Eignung werden nicht geprüft. Amtliche Seekarten und aktuelle Hinweise prüfen."
     enum Failure: LocalizedError {

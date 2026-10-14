@@ -625,7 +625,7 @@ final class AppState: ObservableObject {
     }
 
     func restoreLocalRouting() {
-        if plan.profile.mode == .sea && plan.route != nil && plan.route?.marineDraft != boatDraft { invalidateRoute(showErrorAlert: false) }
+        if plan.profile.mode == .sea && plan.route != nil && (plan.route?.marineDraft != boatDraft || !MarineNavigation.current(plan.route)) { invalidateRoute(showErrorAlert: false) }
         if activeRide?.profile.mode == .sea || (activeRide == nil && plan.profile.mode == .sea) { selectedMapStyle = .seamap }
         if let ride = activeRide, let route = ride.route {
             navigationRoute = LocalRouteMetrics.combined(original: route, state: ride.localNavigation, profile: ride.profile)
@@ -1012,7 +1012,7 @@ final class AppState: ObservableObject {
         mapRevision = UUID()
         refreshPlanName()
         if plan.isAwaitingStart { requestAutomaticStart() }
-        if plan.profile.mode == .sea && plan.route?.marineDraft != boatDraft { invalidateRoute(showErrorAlert: false) }
+        if plan.profile.mode == .sea && (plan.route?.marineDraft != boatDraft || !MarineNavigation.current(plan.route)) { invalidateRoute(showErrorAlert: false) }
         else { prepareLocalRouting() }
         tab = 0
     }
@@ -1252,8 +1252,8 @@ final class AppState: ObservableObject {
     func startRide() {
         guard activeRide == nil else { tab = 1; return }
         guard !waitingForRideLocation else { return }
-        if plan.profile.mode == .sea, let route = plan.route, (route.provider != "Seeweg · OSM-Wasserwege" || route.marineDraft != boatDraft) {
-            errorMessage = "Berechne den Seeweg mit dem aktuellen Tiefgang erneut. EMODnet-Planungen sind nicht zur Navigation geeignet."
+        if plan.profile.mode == .sea, let route = plan.route, (route.provider != "Seeweg · OSM-Wasserwege" || route.marineDraft != boatDraft || !MarineNavigation.current(route)) {
+            errorMessage = "Berechne den Seeweg mit der aktuellen Gefahrenstellenprüfung und dem eingestellten Tiefgang erneut. EMODnet-Planungen sind nicht zur Navigation geeignet."
             return
         }
         location.request()

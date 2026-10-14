@@ -103,7 +103,7 @@ Wiederholen: `seed_gallery.py --device DEVICE --elevation --seamap`, lokaler HTT
 | --- | --- |
 | <img src="images/64-emodnet-fahren-eta.png" width="300" alt="Maritime Fahransicht mit Gesamtstrecke, Reststrecke und geschätzter Ankunft"> | <img src="images/65-seeweg-ancona.png" width="300" alt="Öffentliche Ancona-Beispielplanung mit 98,8 Seemeilen und rund 24 Stunden 41 Minuten"> |
 
-Tiefen: **EMODnet DTM 2024**, [CC BY 4.0 / Nutzungsbedingungen](https://emodnet.ec.europa.eu/en/terms-use-emodnet-online-services-data-and-data-products). Nicht zur Navigation geeignet. Wiederholen zusätzlich mit `MarineRoutingUITests/testBoatSettingsPersistAndDepthLayerWorksAfterRestart` und `MarineRoutingUITests/testLongAnconaExampleUsesStoredDepthPlanWithoutDistanceCutoff`. Alle Bilder visuell geprüft; keine privaten Nutzerbilder übernommen.
+Tiefen: **EMODnet DTM 2024**, [CC BY 4.0 / Nutzungsbedingungen](https://emodnet.ec.europa.eu/en/terms-use-emodnet-online-services-data-and-data-products). Nicht zur Navigation geeignet. Wiederholen zusätzlich mit `MarineRoutingUITests/testBoatSettingsPersistAndDepthLayerWorksAfterRestart` und dem damaligen Test für die gespeicherte Ancona-Route (seit Routenrevision 2 ersetzt durch `testOutdatedAnconaExampleRequiresRecalculation`). Alle Bilder visuell geprüft; keine privaten Nutzerbilder übernommen.
 
 Satellitenbilder: Esri World Imagery · Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community. Topografische Kartendaten: © OpenStreetMap-Mitwirkende, SRTM; Kartendarstellung: © [OpenTopoMap](https://opentopomap.org/about) ([CC-BY-SA](https://creativecommons.org/licenses/by-sa/3.0/)). Die Quellhinweise sind zusätzlich über die Karteninformation der App erreichbar. Die Rasterauflösung ist quellenabhängig; größere Zoomstufen vergrößern vorhandene Bildkacheln. Keine Offline-Pakete oder Feldtests.
 
@@ -281,3 +281,13 @@ Zur Reproduktion den separaten Dokumentationssimulator mit `seed_gallery.py --de
 Der Simulatorlauf `RouteDescriptionUITests/testHighlightsInsertAndRouteInBackgroundWithoutLeavingTheArticle` verwendet echte Wikipedia-Ortsrecherche und einen kontrollierten Router mit 25 Sekunden Verzögerung, damit Auswahlen während der Berechnung geprüft werden können. Seine Verbindungen sind ausdrücklich synthetisch, keine echte Straßenroute oder bestätigte POI-Zufahrt. Kein ORS-, Pi-, iPhone- oder Feldtest. Geprüft sind zwei Einfügungen ohne Verlassen der Beschreibung, erhaltene Start-/Zielpunkte, nicht modale Rückmeldung, fertig berechneter letzter Planungsstand und Speicherung nach Neustart. Die Bilder wurden visuell kontrolliert.
 
 Zur Reproduktion den öffentlichen Bestand und `route_descriptions` wie oben zurücksetzen, denselben HTTPS-Testserver starten und gezielt diesen Test ausführen. Der Testserver enthält seit dieser Erweiterung einen ausdrücklich synthetischen Router und ruft keine externen Routing-/Wegenetzdienste auf.
+
+## Kartierte Untiefen und alte Seewege
+
+**66/67** vom 14. Oktober 2026 zeigen den Stand mit Gefahrenprüfung und Routenrevision 2. **66** zeigt die berechnete öffentliche Ropotnica-Beispielroute um die kartierte Untiefe, 0,54 sm und drei Abschnitte, mit zugeschalteter EMODnet-Ebene. **67** zeigt das ältere Ancona-Beispiel ohne alte Linie und ohne Fahrtstart: zunächst neu berechnen. Die älteren Bilder 55–65 stammen vor dieser Gefahrenprüfung und belegen keine Prüfung der dort dargestellten Linien nach dem aktuellen Verfahren.
+
+| Kartierte Untiefe umgehen | Alten Seeweg neu berechnen |
+| --- | --- |
+| <img src="images/66-ropotnica-untiefen.png" width="300" alt="Öffentliches Ropotnica-Testbeispiel: drei Kursabschnitte um die kartierte Untiefe"> | <img src="images/67-seeweg-neuberechnung.png" width="300" alt="Alte Ancona-Beispielplanung ohne Kurslinie, mit Route berechnen"> |
+
+`seed_gallery.py --seamap --device UUID` auf dem dedizierten Dokumentationssimulator, danach `MarineRoutingUITests/testRopotnicaHazardDetourAndOutdatedRoute`. Kein Testserver erforderlich; `beispiel.invalid` verhindert Pi-Zugriff. Beide Aufnahmen aus bestandenem UI-Lauf exportiert und visuell geprüft. Öffentliche OSM-/EMODnet-Daten wie oben attribuiert; keine privaten Nutzerbilder und kein nautischer Feldtest.

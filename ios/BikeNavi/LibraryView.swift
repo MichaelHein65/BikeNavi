@@ -69,7 +69,7 @@ struct TourDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                RouteMap(styleURL: state.mapStyleURL, route: document.route, waypoints: document.waypoints,
+                RouteMap(styleURL: state.mapStyleURL, route: document.profile.mode == .sea && !MarineNavigation.current(document.route) ? nil : document.route, waypoints: document.waypoints,
                          track: document.track, modeSections: document.kind == .ride && document.profile.mode != .sea ? modeSections : nil, fitRevision: document.id, showWaterDepths: state.showWaterDepths, colorBySurface: document.profile.mode != .sea,
                          hasStart: !document.isAwaitingStart)
                     .frame(height: 300).clipShape(RoundedRectangle(cornerRadius: 24))
@@ -97,7 +97,7 @@ struct TourDetailView: View {
                         "\(counts.total) Bike-Messungen · " + (counts.pending == 0 ? "auf dem Pi gespeichert" : "\(counts.pending) zur Übertragung vorgemerkt"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                if document.profile.mode == .sea { Text(MarineNavigation.warning).font(.caption) }
+                if document.profile.mode == .sea { Text(MarineNavigation.current(document.route) ? MarineNavigation.warning : MarineNavigation.outdatedRouteWarning).font(.caption) }
                 else if document.kind == .ride {
                     RecordedElevationChart(points: elevationPoints)
                     RidePowerChart(points: powerPoints, distanceKM: document.recordedDistance / 1000)
@@ -105,7 +105,7 @@ struct TourDetailView: View {
                 } else if let route = document.route {
                     ElevationChart(route: route).frame(height: 140)
                 }
-                if document.route != nil {
+                if document.route != nil && (document.profile.mode != .sea || MarineNavigation.current(document.route)) {
                     Button(document.profile.mode == .sea ? "Wegpunkte und Kurse" : "Wegbeschaffenheit und Routendetails") { showRoute = true }
                 }
                 Button { state.open(document) } label: {

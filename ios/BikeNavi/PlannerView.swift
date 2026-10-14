@@ -20,7 +20,7 @@ struct PlannerView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
-                RouteMap(styleURL: state.mapStyleURL, route: state.plan.route, waypoints: state.plan.waypoints, savedPlaces: state.savedPlaces,
+                RouteMap(styleURL: state.mapStyleURL, route: state.plan.profile.mode == .sea && !MarineNavigation.current(state.plan.route) ? nil : state.plan.route, waypoints: state.plan.waypoints, savedPlaces: state.savedPlaces,
                          focus: state.mapFocus, fitRevision: state.mapRevision, marineNavigation: state.plan.profile.mode == .sea, showWaterDepths: state.showWaterDepths, colorBySurface: state.plan.profile.mode != .sea, topOverlayInset: 170, hasStart: !state.plan.isAwaitingStart,
                          onTap: {
                              if editingTourName { finishEditingName() }
@@ -58,6 +58,11 @@ struct PlannerView: View {
                             Image(systemName: "bookmark.fill").frame(width: 48, height: 48)
                         }.background(Theme.paper, in: RoundedRectangle(cornerRadius: 18)).accessibilityLabel("Meine gespeicherten Orte")
                     }
+                    if state.plan.profile.mode == .sea, state.plan.route != nil, !MarineNavigation.current(state.plan.route) {
+                        Label(MarineNavigation.outdatedRouteWarning, systemImage: "exclamationmark.triangle")
+                            .font(.caption).padding(12).background(Theme.paper, in: RoundedRectangle(cornerRadius: 12))
+                            .accessibilityIdentifier("marineRouteOutdated")
+                    }
                     if !detailsExpanded, let error = state.planningError {
                         Label(error, systemImage: "exclamationmark.triangle")
                             .font(.caption).padding(12).background(Theme.paper, in: RoundedRectangle(cornerRadius: 12))
@@ -89,7 +94,7 @@ struct PlannerView: View {
             .sheet(isPresented: $showProfile) { ProfileView() }
             .sheet(isPresented: $showDetails) {
                 if state.plan.profile.mode == .sea { MarinePlanDetailsView(points: state.plan.waypoints, route: state.plan.route) }
-                else if let route = state.plan.route { RouteDetailsView(route: route) }
+                else if let route = state.plan.route, state.plan.profile.mode != .sea || MarineNavigation.current(route) { RouteDetailsView(route: route) }
             }
             .sheet(isPresented: $showRouteDescription) { RouteDescriptionView() }
             .sheet(isPresented: $showWaypoints) { WaypointsView() }
@@ -187,7 +192,7 @@ struct PlannerView: View {
                     Text(message).font(.caption).foregroundStyle(Theme.secondaryInk)
                         .accessibilityIdentifier("automaticStartStatus")
                 }
-                if let route = state.plan.route {
+                if let route = state.plan.route, state.plan.profile.mode != .sea || MarineNavigation.current(route) {
                     HStack {
                         if state.plan.profile.mode == .sea {
                             Metric(label: "Seeweg", value: MarineNavigation.distance(route.distance))

@@ -1013,7 +1013,7 @@ final class MarineRoutingUITests: XCTestCase {
         app.tabBars.buttons["Einstellungen"].tap()
         reveal(toggle); toggle.tap()
     }
-    func testLongAnconaExampleUsesStoredDepthPlanWithoutDistanceCutoff() {
+    func testOutdatedAnconaExampleRequiresRecalculation() {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
@@ -1025,11 +1025,35 @@ final class MarineRoutingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["mapStyleMenu"].waitForExistence(timeout: 20))
         XCTAssertEqual(app.buttons["mapStyleMenu"].value as? String, "Seekarte · OpenSeaMap")
         if !app.buttons["routeProfile"].exists { app.buttons["togglePlanningDetails"].tap() }
-        XCTAssertTrue(app.buttons["Wegpunkte und Kurse"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["98,8 sm"].exists)
-        capture(app, "65-seeweg-ancona")
+        XCTAssertFalse(app.buttons["Wegpunkte und Kurse"].exists)
+        XCTAssertFalse(app.buttons["Fahrt starten"].exists)
+        capture(app, "67-seeweg-neuberechnung")
         app.terminate()
     }
+    func testRopotnicaHazardDetourAndOutdatedRoute() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://beispiel.invalid"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launchEnvironment["BIKENAVI_PLAN_ID"] = "3C9C795A-FE11-4E94-9BE0-901B34D38012"
+        app.launchEnvironment["BIKENAVI_MARINE_PREVIEW"] = "0"
+        app.launch()
+        XCTAssertTrue(app.buttons["mapStyleMenu"].waitForExistence(timeout: 20))
+        if !app.buttons["routeProfile"].exists { app.buttons["togglePlanningDetails"].tap() }
+        XCTAssertTrue(app.buttons["Wegpunkte und Kurse"].waitForExistence(timeout: 10))
+        capture(app, "66-ropotnica-untiefen")
+        app.terminate()
+        app.launchEnvironment["BIKENAVI_PLAN_ID"] = "7C9D88D1-CED7-4C5E-A22D-CCF1E6E06388"
+        app.launch()
+        XCTAssertTrue(app.buttons["mapStyleMenu"].waitForExistence(timeout: 20))
+        if !app.buttons["routeProfile"].exists { app.buttons["togglePlanningDetails"].tap() }
+        XCTAssertFalse(app.buttons["Wegpunkte und Kurse"].exists)
+        XCTAssertFalse(app.buttons["Fahrt starten"].exists)
+        capture(app, "67-seeweg-neuberechnung")
+        app.terminate()
+    }
+
     private func capture(_ app: XCUIApplication, _ name: String) {
         let ready = expectation(description: "Öffentliche Onlinekarte laden")
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) { ready.fulfill() }

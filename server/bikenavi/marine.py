@@ -19,13 +19,14 @@ from shapely.strtree import STRtree
 
 from .offline import DEFAULT_OVERPASS, FALLBACK_OVERPASS
 from .bathymetry import DepthTiles, WARNING as DEPTH_WARNING
+from .marine_obstacles import exclusions
 
 WARNING = "Wasserweg anhand erfasster OSM-Küsten; erfasste Fahrwasser und empfohlene Kurse werden leicht bevorzugt. Fährlinien erhalten keinen Vorteil. Strömung, Sperrungen und nautische Eignung werden nicht geprüft. Amtliche Seekarten und aktuelle Hinweise prüfen."
 DATA_ERROR = "Küsten- und Seewegdaten sind unvollständig. Es wird keine ungeprüfte Verbindung berechnet."
 
 
 class WaterArea:
-    def __init__(self, data, bounds):
+    def __init__(self, data, bounds, draft=2.0):
         south, west, north, east = bounds
         self.scale = math.cos(math.radians((south + north) / 2))
         self.bounds = bounds
@@ -84,7 +85,8 @@ class WaterArea:
         if not water:
             raise HTTPException(503, DATA_ERROR)
         # A small geometric margin prevents grazing shores. It is not a depth/safety clearance.
-        self.water = unary_union(water).buffer(-10)
+        self.obstacles = exclusions(data["elements"], self.project, draft)
+        self.water = unary_union(water).buffer(-10).difference(self.obstacles)
         self.prepared = prep(self.water)
         self.corridors = unary_union(corridors).buffer(80).intersection(self.water) if corridors else None
         self.preferred = prep(self.corridors) if self.corridors is not None else None
@@ -116,7 +118,7 @@ class WaterArea:
 
         def attach(point):
             if not self.prepared.contains(Point(point)):
-                raise HTTPException(422, "Ein Wegpunkt liegt an Land oder zu nah an der erfassten Küste. Setze ihn ins Wasser.")
+                raise HTTPException(422, "Ein Wegpunkt liegt an Land, zu nah an der Küste oder in einer kartierten Gefahrenstelle. Wähle einen anderen Wasserpunkt.")
             cx, cy = int(round((point[0]-left)/step)), int(round((point[1]-bottom)/step))
             nodes = []
             for x in range(max(0, cx-3), min(width, cx+4)):
@@ -236,6 +238,36 @@ class MarineRouter:
         self.cache = OrderedDict()
         self.depths = DepthTiles(client)
 
+    async def coast_data(self, bounds):
+        bbox = ",".join(f"{p:.5f}" for p in bounds)
+        # Overpass working memory is separate from our streamed response limit.
+        # Large Adriatic coast queries need more than 16 MiB even for small replies.
+        query = (f'[out:json][timeout:20][maxsize:67108864];('
+                 f'way["natural"="coastline"]({bbox});'
+                 f'way["seamark:type"~"^(fairway|navigation_line|recommended_track)$"]({bbox});'
+                 f'way["waterway"="fairway"]({bbox});'
+                 f'nwr["seamark:type"~"^(rock|wreck|obstruction|depth_area|sounding|seabed_area)$"]({bbox});'
+                 f'nwr["seamark:sea_area:category"~"^(shoal|reef|ledge)$"]({bbox});'
+                 f'nwr["natural"~"^(reef|shoal|rock)$"]({bbox}););out geom;' )
+        urls = [self.url] + ([FALLBACK_OVERPASS] if self.url == DEFAULT_OVERPASS else [])
+        for url in urls:
+            try:
+                async with self.client.stream("POST", url, data={"data": query},
+                        headers={"User-Agent": "BikeNavi/0.4.0 marine routing"}, timeout=25) as response:
+                    response.raise_for_status()
+                    body = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        body.extend(chunk)
+                        if len(body) > 16 * 1024 * 1024:
+                            raise HTTPException(503, DATA_ERROR)
+                data = json.loads(body)
+                if not isinstance(data, dict) or data.get("remark") or not isinstance(data.get("elements"), list):
+                    raise ValueError("Incomplete Overpass response")
+                return data
+            except (httpx.HTTPError, ValueError):
+                continue
+        raise HTTPException(503, "Küsten- und Seewegdaten gerade nicht erreichbar. Es wird keine ungeprüfte Verbindung berechnet.")
+
     async def route(self, request):
         try:
             async with asyncio.timeout(80):
@@ -249,44 +281,25 @@ class MarineRouter:
             raise HTTPException(422,"Seeweg nur zwischen 85° Süd und 85° Nord.")
         south,north = min(p.coordinate.latitude for p in points),max(p.coordinate.latitude for p in points)
         west,east = min(p.coordinate.longitude for p in points),max(p.coordinate.longitude for p in points)
+        if east - west > 180:
+            raise HTTPException(422, "Seewege über die Datumsgrenze werden derzeit nicht unterstützt. Die aktuelle Seewegplanung kann diese Ozeanpassage nicht berechnen.")
         scale = math.cos(math.radians((south+north)/2))
         margin = 1500/111_195
         bounds = (math.floor((south-margin)/.02)*.02,math.floor((west-margin/scale)/.02)*.02,
                   math.ceil((north+margin)/.02)*.02,math.ceil((east+margin/scale)/.02)*.02)
         if bounds[0]<-85 or bounds[2]>85 or bounds[1]<-180 or bounds[3]>180:
             raise HTTPException(422,"Für diese Randlage fehlen geeignete Küstendaten; setze die Wegpunkte innerhalb von 85° Süd/Nord und außerhalb des Datumswechsels.")
+        draft = request.profile.boatDraft or 2.0
+        cache_key = (bounds, draft)
         async with self.lock:
-            cached = self.cache.get(bounds)
+            cached = self.cache.get(cache_key)
             if cached and time.monotonic()-cached[0]<3600:
                 area = cached[1]
-                self.cache.move_to_end(bounds)
+                self.cache.move_to_end(cache_key)
             else:
-                bbox = ",".join(f"{p:.5f}" for p in bounds)
-                query = (f'[out:json][timeout:35][maxsize:16777216];('
-                         f'way["natural"="coastline"]({bbox});way["route"="ferry"]({bbox});'
-                         f'way["seamark:type"~"^(fairway|navigation_line|recommended_track)$"]({bbox});'
-                         f'way["waterway"="fairway"]({bbox}););out geom;')
-                data = None
-                urls = [self.url] + ([FALLBACK_OVERPASS] if self.url==DEFAULT_OVERPASS else [])
-                for url in urls:
-                    try:
-                        async with self.client.stream("GET",url,params={"data":query},headers={"User-Agent":"BikeNavi/0.4.0 marine routing"},timeout=35) as response:
-                            response.raise_for_status()
-                            body = bytearray()
-                            async for chunk in response.aiter_bytes():
-                                body.extend(chunk)
-                                if len(body)>16*1024*1024:
-                                    raise HTTPException(503,DATA_ERROR)
-                        data = json.loads(body)
-                        if data.get("remark"):
-                            raise ValueError("Incomplete Overpass response")
-                        break
-                    except (httpx.HTTPError, ValueError):
-                        continue
-                if data is None or data.get("remark"):
-                    raise HTTPException(503,"Küsten- und Seewegdaten gerade nicht erreichbar. Es wird keine ungeprüfte Verbindung berechnet.")
-                area = await asyncio.to_thread(WaterArea,data,bounds)
-                self.cache[bounds] = (time.monotonic(),area)
+                data = await self.coast_data(bounds)
+                area = await asyncio.to_thread(WaterArea,data,bounds,draft)
+                self.cache[cache_key] = (time.monotonic(),area)
                 while len(self.cache)>4:
                     self.cache.popitem(last=False)
             provisional = await asyncio.to_thread(area.route, request)
@@ -307,6 +320,8 @@ class MarineRouter:
             result['marineDepthUncertain'] = not known_depth_water.covers(line)
             if result['marineDepthUncertain']:
                 result['warnings'].append('Tiefen entlang dieser Planung sind teilweise unbekannt: EMODnet löst enge Küstenbereiche nicht ausreichend auf. Diese Abschnitte sind nicht auf ausreichende Tiefe geprüft.')
+            result['warnings'].append('Kartierte Untiefen, Felsen und Hindernisse werden mit 75 m geometrischem Abstand ausgeschlossen. Kartierung und Abstand sind keine vollständige nautische Sicherheitsprüfung.')
+            result['marineRoutingRevision'] = 2
             result['marineDraft'] = draft
             result['marineDepthSource'] = 'EMODnet DTM 2024 · LAT'
             result['duration'] = result['distance'] / ((request.profile.boatSpeedKnots or 4.0) * 1852 / 3600)

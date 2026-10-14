@@ -37,6 +37,10 @@ class DepthTiles:
         async with self.semaphore:
             try:
                 async with self.client.stream('GET', URL + '?' + query, timeout=30) as response:
+                    # Fixed DTM 2024 coordinate footprint from its official ERDDAP metadata.
+                    # Distinguish outside-coverage 404s from a temporary provider outage.
+                    if response.status_code == 404 and not (15 <= south < 90 and -36 <= west < 43):
+                        raise HTTPException(422, 'Diese Passage liegt außerhalb der verfügbaren EMODnet-Tiefenabdeckung. Eine weltweite Seewegplanung ist mit dieser Datenquelle noch nicht möglich.')
                     response.raise_for_status()
                     body = bytearray()
                     async for chunk in response.aiter_bytes():
@@ -56,8 +60,9 @@ class DepthTiles:
                         raise ValueError('Depth tile coordinate mismatch')
                     # Highest elevation is the shallowest known cell value; mean is explicitly a fallback.
                     candidates = [v for v in (high, mean) if isinstance(v, (int, float)) and math.isfinite(v)]
-                    water_values = [v for v in candidates if v < 0]
-                    elevation = max(water_values) if water_values else math.nan
+                    # Zero/positive maxima represent drying/land cells. A negative
+                    # mean must never override a known shallowest elevation.
+                    elevation = max(candidates) if candidates else math.nan
                     lat = (round(lat / STEP - .5) + .5) * STEP
                     lon = (round(lon / STEP - .5) + .5) * STEP
                     values.append((lat, lon, -elevation))
@@ -117,4 +122,3 @@ class DepthTiles:
             if include_unknown: return box(0, 0, 0, 0)
             raise HTTPException(422, 'Keine EMODnet-Rasterzellen tiefer als der eingestellte Tiefgang vorhanden. Keine Navigationsfreigabe.')
         return unary_union(rectangles)
-

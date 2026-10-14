@@ -106,7 +106,7 @@ def main():
             record = dict(document=document, revision=0, dirty=True, deleted=False, mutationID=identifier(document["id"]))
             db.execute("INSERT OR REPLACE INTO documents VALUES (?, ?)", (document["id"], json.dumps(record).encode()))
         if args.seamap:
-            for fixture in ["tribunj-seamap-plan.json", "tribunj-sibenik-sea-plan.json", "tribunj-ancona-sea-plan.json"]:
+            for fixture in ["tribunj-seamap-plan.json", "tribunj-sibenik-sea-plan.json", "tribunj-ancona-sea-plan.json", "ropotnica-sea-plan.json"]:
                 document = json.loads((ROOT / "tests/fixtures" / fixture).read_text())
                 record = dict(document=document, revision=0, dirty=True, deleted=False, mutationID=identifier(document["id"]))
                 db.execute("INSERT OR REPLACE INTO documents VALUES (?, ?)", (document["id"], json.dumps(record).encode()))
@@ -124,7 +124,7 @@ def main():
         subprocess.run(["xcrun", "simctl", "addmedia", args.device, str(ROOT / "tests/fixtures/blog-photo-gps-example.jpg")], check=True)
     print("Public Heidelberg route and labelled synthetic example ride prepared in simulator.")
     if args.seamap:
-        print("Public Tribunj seamap and two-point Seeweg plans prepared; no precomputed route or recorded voyage.")
+        print("Public Tribunj, Ancona and Ropotnica example plans prepared; calculated example routes, no recorded voyage.")
 
 
 if __name__ == "__main__":

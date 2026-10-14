@@ -1,0 +1,118 @@
+{
+  "localNavigation": null,
+  "sourcePlanID": null,
+  "id": "3C9C795A-FE11-4E94-9BE0-901B34D38012",
+  "kind": "plan",
+  "title": "Ropotnica · Untiefen-Testbeispiel",
+  "usesAutomaticTitle": false,
+  "awaitingStart": null,
+  "createdAt": 1791972000.0,
+  "updatedAt": 1791972000.0,
+  "waypoints": [
+    {
+      "id": "d6451932-0e1a-4773-be50-d3ffa2d0f11c",
+      "name": "Beispielstart westlich der Untiefe",
+      "coordinate": {
+        "latitude": 43.779,
+        "longitude": 15.355,
+        "altitude": null
+      }
+    },
+    {
+      "id": "6f049088-cf69-4a63-98fa-eb79f49ace58",
+      "name": "Beispielziel östlich der Untiefe",
+      "coordinate": {
+        "latitude": 43.7755,
+        "longitude": 15.365,
+        "altitude": null
+      }
+    }
+  ],
+  "profile": {
+    "travelMode": "sea",
+    "bike": "touring",
+    "electric": true,
+    "surface": "any",
+    "gentleHills": false,
+    "boatDraft": 2.0,
+    "boatSpeedKnots": 4.0
+  },
+  "route": {
+    "id": "abb14eb9-6c4d-4ee9-beed-a27eff38bffe",
+    "coordinates": [
+      {
+        "latitude": 43.779,
+        "longitude": 15.355,
+        "altitude": null
+      },
+      {
+        "latitude": 43.77542653456718,
+        "longitude": 15.3592362333035,
+        "altitude": null
+      },
+      {
+        "latitude": 43.77511174710039,
+        "longitude": 15.36054410774695,
+        "altitude": null
+      },
+      {
+        "latitude": 43.7755,
+        "longitude": 15.365,
+        "altitude": null
+      }
+    ],
+    "distance": 994.0784111639903,
+    "duration": 483.0834611488073,
+    "ascent": 0.0,
+    "descent": 0.0,
+    "maneuvers": [
+      {
+        "instruction": "Kurs 139° · Kurswechsel 2",
+        "distance": 523.0343358222839,
+        "coordinateIndex": 0,
+        "type": 11
+      },
+      {
+        "instruction": "Kurs 108° · Kurswechsel 3",
+        "distance": 110.68847532551479,
+        "coordinateIndex": 1,
+        "type": 11
+      },
+      {
+        "instruction": "Kurs 083° · Kurswechsel 4",
+        "distance": 360.35560001619154,
+        "coordinateIndex": 2,
+        "type": 11
+      }
+    ],
+    "surfaces": [],
+    "surfaceSections": null,
+    "waypointIndices": [
+      0,
+      3
+    ],
+    "intersectionContexts": null,
+    "warnings": [
+      "Wasserweg anhand erfasster OSM-Küsten; erfasste Fahrwasser und empfohlene Kurse werden leicht bevorzugt. Fährlinien erhalten keinen Vorteil. Strömung, Sperrungen und nautische Eignung werden nicht geprüft. Amtliche Seekarten und aktuelle Hinweise prüfen.",
+      "Tiefen entlang dieser Planung sind teilweise unbekannt: EMODnet löst enge Küstenbereiche nicht ausreichend auf. Diese Abschnitte sind nicht auf ausreichende Tiefe geprüft.",
+      "EMODnet DTM 2024 · nicht zur Navigation geeignet. Grobe Rastertiefen bezogen auf LAT; teils Zellmittelwerte statt geringster Tiefe. Keine Prüfung von Wasserstand, Hindernissen oder aktueller Befahrbarkeit."
+    ],
+    "provider": "Seeweg · OSM-Wasserwege",
+    "marineRoutingRevision": 2,
+    "marineDraft": 2.0,
+    "marineDepthUncertain": true,
+    "marineDepthSource": "EMODnet DTM 2024 · LAT",
+    "calculatedAt": 1791972057.37587,
+    "elevationProfile": null,
+    "elevationSource": null,
+    "unmappedDestinationDistance": null,
+    "walkingStartIndex": null,
+    "walkingDistance": null,
+    "cyclingDistance": null
+  },
+  "track": [],
+  "startedAt": null,
+  "endedAt": null,
+  "movingDuration": 0.0,
+  "recordingState": "none"
+}

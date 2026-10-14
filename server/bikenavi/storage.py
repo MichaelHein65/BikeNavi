@@ -88,7 +88,7 @@ class Storage:
                 payload["document"]["profile"].pop(field, None)
         route = payload["document"].get("route")
         if route:
-            for field in ("walkingStartIndex", "walkingDistance", "cyclingDistance", "unmappedDestinationDistance", "marineDraft", "marineDepthSource", "marineDepthUncertain"):
+            for field in ("walkingStartIndex", "walkingDistance", "cyclingDistance", "unmappedDestinationDistance", "marineDraft", "marineDepthSource", "marineDepthUncertain", "marineRoutingRevision"):
                 if route.get(field) is None:
                     route.pop(field, None)
         if route and route.get("waypointIndices") is None:

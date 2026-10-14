@@ -78,6 +78,7 @@ class Route(Model):
     intersectionContexts: list[IntersectionContext] | None = Field(default=None, max_length=10_000)
     warnings: list[str] = Field(default_factory=list)
     provider: str = "openrouteservice"
+    marineRoutingRevision: int | None = Field(default=None, ge=1)
     marineDraft: float | None = Field(default=None, ge=0.1, le=20)
     marineDepthUncertain: bool | None = None
     marineDepthSource: str | None = Field(default=None, max_length=200)

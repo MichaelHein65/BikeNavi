@@ -2,13 +2,23 @@
 
 Stand: 14. Oktober 2026. Dies ist eine Entwicklungsfassung vor 1.0, keine für lange Touren freigegebene Navigations-App.
 
+## Aktuelle Untiefenprüfung (14. Oktober 2026)
+
+Kartierte Untiefen, Felsen, Riffe und andere Gefahren sind jetzt harte Hindernisse mit 75 m geometrischem Testabstand. Geschlossene Flächen werden vollständig ausgespart; alle Kursabschnitte und Abkürzungen beachten diese Maske. EMODnet-Maximalwerte null/über Wasser bleiben gesperrt. Alte Seewege müssen mit Routenrevision 2 neu berechnet werden; laufende GPS-Aufzeichnungen bleiben erhalten, alte Kursführung/ETA entfällt.
+
+**245 Backendtests, 154 Swift-Kerntests, zehn native iOS-Tests und der UI-Lauf Ropotnica/alte Ancona-Route erfolgreich.** Gerätebuild und Signaturprüfung erfolgreich. Pi aktualisiert, 15 Module abgeglichen, Sicherung mit 262 Datensätzen wiederhergestellt. Pi-Ropotnica 0,537 sm mit vollständiger Prüfung gegen die Hindernismaske; Pi-Ancona 98,17 sm. Dubrovnik beim ersten Pi-Versuch erneut 503 vom Datendienst, beim zweiten erfolgreich mit **129,57 sm / zwölf Abschnitten / 61,6 s**, zuvor auch auf dem Mac erfolgreich. Keine globale Ozeanplanung, keine Feldprüfung. [Öffentliche Bilder 66/67](BILDSCHIRME.md#kartierte-untiefen-und-alte-seewege).
+
+Neue App auf Michaels iPhone installiert und nach Entsperren erfolgreich gestartet. Die folgenden Abschnitte dokumentieren die vorausgehenden Prüfläufe und Installationen.
+
 ## Seekarte, Tiefen und Törnplanung auf iPhone und Pi (14. Oktober 2026)
 
-**Seekarte · OpenSeaMap** wählt automatisch **Seeweg**. Der Pi berechnet Wasserverbindungen aus OSM-Küsten und Inseln, ohne Fährbevorzugung und ohne feste Streckenbegrenzung. Kartierte Fahrwasser werden leicht bevorzugt; jede Suchkante und vereinfachte Kurslinie muss innerhalb der abgeleiteten Wasserfläche bleiben. EMODnet-Rasterwerte berücksichtigen den gespeicherten Tiefgang (Standard 2 m); bekannte zu flache Zellen werden gemieden. Unbekannte Küstentiefen bleiben ausdrücklich gekennzeichnet. **Nicht zur Navigation geeignet**: Wasserstand, Hindernisse und Sperrungen sind nicht geprüft. Daten-/Zeitbudgets begrenzen weiterhin einzelne Berechnungen. [Algorithmus und Grenzen](ARCHITEKTUR.md#emodnet-bootskonfiguration-und-lange-seewege-14-oktober-2026).
+**Seekarte · OpenSeaMap** wählt automatisch **Seeweg**. Der Pi berechnet Wasserverbindungen aus OSM-Küsten und Inseln, ohne Fährbevorzugung und ohne feste Streckenbegrenzung. Kartierte Fahrwasser werden leicht bevorzugt; jede Suchkante und vereinfachte Kurslinie muss innerhalb der abgeleiteten Wasserfläche bleiben. EMODnet-Rasterwerte berücksichtigen den gespeicherten Tiefgang (Standard 2 m); bekannte zu flache Zellen werden gemieden. Unbekannte Küstentiefen bleiben ausdrücklich gekennzeichnet. **Nicht zur Navigation geeignet**: Wasserstand, nicht kartierte Hindernisse und Sperrungen sind nicht geprüft. Daten-/Zeitbudgets begrenzen weiterhin einzelne Berechnungen. [Algorithmus und Grenzen](ARCHITEKTUR.md#emodnet-bootskonfiguration-und-lange-seewege-14-oktober-2026).
 
 Die EMODnet-Online-Ebene lässt sich für verfügbare Meeresgebiete unabhängig vom Kartenstil zuschalten. **Dein Boot** speichert Tiefgang und Durchschnittstempo (Standard 4 kn). Maritime Fahrt zeigt GPS-Kurs, Wegpunktpeilung, kn/sm, Gesamtstrecke, Reststrecke und geschätzte ETA mit nordorientierter Karte; Fahrradkommunikation entfällt. **Aktuelle Fassung auf Pi und Michaels iPhone 15 Pro installiert und App erfolgreich gestartet.**
 
 Prüfstand: **154 Swift- und 235 Backendtests**, zehn native iOS-Tests, drei abschließende maritime UI-Szenarien und separate automatische Karten-/Profilwahl erfolgreich. Simulator- und signierter Gerätebuild samt Signaturprüfung erfolgreich. Pi-Backup mit **260 Archivdatensätzen** wiederhergestellt; Backend/PostgreSQL gesund und 14 laufende Module abgeglichen. Live-HTTPS: Ancona **98,17 sm / 19,6 s**, Biograd **18,23 sm / 22,0 s**, Šibenik **6,94 sm / 4,4 s**; Tiefenmetadaten, Zeitabschätzung, Zugangsschutz und Landpunktabweisung geprüft. Keine nautische Feldprüfung. Das vorhandene öffentliche Šibenik-Beispiel unter Touren → Geplant wird beim Öffnen mit aktuellem Tiefgang neu berechnet. [Öffentliche Bilder 55–65](BILDSCHIRME.md#seeweg-planen-und-auf-see-fahren).
+
+Nach Nutzerfehlerbericht Küstenabruf für große Adriagebiete korrigiert: 64 MiB Arbeitsspeicher beim Overpass-Anbieter, keine ungenutzten Fährdaten, Formular-POST und geprüfte Fehlerbehandlung. **241 Backendtests** erfolgreich. Öffentliche Mac-Liveberechnungen: Ancona 98,75 sm und Dubrovnik 128,26 sm. Globale Extremtests für Atlantik und Pazifik liefern ausdrücklich keine Route; weltweite Tiefendaten und Datumsgrenzenunterstützung fehlen. [Einzelergebnisse](../CHANGELOG.md).
 
 ## Entwicklungsstand nach 0.4.0 (13. Oktober 2026)
 

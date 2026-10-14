@@ -39,7 +39,7 @@ struct MarineRideView: View {
                         Text("Fahrt über Grund").font(.caption2)
                     }
                 }.padding(14).foregroundStyle(.white).background(navy)
-                if let ride, ride.profile.mode == .sea, ride.route != nil {
+                if let ride, ride.profile.mode == .sea, MarineNavigation.current(ride.route) {
                     let index = state.marineTargetIndex
                     let points = MarineNavigation.navigationPoints(ride)
                     if points.indices.contains(index) {
@@ -62,7 +62,11 @@ struct MarineRideView: View {
                         Label("Letzter Wegpunkt erreicht", systemImage: "flag.checkered").font(.subheadline.bold()).padding(10)
                     }
                 }
-                RouteMap(styleURL: state.mapStyleURL, route: ride?.profile.mode == .sea ? ride?.route : nil,
+                if let ride, ride.route != nil, !MarineNavigation.current(ride.route) {
+                    Text(MarineNavigation.outdatedRouteWarning).font(.caption).foregroundStyle(.orange).padding(10)
+                        .accessibilityIdentifier("marineRouteOutdated")
+                }
+                RouteMap(styleURL: state.mapStyleURL, route: ride?.profile.mode == .sea && MarineNavigation.current(ride?.route) ? ride?.route : nil,
                     waypoints: ride?.profile.mode == .sea ? ride?.waypoints ?? [] : [], track: ride?.track ?? [],
                     focus: ride == nil ? state.location.coordinate ?? state.mapFocus : nil, follow: ride?.recordingState != .paused,
                     marineNavigation: true, showWaterDepths: state.showWaterDepths, navigationPosition: state.location.coordinate,
@@ -77,7 +81,7 @@ struct MarineRideView: View {
                         if let mapError { Text(mapError).font(.caption).padding(8).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10)).padding(8) }
                     }
                 VStack(spacing: 10) {
-                    if let ride, let route = ride.route, ride.profile.mode == .sea {
+                    if let ride, let route = ride.route, ride.profile.mode == .sea, MarineNavigation.current(route) {
                         let points = MarineNavigation.navigationPoints(ride)
                         let remaining = fresh ? state.location.coordinate.flatMap { MarineNavigation.remainingDistance(points: points, target: state.marineTargetIndex, position: $0) } : nil
                         let duration = remaining.flatMap { MarineNavigation.travelTime(distance: $0, speedKnots: state.boatSpeedKnots) }
@@ -108,7 +112,7 @@ struct MarineRideView: View {
                                 Label(ride.recordingState == .paused ? "Fortsetzen" : "Pause", systemImage: ride.recordingState == .paused ? "play.fill" : "pause.fill")
                                     .frame(maxWidth: .infinity, minHeight: 44)
                             }.buttonStyle(.borderedProminent).tint(navy)
-                            if !ride.waypoints.isEmpty {
+                            if !ride.waypoints.isEmpty && MarineNavigation.current(ride.route) {
                                 Button { details = true } label: { Image(systemName: "list.number").frame(width: 36, height: 36) }
                                     .accessibilityLabel("Wegpunkte und Kurse")
                             }
@@ -123,7 +127,7 @@ struct MarineRideView: View {
                     } else {
                         Button("Aufzeichnung auf See starten") { state.startRide() }.buttonStyle(.borderedProminent).tint(navy)
                     }
-                    if ride?.route != nil { Text("ETA mit Ø " + state.boatSpeedKnots.formatted(.number.precision(.fractionLength(1))) + " kn · ohne spätere Pausen").font(.caption2).foregroundStyle(.secondary) }
+                    if MarineNavigation.current(ride?.route) { Text("ETA mit Ø " + state.boatSpeedKnots.formatted(.number.precision(.fractionLength(1))) + " kn · ohne spätere Pausen").font(.caption2).foregroundStyle(.secondary) }
                     Text("EMODnet · nicht zur Navigation geeignet").font(.caption2).foregroundStyle(.secondary)
                 }.padding(14).background(Color(uiColor: .systemBackground))
             }

@@ -20,6 +20,7 @@ final class MarineRideTests: XCTestCase {
         plan.waypoints = [Waypoint(name: "Beispielstart", coordinate: coordinates[0]), Waypoint(name: "Beispielziel", coordinate: coordinates[2])]
         plan.route = CalculatedRoute(id: UUID(), coordinates: coordinates, distance: 80, duration: 0, ascent: 0, descent: 0,
             maneuvers: [], surfaces: [], warnings: [MarineNavigation.warning], provider: "Seeweg · OSM-Wasserwege", calculatedAt: 0, waypointIndices: [0, 2])
+        plan.route?.marineRoutingRevision = MarineNavigation.routingRevision
         plan.route?.marineDraft = 2
         plan.route?.marineDepthSource = "Synthetischer Test"
         state.plan = plan
@@ -29,6 +30,13 @@ final class MarineRideTests: XCTestCase {
                 altitude: 0, horizontalAccuracy: 5, verticalAccuracy: -1, course: 90, speed: 3, timestamp: now.addingTimeInterval(-age))])
         }
         fix(0, age: 4)
+        state.plan.route?.marineRoutingRevision = nil
+        state.startRide()
+        XCTAssertNil(state.activeRide)
+        XCTAssertNotNil(state.errorMessage)
+        XCTAssertEqual(state.plan.route?.id, plan.route?.id)
+        state.plan.route?.marineRoutingRevision = MarineNavigation.routingRevision
+        state.errorMessage = nil
         state.startRide()
         let id = try XCTUnwrap(state.activeRide?.id)
         XCTAssertTrue(state.isMarinePresentation)

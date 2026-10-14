@@ -42,7 +42,9 @@ def client(tmp_path):
             south, west = float(ranges[0][0]), float(ranges[1][0])
             rows = [[south+y*STEP, west+x*STEP, -20, -20] for y in range(96) for x in range(96)]
             return httpx.Response(200, json={"table":{"columnNames":["latitude","longitude","elevation_max","elevation"],"rows":rows}})
-        assert "coastline" in req.url.params.get("data", "")
+        from urllib.parse import parse_qs
+        assert req.method == "POST"
+        assert "coastline" in parse_qs(req.content.decode())["data"][0]
         return httpx.Response(200, json=coast())
     with TestClient(create_app(f"sqlite:///{tmp_path/'marine.sqlite'}", token=AUTH["Authorization"][7:], ors_key="", transport=httpx.MockTransport(upstream))) as c:
         yield c
@@ -57,13 +59,14 @@ def test_water_route_does_not_need_ors_and_preserves_all_requested_points(client
     assert route["distance"] == pytest.approx(3704, abs=10)
     assert route["duration"] == pytest.approx(route["distance"] / (4 * 1852 / 3600))
     assert route["marineDraft"] == 2
+    assert route["marineRoutingRevision"] == 2
     assert route["ascent"] == route["descent"] == 0
     assert route["provider"] == "Seeweg · OSM-Wasserwege"
 
 
 def test_sea_plan_and_next_waypoint_survive_idempotent_sync(client):
     req = request()
-    route = client.post("/v1/route",headers=AUTH,json=req.model_dump(mode="json")).json()
+    route = WaterArea(coast(), (-.02,-.02,.02,.04)).route(req)
     document = {"id":str(uuid4()),"kind":"ride","title":"Öffentliches Seeweg-Testbeispiel","createdAt":1,"updatedAt":2,
                 "profile":{"travelMode":"sea"},"waypoints":[p.model_dump(mode="json") for p in req.waypoints],"route":route,
                 "recordingState":"paused","localNavigation":{"marineNextWaypointIndex":1}}
@@ -209,3 +212,131 @@ def test_unresolved_coastal_cells_are_explicitly_uncertain_but_known_shoals_stay
     shallow=Point(base.project(2.5*STEP,.5*STEP))
     assert allowed.covers(unknown) and not known.covers(unknown)
     assert not allowed.covers(shallow)
+
+
+@pytest.mark.parametrize("first", [httpx.Response(503), httpx.Response(200, json={"remark": "runtime error: out of memory", "elements": []}), httpx.Response(200, json={"version": 0.6})])
+def test_coast_download_retries_provider_errors_and_rejects_partial_results(first):
+    import asyncio
+    from urllib.parse import parse_qs
+    from bikenavi.marine import MarineRouter
+    from bikenavi.offline import DEFAULT_OVERPASS, FALLBACK_OVERPASS
+    async def run():
+        calls = []
+        def upstream(req):
+            calls.append(str(req.url))
+            assert req.method == "POST"
+            query = parse_qs(req.content.decode())["data"][0]
+            assert "[maxsize:67108864]" in query  # Server working memory, not response bytes.
+            assert '"ferry"' not in query
+            assert "coastline" in query and "fairway" in query
+            assert req.headers["User-Agent"].startswith("BikeNavi/")
+            return first if len(calls) == 1 else httpx.Response(200, json=coast())
+        async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as client:
+            data = await MarineRouter(client, "").coast_data((-.02,-.02,.02,.04))
+            assert data == coast()
+            assert calls == [DEFAULT_OVERPASS, FALLBACK_OVERPASS]
+    asyncio.run(run())
+
+
+def test_unavailable_custom_coast_provider_never_uses_another_host_or_partial_coast():
+    import asyncio
+    from bikenavi.marine import MarineRouter
+    async def run():
+        calls = []
+        def upstream(req):
+            calls.append(str(req.url))
+            raise httpx.ReadTimeout("unavailable", request=req)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as client:
+            with pytest.raises(HTTPException) as error:
+                await MarineRouter(client, "https://maps.example/api").coast_data((-.02,-.02,.02,.04))
+            assert error.value.status_code == 503
+            assert calls == ["https://maps.example/api"]
+    asyncio.run(run())
+
+
+def test_dateline_passage_is_rejected_before_querying_the_wrong_side_of_the_globe():
+    import asyncio
+    from bikenavi.marine import MarineRouter
+    async def run():
+        def upstream(req):
+            pytest.fail("Unsupported dateline passage must not query a 265-degree land rectangle")
+        async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as client:
+            with pytest.raises(HTTPException) as error:
+                await MarineRouter(client, "").route(request(((141,35),(-124,37))))
+            assert error.value.status_code == 422
+            assert "Datumsgrenze" in error.value.detail
+    asyncio.run(run())
+
+
+def test_missing_depth_outside_dataset_footprint_is_reported_as_coverage_not_outage():
+    import asyncio
+    from bikenavi.bathymetry import DepthTiles
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda req:httpx.Response(404))) as client:
+            with pytest.raises(HTTPException) as error:
+                await DepthTiles(client).tile((400,-740))
+            assert error.value.status_code == 422
+            assert "Tiefenabdeckung" in error.value.detail
+            with pytest.raises(HTTPException) as coastal_error:
+                await DepthTiles(client).tile((437,157))
+            assert coastal_error.value.status_code == 503
+    asyncio.run(run())
+
+
+def test_ropotnica_shoal_polygon_and_rocks_are_land_for_search_and_simplification():
+    data = json.loads((Path(__file__).resolve().parents[2]/"tests/fixtures/ropotnica-marine-osm.json").read_text())
+    area = WaterArea(data, (43.765,15.345,43.79,15.375))
+    req = request(((15.355,43.779),(15.365,43.7755)))
+    direct = LineString([area.project(p.coordinate.longitude,p.coordinate.latitude) for p in req.waypoints])
+    assert direct.intersects(area.obstacles)
+    route = area.route(req)
+    line = LineString([area.project(c['longitude'],c['latitude']) for c in route['coordinates']])
+    assert area.prepared.covers(line)
+    assert not line.intersects(area.obstacles)
+    assert len(route['coordinates']) > 2
+    with pytest.raises(HTTPException) as error:
+        area.route(request(((15.3595,43.7775),(15.365,43.7755))))
+    assert error.value.status_code == 422
+
+
+def test_point_and_polygon_hazards_cannot_be_crossed_even_on_a_fairway():
+    from bikenavi.marine_obstacles import exclusions
+    data = coast()
+    data['elements'].extend([
+        {'type':'node','lat':0,'lon':.015,'tags':{'seamark:type':'rock'}},
+        way([(.021,-.001),(.023,-.001),(.023,.001),(.021,.001),(.021,-.001)], **{'seamark:sea_area:category':'shoal'}),
+        way([(0,0),(.03,0)], **{'seamark:type':'recommended_track'})])
+    area = WaterArea(data,(-.02,-.02,.02,.04))
+    route = area.route(request())
+    line = LineString([area.project(c['longitude'],c['latitude']) for c in route['coordinates']])
+    assert not line.intersects(area.obstacles)
+    assert area.prepared.covers(line)
+    # Joined multipolygon outer fragments must exclude their interior as well.
+    relation = {'type':'relation','tags':{'natural':'reef'},'members':[
+        {'type':'way','role':'outer','geometry':[{'lon':x,'lat':y} for x,y in [(0,0),(.01,0),(.01,.01)]]},
+        {'type':'way','role':'outer','geometry':[{'lon':x,'lat':y} for x,y in [(.01,.01),(0,.01),(0,0)]]}]}
+    blocked = exclusions([relation], area.project, 2)
+    assert blocked.covers(Point(area.project(.005,.005)))
+    relation['members'].pop()
+    with pytest.raises(HTTPException): exclusions([relation],area.project,2)
+
+
+def test_depth_area_and_sounding_block_at_or_below_draft():
+    from bikenavi.marine_obstacles import is_hazard
+    assert is_hazard({'seamark:type':'sounding','seamark:sounding:depth':'2'},2)
+    assert not is_hazard({'seamark:type':'sounding','seamark:sounding:depth':'3'},2)
+    assert is_hazard({'seamark:type':'depth_area'},2)
+    assert is_hazard({'seamark:type':'depth_area','seamark:depth_area:minimum_depth':'2.4'},2.5)
+
+
+def test_drying_emodnet_maximum_is_not_overridden_by_negative_mean():
+    import asyncio
+    from bikenavi.bathymetry import DepthTiles
+    async def run():
+        def upstream(req):
+            return httpx.Response(200,json={'table':{'columnNames':['latitude','longitude','elevation_max','elevation'],
+                'rows':[[43.700520833,15.700520833,0,-8],[43.700520833,15.7015625,1,-9]]}})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as client:
+            cells = await DepthTiles(client).tile((437,157))
+            assert list(cells[:,2]) == [0,-1]
+    asyncio.run(run())

@@ -186,6 +186,7 @@ struct CalculatedRoute: Codable, Identifiable, Equatable {
     var waypointIndices: [Int]?
     var elevationProfile: [RouteElevationSample]?
     var elevationSource: String?
+    var marineRoutingRevision: Int?
     var marineDraft: Double?
     var marineDepthSource: String?
     var marineDepthUncertain: Bool?
