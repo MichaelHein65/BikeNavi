@@ -4,6 +4,29 @@ import MapLibre
 
 final class RouteMapTests: XCTestCase {
     @MainActor
+    func testMarineCameraUsesRawPositionAndKeepsNorthUpAndUserZoom() throws {
+        let (map, coordinator) = try fixture()
+        map.setZoomLevel(14, animated: false)
+        coordinator.parent.marineNavigation = true
+        coordinator.parent.follow = true
+        coordinator.parent.navigationHeading = 135
+        coordinator.parent.navigationPosition = Coordinate(latitude: 43.7508, longitude: 15.7458)
+        coordinator.updateNavigationCamera()
+        XCTAssertEqual(map.camera.pitch, 0, accuracy: 0.001)
+        XCTAssertEqual(map.camera.heading, 0, accuracy: 0.001)
+        XCTAssertEqual(map.centerCoordinate.latitude, 43.7508, accuracy: 0.000001)
+        XCTAssertEqual(map.zoomLevel, 14, accuracy: 0.001)
+        coordinator.mapView(map, regionWillChangeWith: .gesturePan, animated: false)
+        XCTAssertTrue(coordinator.navigationSuspended)
+        coordinator.parent.navigationPosition?.latitude += 0.001
+        coordinator.updateNavigationCamera()
+        XCTAssertEqual(map.centerCoordinate.latitude, 43.7508, accuracy: 0.000001)
+        coordinator.resetNavigationInteraction()
+        coordinator.updateNavigationCamera()
+        XCTAssertEqual(map.centerCoordinate.latitude, 43.7518, accuracy: 0.000001)
+        map.delegate = nil
+    }
+    @MainActor
     private func fixture() throws -> (MLNMapView, RouteMap.Coordinator) {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("map-test-\(UUID()).json")
         try Data(##"{"version":8,"sources":{},"layers":[{"id":"background","type":"background","paint":{"background-color":"#ffffff"}}]}"##.utf8).write(to: url)
@@ -24,6 +47,26 @@ final class RouteMapTests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [loaded], timeout: 10), .completed)
         try FileManager.default.removeItem(at: url)
         return (map, coordinator)
+    }
+
+    @MainActor
+    func testIndependentDepthLayerSurvivesStyleReloadAndToggleWithoutLosingRoute() throws {
+        let (map, coordinator) = try fixture()
+        let count = map.annotations?.count
+        coordinator.parent.showWaterDepths = true
+        coordinator.updateWaterDepths()
+        XCTAssertNotNil(map.style?.source(withIdentifier: "emodnet-depth"))
+        XCTAssertEqual(map.style?.layer(withIdentifier: "emodnet-depth")?.isVisible, true)
+        XCTAssertEqual(map.viewWithTag(71304)?.isHidden, false)
+        coordinator.parent.showWaterDepths = false
+        coordinator.updateWaterDepths()
+        XCTAssertEqual(map.style?.layer(withIdentifier: "emodnet-depth")?.isVisible, false)
+        XCTAssertEqual(map.annotations?.count, count)
+        coordinator.parent.showWaterDepths = true
+        coordinator.mapView(map, didFinishLoading: try XCTUnwrap(map.style))
+        XCTAssertEqual(map.style?.layer(withIdentifier: "emodnet-depth")?.isVisible, true)
+        XCTAssertEqual(map.annotations?.count, count)
+        map.delegate = nil
     }
 
     @MainActor

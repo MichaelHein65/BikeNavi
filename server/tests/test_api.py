@@ -248,8 +248,10 @@ def test_old_receipt_still_accepts_retry_without_naming_field(client, with_route
         change["document"]["route"].pop("surfaceSections")
     legacy_payload = Mutation.model_validate(change).model_dump(mode="json")
     legacy_payload["document"]["profile"].pop("travelMode")
+    legacy_payload["document"]["profile"].pop("boatDraft")
+    legacy_payload["document"]["profile"].pop("boatSpeedKnots")
     if with_route:
-        for field in ("walkingStartIndex", "walkingDistance", "cyclingDistance", "unmappedDestinationDistance"):
+        for field in ("walkingStartIndex", "walkingDistance", "cyclingDistance", "unmappedDestinationDistance", "marineDraft", "marineDepthSource", "marineDepthUncertain"):
             legacy_payload["document"]["route"].pop(field)
     legacy_payload["document"].pop("usesAutomaticTitle")
     legacy_payload["document"].pop("awaitingStart")

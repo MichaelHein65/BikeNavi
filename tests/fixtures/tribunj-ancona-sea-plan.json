@@ -1,0 +1,88 @@
+{
+  "id": "7C9D88D1-CED7-4C5E-A22D-CCF1E6E06388",
+  "kind": "plan",
+  "title": "Tribunj–Ancona · Seeweg-Beispiel",
+  "usesAutomaticTitle": false,
+  "createdAt": 1790146800,
+  "updatedAt": 1790146800,
+  "waypoints": [
+    {
+      "id": "BEAA04B2-48B9-4114-9340-94D1A9B46A85",
+      "name": "Tribunj · Beispielstart im Wasser",
+      "coordinate": {
+        "latitude": 43.7508,
+        "longitude": 15.7458
+      }
+    },
+    {
+      "id": "A8E66D7D-82D6-4B65-93C8-6DF2D2B8F88D",
+      "name": "Ancona · Beispielziel vor dem Hafen",
+      "coordinate": {
+        "latitude": 43.635,
+        "longitude": 13.5
+      }
+    }
+  ],
+  "profile": {
+    "travelMode": "sea",
+    "bike": "touring",
+    "electric": false,
+    "surface": "any",
+    "gentleHills": false,
+    "boatDraft": 2,
+    "boatSpeedKnots": 4
+  },
+  "track": [],
+  "movingDuration": 0,
+  "recordingState": "none",
+  "route": {
+    "id": "42aa32ed-6829-4fa0-b00d-c8fb404e49f0",
+    "coordinates": [
+      {
+        "latitude": 43.7508,
+        "longitude": 15.7458
+      },
+      {
+        "longitude": 15.380972813034276,
+        "latitude": 43.646831626581125
+      },
+      {
+        "latitude": 43.635,
+        "longitude": 13.5
+      }
+    ],
+    "distance": 182891.94385031954,
+    "duration": 88878.37444129998,
+    "ascent": 0,
+    "descent": 0,
+    "maneuvers": [
+      {
+        "instruction": "Kurs 248° · Kurswechsel 2",
+        "distance": 31525.367088939423,
+        "coordinateIndex": 0,
+        "type": 11
+      },
+      {
+        "instruction": "Kurs 270° · Kurswechsel 3",
+        "distance": 151366.57676138013,
+        "coordinateIndex": 1,
+        "type": 11
+      }
+    ],
+    "surfaces": [],
+    "warnings": [
+      "Wasserweg anhand erfasster OSM-Küsten; erfasste Seewege werden bevorzugt. Keine Prüfung von Wassertiefen, Strömung, Sperrungen oder nautischer Eignung. Amtliche Seekarten und aktuelle Hinweise prüfen.",
+      "Tiefen entlang dieser Planung sind teilweise unbekannt: EMODnet löst enge Küstenbereiche nicht ausreichend auf. Diese Abschnitte sind nicht auf ausreichende Tiefe geprüft.",
+      "EMODnet DTM 2024 · nicht zur Navigation geeignet. Grobe Rastertiefen bezogen auf LAT; teils Zellmittelwerte statt geringster Tiefe. Keine Prüfung von Wasserstand, Hindernissen oder aktueller Befahrbarkeit."
+    ],
+    "provider": "Seeweg · OSM-Wasserwege",
+    "calculatedAt": 1791956879.954877,
+    "waypointIndices": [
+      0,
+      2
+    ],
+    "marineDepthUncertain": true,
+    "marineDraft": 2.0,
+    "marineDepthSource": "EMODnet DTM 2024 · LAT"
+  }
+}

@@ -1,6 +1,7 @@
 import Foundation
 
 struct LocalNavigationState: Codable, Equatable {
+    var marineNextWaypointIndex: Int?
     var connector: CalculatedRoute?
     var rejoinIndex: Int?
     var originalProgress = 0.0

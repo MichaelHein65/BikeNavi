@@ -211,6 +211,11 @@ class ORS:
             raise HTTPException(502, "Der Kartendienst ist gerade nicht erreichbar.") from error
 
     async def route(self, request: RouteRequest, include_context: bool = True, route_validator=None) -> dict:
+        if request.profile.travelMode == "sea":
+            from .marine import MarineRouter
+            if not hasattr(self, "marine"):
+                self.marine = MarineRouter(self.client, self.overpass_url)
+            return await self.marine.route(request)
         if request.profile.travelMode in {"hiking", "bikeAndHike"}:
             from .hiking import route_with_walking
             try:

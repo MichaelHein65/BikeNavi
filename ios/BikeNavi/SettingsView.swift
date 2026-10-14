@@ -4,6 +4,7 @@ import MediaPlayer
 struct SettingsView: View {
     @EnvironmentObject var state: AppState
     @Environment(\.scenePhase) private var scenePhase
+    @FocusState private var editingBoat: Bool
     var body: some View {
         NavigationStack {
             Form {
@@ -31,23 +32,43 @@ struct SettingsView: View {
                 }
                 if let notice = state.notice { Section("Status") { Text(notice).font(.subheadline) } }
                 Section {
+                    HStack {
+                        Text("Tiefgang"); Spacer()
+                        TextField("2", value: $state.boatDraft, format: .number.precision(.fractionLength(1)))
+                            .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 80)
+                            .focused($editingBoat).accessibilityIdentifier("boatDraft")
+                        Text("m")
+                    }
+                    HStack {
+                        Text("Durchschnittstempo"); Spacer()
+                        TextField("4", value: $state.boatSpeedKnots, format: .number.precision(.fractionLength(1)))
+                            .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 80)
+                            .focused($editingBoat).accessibilityIdentifier("boatSpeedKnots")
+                        Text("kn")
+                    }
+                } header: { Text("Dein Boot") } footer: {
+                    Text("Bleibt auf diesem iPhone gespeichert. Der Tiefgang wird bei neuen Seewegplanungen mit EMODnet-Rasterwerten verglichen. Keine Navigationsfreigabe. Das Durchschnittstempo dient der geschätzten Fahrzeit und ETA; Standard 2 m und 4 kn.")
+                }
+                Section {
                     Picker("Kartenansicht", selection: $state.selectedMapStyle) {
                         ForEach(MapStyle.allCases) { style in Text(style.title).tag(style) }
                     }.accessibilityIdentifier("settingsMapStyle")
-                    Text("Beim App-Start immer Standard · Deutsch").font(.footnote).foregroundStyle(.secondary)
+                    Text("Standard beim App-Start · Seeweg öffnet die Seekarte").font(.footnote).foregroundStyle(.secondary)
                     if state.selectedMapStyle == .custom {
                         TextField("HTTPS-Adresse des Kartenstils", text: $state.customMapStyleURL)
                             .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     }
+                    Toggle("EMODnet-Wassertiefen", isOn: $state.showWaterDepths).accessibilityIdentifier("waterDepthToggle")
+                    Text("Nicht zur Navigation geeignet · grobe Tiefenübersicht für verfügbare Meeresgebiete").font(.footnote).foregroundStyle(.secondary)
                     Toggle("Eigener Kartenserver für Offline-Pakete", isOn: $state.offlineMapsAllowed)
                 } header: { Text("Karten") } footer: {
-                    Text("Die Auswahl gilt bis zum nächsten App-Start für alle Karten. Satellit zeigt Luftbilder ohne Ortsbeschriftungen; Topografisch zeigt Gelände und Höhenlinien. Öffentliche Karten sind Online-Ansichten. Offline-Downloads sind nur mit eigenem Kartenstil und Kartenserver verfügbar.")
+                    Text("Seekarte zeigt OpenSeaMap-Seezeichen und öffnet die maritime Fahrtansicht ohne Fahrradverbindung. Das Profil Seeweg berechnet Wasserwege über den Pi und bevorzugt erfasste Seewege. EMODnet-Rastertiefen werden bei der Planung berücksichtigt; Wasserstand und Hindernisse werden nicht geprüft. Öffentliche Kartenansichten benötigen Internet. Offline-Downloads sind nur mit eigenem Kartenstil und Kartenserver verfügbar.")
                 }
-                Section("Dein Bike") {
+                if !state.isMarinePresentation { Section("Dein Bike") {
                     NavigationLink { BikeBluetoothTestView() } label: {
                         Label("Bosch Kiox 500 · Verbindung testen", systemImage: "bicycle")
                     }
-                }
+                } }
                 Section("Deine Daten") {
                     LabeledContent("Lokal gespeicherte Touren", value: "\(state.records.filter { !$0.deleted }.count)")
                     LabeledContent("Abgleich ausstehend", value: "\(state.records.filter(\.dirty).count)")
@@ -58,11 +79,14 @@ struct SettingsView: View {
                     Link("OpenFreeMap / OpenMapTiles", destination: URL(string: "https://openfreemap.org")!)
                     Link("Satellitenbilder: Esri World Imagery", destination: URL(string: "https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9")!)
                     Link("Topografisch: OpenTopoMap · CC-BY-SA", destination: URL(string: "https://opentopomap.org/about")!)
+                    Link("Tiefen: EMODnet · CC BY 4.0", destination: URL(string: "https://emodnet.ec.europa.eu/en/bathymetry")!)
+                    Link("Seekarte: OpenSeaMap", destination: URL(string: "https://www.openseamap.org")!)
                     Link("Deutsche Kartenbeschriftungen", destination: URL(string: "https://github.com/kalwinskidawid/openfreemap-translations")!)
                     Link("Routing: openrouteservice / HeiGIT", destination: URL(string: "https://openrouteservice.org")!)
                     LabeledContent("Version", value: "\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "–"))")
                 }
             }.navigationTitle("Einstellungen")
+                .toolbar { ToolbarItemGroup(placement: .keyboard) { if editingBoat { Spacer(); Button("Fertig") { editingBoat = false } } } }
                 .onAppear { state.observeSystemVolume() }
                 .onDisappear { state.stopObservingSystemVolume() }
                 .onChange(of: scenePhase) { _, phase in

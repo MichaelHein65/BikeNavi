@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum MapStyle: String, CaseIterable, Identifiable {
-    case standard, light, detailed, dark, satellite, topographic, custom
+    case standard, light, detailed, dark, satellite, topographic, seamap, custom
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -11,6 +11,7 @@ enum MapStyle: String, CaseIterable, Identifiable {
         case .dark: "Dunkel"
         case .satellite: "Satellit"
         case .topographic: "Topografisch"
+        case .seamap: "Seekarte · OpenSeaMap"
         case .custom: "Eigener Kartenstil"
         }
     }
@@ -20,7 +21,7 @@ enum MapStyle: String, CaseIterable, Identifiable {
         case .light: "https://tiles.openfreemap.org/styles/positron"
         case .detailed: "https://tiles.openfreemap.org/styles/bright"
         case .dark: "https://tiles.openfreemap.org/styles/dark"
-        case .satellite, .topographic: Bundle.main.url(forResource: rawValue, withExtension: "json")!.absoluteString
+        case .satellite, .topographic, .seamap: Bundle.main.url(forResource: rawValue, withExtension: "json")!.absoluteString
         case .custom: customURL.trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }
@@ -34,6 +35,11 @@ struct MapStyleMenu: View {
                 ForEach(MapStyle.allCases.filter { $0 != .custom || !state.customMapStyleURL.isEmpty }) { style in
                     Text(style.title).tag(style)
                 }
+            }
+            Toggle("EMODnet-Wassertiefen", isOn: $state.showWaterDepths).accessibilityIdentifier("mapWaterDepthToggle")
+            Text("EMODnet · nicht zur Navigation geeignet")
+            if state.showWaterDepths {
+                Link("Tiefenlegende (Meter)", destination: URL(string: "https://ows.emodnet-bathymetry.eu/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetLegendGraphic&LAYER=emodnet:mean_multicolour&FORMAT=image/png")!)
             }
         } label: {
             Image(systemName: "square.3.layers.3d").font(.title3).frame(width: 44, height: 44)

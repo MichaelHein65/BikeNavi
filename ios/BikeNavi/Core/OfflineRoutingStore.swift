@@ -54,6 +54,7 @@ actor OfflineRoutingStore {
     /// Planning never waits for the local navigation window when a server is configured.
     func calculate(document: TourDocument, api: APIClient?,
                    progress: @Sendable (Int, Int) async -> Void) async throws -> CalculatedRoute {
+        if document.profile.mode == .sea && api == nil { throw MarineNavigation.Failure.server }
         if let api { return try await api.route(document, includeContext: false) }
         return try await plan(document: document, api: nil, progress: progress).0
     }

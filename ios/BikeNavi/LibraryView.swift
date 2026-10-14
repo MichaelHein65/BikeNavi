@@ -29,7 +29,7 @@ struct LibraryView: View {
                                 Text(record.document.title).font(.headline).lineLimit(2)
                             }
                             HStack(spacing: 15) {
-                                Text(Format.distance(kind == .ride ? record.document.recordedDistance : record.document.route?.distance ?? 0))
+                                Text(record.document.profile.mode == .sea ? MarineNavigation.distance(kind == .ride ? record.document.recordedDistance : record.document.route?.distance ?? 0) : Format.distance(kind == .ride ? record.document.recordedDistance : record.document.route?.distance ?? 0))
                                 if let route = record.document.route { Label(route.hasElevation ? "\(Int(route.ascent.rounded())) m" : "–", systemImage: "arrow.up.right") }
                                 Spacer()
                                 Image(systemName: record.dirty || ((try? state.store.bikeSampleCounts(rideID: record.id).pending) ?? 0) > 0 ? "internaldrive" : "checkmark.icloud")
@@ -70,16 +70,20 @@ struct TourDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 RouteMap(styleURL: state.mapStyleURL, route: document.route, waypoints: document.waypoints,
-                         track: document.track, modeSections: document.kind == .ride ? modeSections : nil, fitRevision: document.id, colorBySurface: true,
+                         track: document.track, modeSections: document.kind == .ride && document.profile.mode != .sea ? modeSections : nil, fitRevision: document.id, showWaterDepths: state.showWaterDepths, colorBySurface: document.profile.mode != .sea,
                          hasStart: !document.isAwaitingStart)
                     .frame(height: 300).clipShape(RoundedRectangle(cornerRadius: 24))
-                if document.kind == .ride {
+                if document.kind == .ride && document.profile.mode != .sea {
                     RideModeLegend(modes: Array(Set(modeSections.compactMap(\.mode))).sorted(),
                                    hasUnknown: modeSections.contains { $0.mode == nil })
                 }
                 HStack {
-                    Metric(label: document.kind == .ride ? "Gefahren" : "Strecke", value: Format.distance(document.kind == .ride ? document.recordedDistance : document.route?.distance ?? 0))
-                    Metric(label: document.kind == .ride ? "Aufgezeichnet" : "Fahrzeit ca.", value: Format.duration(document.kind == .ride ? document.movingDuration : document.route.map { RouteTravelTime(route: $0, profile: document.profile).total } ?? 0))
+                    Metric(label: document.kind == .ride ? "Gefahren" : "Strecke", value: document.profile.mode == .sea ? MarineNavigation.distance(document.kind == .ride ? document.recordedDistance : document.route?.distance ?? 0) : Format.distance(document.kind == .ride ? document.recordedDistance : document.route?.distance ?? 0))
+                    if document.profile.mode == .sea && document.kind == .plan {
+                        Metric(label: "Abschnitte", value: "\(max(0, (document.route?.coordinates.count ?? 1) - 1))")
+                    } else {
+                        Metric(label: document.kind == .ride ? "Aufgezeichnet" : "Fahrzeit ca.", value: Format.duration(document.kind == .ride ? document.movingDuration : document.route.map { RouteTravelTime(route: $0, profile: document.profile).total } ?? 0))
+                    }
                 }
                 if let blogRideID {
                     VStack(alignment: .leading, spacing: 8) {
@@ -88,12 +92,13 @@ struct TourDetailView: View {
                     }.padding(16)
                         .background(Theme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
                 }
-                if document.kind == .ride, let counts = try? state.store.bikeSampleCounts(rideID: document.id) {
+                if document.kind == .ride && document.profile.mode != .sea, let counts = try? state.store.bikeSampleCounts(rideID: document.id) {
                     Text(counts.total == 0 ? "Noch keine Bike-Messungen aufgezeichnet" :
                         "\(counts.total) Bike-Messungen · " + (counts.pending == 0 ? "auf dem Pi gespeichert" : "\(counts.pending) zur Übertragung vorgemerkt"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                if document.kind == .ride {
+                if document.profile.mode == .sea { Text(MarineNavigation.warning).font(.caption) }
+                else if document.kind == .ride {
                     RecordedElevationChart(points: elevationPoints)
                     RidePowerChart(points: powerPoints, distanceKM: document.recordedDistance / 1000)
                     if let measurementError { Text(measurementError).font(.caption).foregroundStyle(.red) }
@@ -101,20 +106,23 @@ struct TourDetailView: View {
                     ElevationChart(route: route).frame(height: 140)
                 }
                 if document.route != nil {
-                    Button("Wegbeschaffenheit und Routendetails") { showRoute = true }
+                    Button(document.profile.mode == .sea ? "Wegpunkte und Kurse" : "Wegbeschaffenheit und Routendetails") { showRoute = true }
                 }
                 Button { state.open(document) } label: {
                     Label(document.kind == .ride ? "Als neue Tour planen" : "Planung öffnen", systemImage: "map")
                         .frame(maxWidth: .infinity).padding(.vertical, 8)
                 }.buttonStyle(.borderedProminent).tint(Theme.forest).foregroundStyle(.white)
                 if let exportURL { ShareLink(item: exportURL) { Label("GPX exportieren", systemImage: "square.and.arrow.up") } }
-                if document.kind == .ride { Text("Belagsfarben: geplante Route · Fahrmodusfarben: gefahrene Strecke").font(.caption).foregroundStyle(.secondary) }
+                if document.kind == .ride && document.profile.mode != .sea { Text("Belagsfarben: geplante Route · Fahrmodusfarben: gefahrene Strecke").font(.caption).foregroundStyle(.secondary) }
             }.padding(20)
         }.background(Theme.paper).navigationTitle(document.title).navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: $showRoute) { if let route = document.route { RouteDetailsView(route: route) } }
+            .sheet(isPresented: $showRoute) {
+                if document.profile.mode == .sea { MarinePlanDetailsView(points: document.waypoints, route: document.route) }
+                else if let route = document.route { RouteDetailsView(route: route) }
+            }
             .task(id: document.id) {
                 exportURL = try? GPX.write(document)
-                guard document.kind == .ride else { return }
+                guard document.kind == .ride && document.profile.mode != .sea else { return }
                 elevationPoints = RideHistory.elevations(document.track)
                 do {
                     let samples = try state.store.bikeSamples(rideID: document.id, limit: Int.max)

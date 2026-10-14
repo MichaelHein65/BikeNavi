@@ -21,7 +21,7 @@ struct PlannerView: View {
         NavigationStack {
             ZStack(alignment: .top) {
                 RouteMap(styleURL: state.mapStyleURL, route: state.plan.route, waypoints: state.plan.waypoints, savedPlaces: state.savedPlaces,
-                         focus: state.mapFocus, fitRevision: state.mapRevision, colorBySurface: true, topOverlayInset: 170, hasStart: !state.plan.isAwaitingStart,
+                         focus: state.mapFocus, fitRevision: state.mapRevision, marineNavigation: state.plan.profile.mode == .sea, showWaterDepths: state.showWaterDepths, colorBySurface: state.plan.profile.mode != .sea, topOverlayInset: 170, hasStart: !state.plan.isAwaitingStart,
                          onTap: {
                              if editingTourName { finishEditingName() }
                              else { state.selectedPoint = $0; choosingPoint = true }
@@ -87,7 +87,10 @@ struct PlannerView: View {
             .onChange(of: state.mapStyleURL) { _, _ in mapError = nil }
             .sheet(isPresented: $showSearch) { SearchView() }
             .sheet(isPresented: $showProfile) { ProfileView() }
-            .sheet(isPresented: $showDetails) { if let route = state.plan.route { RouteDetailsView(route: route) } }
+            .sheet(isPresented: $showDetails) {
+                if state.plan.profile.mode == .sea { MarinePlanDetailsView(points: state.plan.waypoints, route: state.plan.route) }
+                else if let route = state.plan.route { RouteDetailsView(route: route) }
+            }
             .sheet(isPresented: $showRouteDescription) { RouteDescriptionView() }
             .sheet(isPresented: $showWaypoints) { WaypointsView() }
             .sheet(isPresented: $showSavedPlaces) { SavedPlacesView() }
@@ -160,7 +163,7 @@ struct PlannerView: View {
                     }.buttonStyle(.bordered)
                     Spacer(minLength: 0)
                 }
-                Text(state.plan.profile.mode == .hiking ? "Ohne Klettern" : state.plan.profile.surface.title)
+                Text(state.plan.profile.mode == .sea ? "Wasserwege · Seewege bevorzugt" : state.plan.profile.mode == .hiking ? "Ohne Klettern" : state.plan.profile.surface.title)
                     .font(.caption).foregroundStyle(Theme.secondaryInk)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("surfacePreferenceSummary")
@@ -186,10 +189,23 @@ struct PlannerView: View {
                 }
                 if let route = state.plan.route {
                     HStack {
-                        Metric(label: "Strecke", value: Format.distance(route.distance))
-                        Metric(label: "Fahrzeit ca.", value: Format.duration(RouteTravelTime(route: route, profile: state.plan.profile).total))
-                        Metric(label: "Anstieg", value: route.hasElevation ? "\(Int(route.ascent.rounded())) m" : "–")
+                        if state.plan.profile.mode == .sea {
+                            Metric(label: "Seeweg", value: MarineNavigation.distance(route.distance))
+                            Metric(label: "Abschnitte", value: "\(max(0, route.coordinates.count - 1))")
+                            Metric(label: "Erster Kurs", value: MarineNavigation.legs(MarineNavigation.navigationPoints(state.plan)).first.map { MarineNavigation.course($0.course) } ?? "—")
+                        } else {
+                            Metric(label: "Strecke", value: Format.distance(route.distance))
+                            Metric(label: "Fahrzeit ca.", value: Format.duration(RouteTravelTime(route: route, profile: state.plan.profile).total))
+                            Metric(label: "Anstieg", value: route.hasElevation ? "\(Int(route.ascent.rounded())) m" : "–")
+                        }
                     }
+                    if state.plan.profile.mode == .sea {
+                        if route.marineDepthUncertain == true { Label("Tiefen teilweise unbekannt · amtliche Seekarte prüfen", systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange) }
+                        Text(MarineNavigation.depthWarning).font(.caption).foregroundStyle(Theme.secondaryInk)
+                        if let draft = route.marineDraft {
+                            Text("Tiefgang: " + draft.formatted(.number.precision(.fractionLength(1))) + " m · Fahrzeit ca. " + Format.duration(MarineNavigation.travelTime(distance: route.distance, speedKnots: state.boatSpeedKnots) ?? 0)).font(.caption)
+                        }
+                    } else {
                     if let missing = route.unmappedDestinationDistance {
                         Label("Wegdaten zum Ziel fehlen · ca. " + Format.distance(missing) + " Luftlinie. Zugang vor Ort prüfen.", systemImage: "exclamationmark.triangle")
                             .font(.caption).foregroundStyle(.orange)
@@ -216,13 +232,15 @@ struct PlannerView: View {
                             }.font(.caption)
                         }
                     }
+                    }
                     HStack(spacing: 8) {
                         Button { showDetails = true } label: {
-                            Image(systemName: "chart.xyaxis.line").font(.system(size: 20, weight: .semibold))
+                            Image(systemName: state.plan.profile.mode == .sea ? "list.number" : "chart.xyaxis.line").font(.system(size: 20, weight: .semibold))
                                 .frame(width: 52)
                         }
                             .buttonStyle(PlanningActionStyle(background: Theme.accent.opacity(0.10)))
-                            .accessibilityLabel("Höhenprofil und Wegbeläge")
+                            .accessibilityLabel(state.plan.profile.mode == .sea ? "Wegpunkte und Kurse" : "Höhenprofil und Wegbeläge")
+                        if state.plan.profile.mode != .sea {
                         Button { showRouteDescription = true } label: {
                             Label("Beschreibung", systemImage: "sparkles")
                                 .lineLimit(1).minimumScaleFactor(0.85)
@@ -230,8 +248,9 @@ struct PlannerView: View {
                         }.buttonStyle(PlanningActionStyle(background: Theme.accent.opacity(0.22)))
                             .accessibilityLabel("Routenbeschreibung")
                             .accessibilityIdentifier("routeDescription")
+                        }
                         Button { if state.waitingForRideLocation { state.cancelRideStart() } else { state.startRide() } } label: {
-                            Label(state.waitingForRideLocation ? "Standortsuche abbrechen" : "Tour starten", systemImage: "location.north.fill")
+                            Label(state.waitingForRideLocation ? "Standortsuche abbrechen" : state.plan.profile.mode == .sea ? "Fahrt starten" : "Tour starten", systemImage: state.plan.profile.mode == .sea ? "sailboat.fill" : "location.north.fill")
                                 .lineLimit(2).minimumScaleFactor(0.85)
                                 .padding(.horizontal, 8).frame(maxWidth: .infinity)
                         }
@@ -524,13 +543,14 @@ struct ProfileView: View {
                         }.foregroundStyle(.primary).accessibilityIdentifier("travelMode_" + mode.rawValue)
                     }
                 } header: { Text("Unterwegs") } footer: {
-                    Text(state.plan.profile.mode == .bikeAndHike
+                    Text(state.plan.profile.mode == .sea ? "Setze Wegpunkte im Wasser. Der Pi berechnet Verbindungen anhand der Küsten und bevorzugt erfasste Seewege. EMODnet-Rasterwerte berücksichtigen den Tiefgang aus Einstellungen. Nicht zur Navigation geeignet; keine Prüfung von Wasserstand, Hindernissen und aktuellen Sperrungen."
+                         : state.plan.profile.mode == .bikeAndHike
                          ? "Mit dem Rad so nah wie möglich zum Ziel, dann zu Fuß. Der berechnete Übergang wird als „Rad abstellen“ markiert. Zwischenziele werden mit dem Rad angefahren."
                          : state.plan.profile.mode == .hiking
                          ? "Einfache Wanderwege ohne bekannte Kletterpassagen (höchstens SAC T1). Fehlende Schwierigkeitsangaben bleiben möglich."
                          : "Die gesamte Tour mit dem Rad fahren.")
                 }
-                if state.plan.profile.mode != .hiking {
+                if state.plan.profile.mode != .hiking && state.plan.profile.mode != .sea {
                 Section("Dein Fahrrad") {
                     Picker("Fahrradtyp", selection: $state.plan.profile.bike) { ForEach(Bike.allCases, id: \.self) { Text($0.title).tag($0) } }
                     Toggle("Elektrische Unterstützung", isOn: $state.plan.profile.electric)
@@ -546,13 +566,13 @@ struct ProfileView: View {
                 }
                 Section { Toggle("Sanfte Steigungen bevorzugen", isOn: $state.plan.profile.gentleHills) }
                 }
-                if state.plan.profile.mode != .hiking {
+                if state.plan.profile.mode != .hiking && state.plan.profile.mode != .sea {
                 Section("Schnellauswahl") {
                     Button("Meine Tour · Schotter erlaubt") { state.plan.profile.surface = .any }
                     Button("Gemeinsam · befestigte Wege bevorzugen") { state.plan.profile.surface = .preferPaved }
                 }
                 }
-                if state.plan.profile.mode != .cycling {
+                if state.plan.profile.mode == .hiking || state.plan.profile.mode == .bikeAndHike {
                     Section {
                         Text("Die Berechnung benötigt den Pi. Gespeicherte Strecken funktionieren offline; lokale Rückführung auf Wanderwegen ist noch nicht verfügbar.")
                         Text("Wanderwege können in OpenStreetMap fehlen. Beschilderung und Sperrungen vor Ort beachten.")

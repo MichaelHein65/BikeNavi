@@ -41,6 +41,8 @@ struct RouteMap: UIViewRepresentable {
     var fitRevision: UUID?
     var follow = false
     var followHeading = false
+    var marineNavigation = false
+    var showWaterDepths = false
     var navigationPosition: Coordinate?
     var navigationHeading: Double?
     var colorBySurface = false
@@ -63,6 +65,8 @@ struct RouteMap: UIViewRepresentable {
         // MapLibre's attribution button remains visible, including data/style attribution.
         map.attributionButtonPosition = .bottomLeft
         map.tintColor = UIColor(Theme.forest)
+        map.isRotateEnabled = !marineNavigation
+        map.isPitchEnabled = !marineNavigation
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tapped(_:)))
         for gesture in map.gestureRecognizers ?? [] {
             if let other = gesture as? UITapGestureRecognizer, other.numberOfTapsRequired > 1 { tap.require(toFail: other) }
@@ -80,14 +84,18 @@ struct RouteMap: UIViewRepresentable {
     func updateUIView(_ map: MLNMapView, context: Context) {
         let c = context.coordinator
         let wasFollowing = c.parent.follow
+        let wasMarine = c.parent.marineNavigation
         c.parent = self
-        if wasFollowing != follow { c.resetNavigationInteraction() }
+        map.isRotateEnabled = !marineNavigation
+        map.isPitchEnabled = !marineNavigation
+        if wasFollowing != follow || wasMarine != marineNavigation { c.resetNavigationInteraction() }
         if map.styleURL?.absoluteString != styleURL { map.styleURL = URL(string: styleURL) }
         let auth = CLLocationManager().authorizationStatus
         map.showsUserLocation = navigationPosition == nil && (auth == .authorizedAlways || auth == .authorizedWhenInUse)
         if follow && !followHeading && map.showsUserLocation {
             map.userTrackingMode = .follow
         }
+        c.updateWaterDepths()
         c.redraw()
         c.updateNavigationPosition()
         if c.focus != focus, let focus {
@@ -256,7 +264,7 @@ struct RouteMap: UIViewRepresentable {
             if let heading = parent.navigationHeading, heading.isFinite, heading >= 0 {
                 lastNavigationHeading = heading
             }
-            guard parent.follow, parent.followHeading, !navigationSuspended,
+            guard parent.follow, (parent.followHeading || parent.marineNavigation), !navigationSuspended,
                   !applyingNavigationCamera, let map,
                   map.bounds.width > 0, map.bounds.height > 0,
                   let position = parent.navigationPosition?.cl ?? map.userLocation?.location?.coordinate,
@@ -265,6 +273,17 @@ struct RouteMap: UIViewRepresentable {
             defer { applyingNavigationCamera = false }
             map.userTrackingMode = .none
             map.automaticallyAdjustsContentInset = false
+            if parent.marineNavigation {
+                map.contentInset = .zero
+                let zoom = hasLoadedStyle ? map.zoomLevel : 14
+                let camera = map.camera
+                camera.centerCoordinate = position
+                camera.pitch = 0
+                camera.heading = 0
+                map.setCamera(camera, animated: false)
+                map.setZoomLevel(zoom, animated: false)
+                return
+            }
             // The camera target (our position) sits at 80% of the map's height.
             map.contentInset = UIEdgeInsets(top: map.bounds.height * 0.6, left: 0, bottom: 0, right: 0)
             // Request the SDK maximum; MapLibre also caps pitch for the padded viewport
@@ -292,7 +311,7 @@ struct RouteMap: UIViewRepresentable {
         }
 
         private func suspendNavigation() {
-            guard parent.follow, parent.followHeading, !applyingNavigationCamera else { return }
+            guard parent.follow, (parent.followHeading || parent.marineNavigation), !applyingNavigationCamera else { return }
             navigationSuspended = true
             resumeNavigation?.cancel()
             let work = DispatchWorkItem { [weak self] in
@@ -325,10 +344,45 @@ struct RouteMap: UIViewRepresentable {
             updateNavigationCamera()
         }
 
+        func updateWaterDepths() {
+            guard let map, let style = map.style else { return }
+            let identifier = "emodnet-depth"
+            if parent.showWaterDepths && style.source(withIdentifier: identifier) == nil {
+                let template = "https://ows.emodnet-bathymetry.eu/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=emodnet:mean_multicolour,emodnet:contours&STYLES=&FORMAT=image/png&TRANSPARENT=TRUE&SRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256"
+                let source = MLNRasterTileSource(identifier: identifier, tileURLTemplates: [template], options: [
+                    .tileSize: 256, .maximumZoomLevel: 14,
+                    .attributionHTMLString: "Tiefen: <a href=\"https://emodnet.ec.europa.eu/en/bathymetry\">EMODnet Bathymetry Consortium · DTM 2024 · CC BY 4.0</a> · Nicht zur Navigation geeignet"
+                ])
+                style.addSource(source)
+                let layer = MLNRasterStyleLayer(identifier: identifier, source: source)
+                layer.rasterOpacity = NSExpression(forConstantValue: 0.7)
+                if let marks = style.layer(withIdentifier: "seamarks") { style.insertLayer(layer, below: marks) }
+                else { style.addLayer(layer) }
+            }
+            style.layer(withIdentifier: identifier)?.isVisible = parent.showWaterDepths
+            let tag = 71304
+            if parent.showWaterDepths && map.viewWithTag(tag) == nil {
+                let label = UILabel()
+                label.tag = tag
+                label.text = "EMODnet · nicht zur Navigation geeignet"
+                label.font = .systemFont(ofSize: 10, weight: .semibold)
+                label.textColor = .label
+                label.backgroundColor = .secondarySystemBackground.withAlphaComponent(0.95)
+                label.layer.cornerRadius = 4
+                label.clipsToBounds = true
+                label.accessibilityIdentifier = "waterDepthNotice"
+                label.translatesAutoresizingMaskIntoConstraints = false
+                map.addSubview(label)
+                NSLayoutConstraint.activate([label.trailingAnchor.constraint(equalTo: map.trailingAnchor, constant: -8), label.bottomAnchor.constraint(equalTo: map.bottomAnchor, constant: -8)])
+            }
+            map.viewWithTag(tag)?.isHidden = !parent.showWaterDepths
+        }
+
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
+            updateWaterDepths()
             redraw(force: true)
             updateNavigationPosition()
-            if !hasLoadedStyle && !(parent.follow && parent.followHeading) { fit() }
+            if !hasLoadedStyle && !(parent.follow && (parent.followHeading || parent.marineNavigation)) { fit() }
             hasLoadedStyle = true
         }
         func mapViewDidFailLoadingMap(_ mapView: MLNMapView, withError error: Error) {
@@ -341,9 +395,9 @@ struct RouteMap: UIViewRepresentable {
             if let title = annotation.title, title.hasPrefix("mode:"), let code = Int(title.dropFirst(5)) {
                 return UIColor(BikeTelemetryView.modeColor(code) ?? .gray)
             }
-            return annotation.title == "track" ? .systemOrange : UIColor(Theme.forest)
+            return annotation.title == "track" ? .systemOrange : parent.marineNavigation ? UIColor(red: 0.04, green: 0.18, blue: 0.27, alpha: 1) : UIColor(Theme.forest)
         }
-        func mapView(_ mapView: MLNMapView, lineWidthForPolylineAnnotation annotation: MLNPolyline) -> CGFloat { 5 }
+        func mapView(_ mapView: MLNMapView, lineWidthForPolylineAnnotation annotation: MLNPolyline) -> CGFloat { parent.marineNavigation ? 3 : 5 }
         func mapView(_ mapView: MLNMapView, viewFor annotation: MLNAnnotation) -> MLNAnnotationView? {
             if (annotation as AnyObject) === navigationPin {
                 let view = MLNAnnotationView(reuseIdentifier: "navigation-position")

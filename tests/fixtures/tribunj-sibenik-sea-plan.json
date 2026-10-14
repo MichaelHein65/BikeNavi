@@ -1,0 +1,36 @@
+{
+  "id": "960E36CE-B7A2-48B4-B49A-6DA189641DAD",
+  "kind": "plan",
+  "title": "Tribunj–Šibenik · Seeweg-Beispiel",
+  "usesAutomaticTitle": false,
+  "createdAt": 1790146800,
+  "updatedAt": 1790146800,
+  "waypoints": [
+    {
+      "id": "BEAA04B2-48B9-4114-9340-94D1A9B46A85",
+      "name": "Tribunj · Beispielstart im Wasser",
+      "coordinate": {
+        "latitude": 43.7508,
+        "longitude": 15.7458
+      }
+    },
+    {
+      "id": "A8E66D7D-82D6-4B65-93C8-6DF2D2B8F88D",
+      "name": "Šibenik · Beispielziel im Hafenbecken",
+      "coordinate": {
+        "latitude": 43.737,
+        "longitude": 15.8835
+      }
+    }
+  ],
+  "profile": {
+    "travelMode": "sea",
+    "bike": "touring",
+    "electric": false,
+    "surface": "any",
+    "gentleHills": false
+  },
+  "track": [],
+  "movingDuration": 0,
+  "recordingState": "none"
+}

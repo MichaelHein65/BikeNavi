@@ -3,6 +3,7 @@ import Foundation
 
 @MainActor
 final class RideActivityController {
+    var marinePresentation = false
     private var activity: Activity<RideActivityAttributes>?
     private var lastState: RideActivityAttributes.ContentState?
 
@@ -13,11 +14,11 @@ final class RideActivityController {
                 await old.end(nil, dismissalPolicy: .immediate)
             }
             let state = RideActivityAttributes.ContentState(
-                instruction: route == nil ? "Dein Weg wird aufgezeichnet" : "Position auf der Route wird ermittelt",
+                instruction: marinePresentation ? "Deine Spur auf See wird aufgezeichnet" : route == nil ? "Dein Weg wird aufgezeichnet" : "Position auf der Route wird ermittelt",
                 distanceMeters: 0,
                 remainingMeters: 0,
-                symbol: "location.north.fill",
-                status: route == nil ? "Freie Fahrt" : "Navigation läuft"
+                symbol: marinePresentation ? "sailboat.fill" : "location.north.fill",
+                status: marinePresentation ? "Auf See" : route == nil ? "Freie Fahrt" : "Navigation läuft"
             )
             do {
                 activity = try Activity.request(
@@ -47,6 +48,9 @@ final class RideActivityController {
         if paused {
             state = .init(instruction: "Fahrt pausiert", distanceMeters: 0,
                           remainingMeters: rounded(progress?.remaining ?? 0), symbol: "pause.fill", status: "Pause")
+        } else if marinePresentation {
+            state = .init(instruction: "Deine Spur auf See wird aufgezeichnet", distanceMeters: 0,
+                          remainingMeters: 0, symbol: "sailboat.fill", status: "Auf See")
         } else if route == nil {
             state = .init(instruction: "Dein Weg wird aufgezeichnet", distanceMeters: 0,
                           remainingMeters: 0, symbol: "location.north.fill", status: "Freie Fahrt")
@@ -65,7 +69,7 @@ final class RideActivityController {
             state = .init(instruction: "Position auf der Route wird ermittelt", distanceMeters: 0,
                           remainingMeters: 0, symbol: "location.north.fill", status: "Navigation läuft")
         }
-        if var diagramProgress = progress, let route {
+        if !marinePresentation, var diagramProgress = progress, let route {
             // Quantization keeps the diagram stable and avoids unnecessary
             // ActivityKit updates for every individual GPS meter.
             diagramProgress.traveled = (diagramProgress.traveled / 15).rounded(.down) * 15

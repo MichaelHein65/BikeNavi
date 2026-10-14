@@ -75,15 +75,16 @@ enum SurfacePreference: String, Codable, CaseIterable {
 }
 
 enum TravelMode: String, Codable, CaseIterable {
-    case cycling, bikeAndHike, hiking
+    case cycling, bikeAndHike, hiking, sea
     var title: String {
         switch self {
         case .cycling: "Rad"
         case .bikeAndHike: "Rad&Wandern"
         case .hiking: "Wandern"
+        case .sea: "Seeweg"
         }
     }
-    var symbol: String { self == .hiking ? "figure.hiking" : "bicycle" }
+    var symbol: String { self == .sea ? "sailboat.fill" : self == .hiking ? "figure.hiking" : "bicycle" }
 }
 
 struct RidingProfile: Codable, Equatable {
@@ -97,6 +98,8 @@ struct RidingProfile: Codable, Equatable {
     var electric = true
     var surface: SurfacePreference = .any
     var gentleHills = false
+    var boatDraft: Double?
+    var boatSpeedKnots: Double?
     var title: String { mode == .cycling ? (electric ? "E-" : "") + bike.title : mode.title }
 }
 
@@ -183,6 +186,9 @@ struct CalculatedRoute: Codable, Identifiable, Equatable {
     var waypointIndices: [Int]?
     var elevationProfile: [RouteElevationSample]?
     var elevationSource: String?
+    var marineDraft: Double?
+    var marineDepthSource: String?
+    var marineDepthUncertain: Bool?
     var unmappedDestinationDistance: Double?
     var walkingStartIndex: Int?
     var walkingDistance: Double?

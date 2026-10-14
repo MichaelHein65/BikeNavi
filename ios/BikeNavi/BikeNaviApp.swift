@@ -61,6 +61,11 @@ struct AppRoot: View {
             }
         }
         .onAppear { state.updateScreenAwake(sceneActive: phase == .active) }
+        .onChange(of: state.isMarinePresentation, initial: true) { _, marine in
+            bike.setSuspended(marine)
+            bike.monitor(state.tab == 1 && !marine, for: .rideScreen)
+            bike.monitor(state.activeRide != nil && !marine, for: .activeRide)
+        }
         .onChange(of: phase) { _, value in
             state.updateScreenAwake(sceneActive: value == .active)
             if value == .active { state.becameActive(); Task { await state.sync() } }
@@ -68,11 +73,11 @@ struct AppRoot: View {
         }
         .onChange(of: state.tab, initial: true) { _, tab in
             state.cancelRideStart()
-            bike.monitor(tab == 1, for: .rideScreen)
+            bike.monitor(tab == 1 && !state.isMarinePresentation, for: .rideScreen)
             if tab == 1 { state.openRide() }
         }
         .onChange(of: state.activeRide?.id, initial: true) { _, id in
-            bike.monitor(id != nil, for: .activeRide)
+            bike.monitor(id != nil && !state.isMarinePresentation, for: .activeRide)
         }
     }
 }

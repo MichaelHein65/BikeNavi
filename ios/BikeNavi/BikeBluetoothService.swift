@@ -15,6 +15,12 @@ final class BikeBluetoothService: NSObject, ObservableObject, CBCentralManagerDe
     }
     @Published var status = "Bike nicht verbunden"
     @Published var running = false
+    @Published private(set) var suspended = false
+    func setSuspended(_ value: Bool) {
+        guard value != suspended else { return }
+        suspended = value
+        if suspended || consumers.isEmpty { stop() } else { start() }
+    }
     @Published var connected = false
     @Published var candidates: [Candidate] = []
     @Published var battery: Int?
@@ -91,7 +97,7 @@ final class BikeBluetoothService: NSObject, ObservableObject, CBCentralManagerDe
 
     func monitor(_ enabled: Bool, for consumer: Consumer) {
         if enabled { consumers.insert(consumer) } else { consumers.remove(consumer) }
-        if consumers.isEmpty { stop() } else { start() }
+        if suspended || consumers.isEmpty { stop() } else { start() }
     }
 
     func retry() {
@@ -101,7 +107,7 @@ final class BikeBluetoothService: NSObject, ObservableObject, CBCentralManagerDe
     }
 
     private func start() {
-        guard !running else { return }
+        guard !running, !suspended else { return }
         candidates = []; peripherals = [:]
         running = true
         status = "Bluetooth wird vorbereitet"

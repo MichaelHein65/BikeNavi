@@ -21,11 +21,13 @@ class Waypoint(Model):
 
 
 class Profile(Model):
-    travelMode: Literal["cycling", "bikeAndHike", "hiking"] | None = None
+    travelMode: Literal["cycling", "bikeAndHike", "hiking", "sea"] | None = None
     bike: Literal["touring", "gravel", "mountain", "road"] = "touring"
     electric: bool = True
     surface: Literal["any", "preferPaved", "pavedOnly"] = "any"
     gentleHills: bool = False
+    boatDraft: float | None = Field(default=None, ge=0.1, le=20)
+    boatSpeedKnots: float | None = Field(default=None, ge=0.5, le=50)
 
 
 class Maneuver(Model):
@@ -76,6 +78,9 @@ class Route(Model):
     intersectionContexts: list[IntersectionContext] | None = Field(default=None, max_length=10_000)
     warnings: list[str] = Field(default_factory=list)
     provider: str = "openrouteservice"
+    marineDraft: float | None = Field(default=None, ge=0.1, le=20)
+    marineDepthUncertain: bool | None = None
+    marineDepthSource: str | None = Field(default=None, max_length=200)
     calculatedAt: float
     elevationProfile: list[ElevationSample] | None = Field(default=None, min_length=2, max_length=2000)
     elevationSource: str | None = Field(default=None, max_length=200)
@@ -86,6 +91,9 @@ class Route(Model):
 
     @model_validator(mode="after")
     def check_indices(self):
+        if ((self.marineDraft is None) != (self.marineDepthSource is None)
+                or (self.marineDepthUncertain is not None and self.marineDraft is None)):
+            raise ValueError("Unvollständige Tiefenplanung")
         walking = (self.walkingStartIndex, self.walkingDistance, self.cyclingDistance)
         if any(v is not None for v in walking):
             if any(v is None for v in walking):
@@ -128,6 +136,7 @@ class TrackPoint(Model):
 
 
 class LocalNavigationState(Model):
+    marineNextWaypointIndex: int | None = Field(default=None, ge=1, le=100_000)
     connector: Route | None = None
     rejoinIndex: int | None = Field(default=None, ge=0)
     originalProgress: float = Field(default=0, ge=0)
@@ -158,6 +167,9 @@ class Document(Model):
     @model_validator(mode="after")
     def check_local_navigation(self):
         nav = self.localNavigation
+        if nav and nav.marineNextWaypointIndex is not None:
+            if self.kind != "ride" or self.profile.travelMode != "sea" or self.route is None or not 1 <= nav.marineNextWaypointIndex <= len(self.route.coordinates):
+                raise ValueError("Ungültiger nächster nautischer Wegpunkt")
         if nav and nav.skippedWaypointOrdinals:
             if self.kind != "ride" or any(i <= 0 or i >= len(self.waypoints) - 1 for i in nav.skippedWaypointOrdinals):
                 raise ValueError("Nur Zwischenziele einer Fahrt können übersprungen werden")

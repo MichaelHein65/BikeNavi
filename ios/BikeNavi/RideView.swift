@@ -9,7 +9,9 @@ struct RideView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
         NavigationStack {
-            if let ride = state.activeRide {
+            if state.isMarinePresentation {
+                MarineRideView()
+            } else if let ride = state.activeRide {
                 VStack(spacing: 0) {
                     HStack(spacing: 12) {
                         Image(systemName: state.progress?.nextManeuver?.symbol ?? "location.north.fill")
@@ -42,7 +44,7 @@ struct RideView: View {
                         .background(Theme.forest).foregroundStyle(.white)
                     RouteMap(styleURL: state.mapStyleURL, route: state.ridingRoute, waypoints: ride.waypoints,
                              track: ride.track, follow: ride.recordingState == .recording,
-                             followHeading: ride.recordingState == .recording,
+                             followHeading: ride.recordingState == .recording, showWaterDepths: state.showWaterDepths,
                              navigationPosition: state.progress?.snappedPosition ?? state.location.coordinate,
                              navigationHeading: state.location.navigationHeading,
                              colorBySurface: true, topOverlayInset: 40, onError: { mapError = $0 })
@@ -134,7 +136,7 @@ struct RideView: View {
             } else if !state.plan.canCalculateRoute || state.plan.route == nil {
                 VStack(spacing: 0) {
                     RouteMap(styleURL: state.mapStyleURL, route: nil, focus: state.location.coordinate ?? state.mapFocus,
-                             follow: true, navigationPosition: state.location.coordinate,
+                             follow: true, showWaterDepths: state.showWaterDepths, navigationPosition: state.location.coordinate,
                              onError: { mapError = $0 })
                         .accessibilityIdentifier("rideMap")
                         .overlay(alignment: .topLeading) {

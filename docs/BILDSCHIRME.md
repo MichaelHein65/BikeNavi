@@ -1,8 +1,8 @@
 # BikeNavi – Bildschirmgalerie
 
-Version **0.4.0 (4)** · iPhone-Simulator, helle Darstellung. Planung und Routendetails am 24. September 2026 mit Höhenprofil und getrenntem lokalem Umfeld aktualisiert; Planungs-/Fahrtkarten und Einstellungen am 5. Oktober 2026 mit Kartenansichten aktualisiert; Ortssuche am 1. Oktober 2026 mit lokaler Koordinatenerkennung aktualisiert; Fahrprofil am 5. Oktober 2026 mit Rad-/Wanderoptionen aktualisiert; übrige Bilder vom 23. September 2026.
+Version **0.4.0 (4)** · iPhone-Simulator, helle Darstellung. Planung und Routendetails am 24. September 2026 mit Höhenprofil und getrenntem lokalem Umfeld aktualisiert; Planungs-/Fahrtkarten und Einstellungen am 5. Oktober 2026 mit Kartenansichten aktualisiert; Ortssuche am 1. Oktober 2026 mit lokaler Koordinatenerkennung aktualisiert; Fahrprofile und maritime Ansichten am 14. Oktober 2026 mit Seeweg ergänzt; übrige Bilder vom 23. September 2026.
 
-Die Bilder zeigen die tatsächlich laufende App. Die Route stammt aus dem öffentlichen Heidelberg-Beispiel von openrouteservice. Die gespeicherte **Beispielaufzeichnung**, ihre Zeit-/GPS-Samples und ihre Bike-Messwerte sind synthetische Demonstrationsdaten. In der Live-Fahrt ist kein echtes Bike verbunden: fehlende Messwerte bleiben leer. Persönliche Touren und Zugangsdaten sind nicht enthalten. Die Serveradresse `beispiel.invalid` ist ein nicht erreichbarer Platzhalter; ein vorbereitetes lokales Wegenetz ist für dieses alte ORS-Beispiel nicht vorhanden.
+Die Bilder zeigen die tatsächlich laufende App. Die Straßenroute stammt aus dem öffentlichen Heidelberg-Beispiel von openrouteservice. Die Seekartenbilder verwenden öffentliche Tribunj-Beispielpunkte; die Seewegplanung Tribunj–Šibenik wird aus OSM-Küsten automatisch berechnet. Die gespeicherte **Beispielaufzeichnung**, ihre Zeit-/GPS-Samples und ihre Bike-Messwerte sind synthetische Demonstrationsdaten. In der Live-Fahrt ist kein echtes Bike verbunden: fehlende Messwerte bleiben leer. Persönliche Touren und Zugangsdaten sind nicht enthalten. Die Serveradresse `beispiel.invalid` ist ein nicht erreichbarer Platzhalter; ein vorbereitetes lokales Wegenetz ist für dieses alte ORS-Beispiel nicht vorhanden.
 
 Die aktualisierten Ansichten **01** und **07** zeigen die nachträglich über SRTM ergänzten und lokal gespeicherten Höhen der öffentlichen Heidelberg-Beispielgeometrie. Der UI-Test hat Anzeige und Wiederöffnen ohne konfigurierten Serverzugang geprüft. Das Beispiel enthält kein vorbereitetes Offline-Wegenetz; der entsprechende Hinweis in der Planung ist daher erwartet. Die Aufnahmen wurden nach der Umstellung auf das mitwandernde 3-km-Umfeld erneut erstellt und geprüft. Die gespeicherte Route und der Fahrtstart bleiben auch ohne Umfelddaten verfügbar.
 
@@ -27,7 +27,7 @@ Die drei Aktionen am unteren Kartenrand haben eine gemeinsame Höhe und Kapsel-F
 
 | Ortssuche | Fahrprofil |
 | --- | --- |
-| <img src="images/05-suche.png" width="300" alt="Koordinatensuche mit einem öffentlichen Heidelberger Beispielpunkt und gespeicherten Beispielorten"> | <img src="images/06-profil.png" width="300" alt="Rad, Rad&Wandern und Wandern neben Fahrradtyp und Belagswünschen"> |
+| <img src="images/05-suche.png" width="300" alt="Koordinatensuche mit einem öffentlichen Heidelberger Beispielpunkt und gespeicherten Beispielorten"> | <img src="images/06-profil.png" width="300" alt="Rad, Rad&Wandern, Wandern und Seeweg neben Fahrradtyp und Belagswünschen"> |
 
 | Routendetails |
 | --- |
@@ -37,7 +37,7 @@ Die Ortssuche **05** zeigt die Eingabe `49,4100; 8,7000` und den lokal normalisi
 
 ## Rad&Wandern und Wandern
 
-Am 5. Oktober 2026 im separaten Dokumentationssimulator aufgenommen. **06** zeigt die neue Auswahl **Rad**, **Rad&Wandern**, **Wandern**. Der UI-Test prüft Auswahl, ausgeblendete Fahrradoptionen bei Wanderung und die Speicherung nach App-Neustart. **17** zeigt das konservative Wanderprofil und den Link zur freien Wanderübersicht Waymarked Trails.
+**06/17** am 14. Oktober 2026 im separaten Dokumentationssimulator erneuert. **06** zeigt die vier Optionen **Rad**, **Rad&Wandern**, **Wandern**, **Seeweg**. Der UI-Test prüft Auswahl, ausgeblendete Fahrradoptionen bei Wanderung und die Speicherung nach App-Neustart. **17** zeigt das konservative Wanderprofil und den Link zur freien Wanderübersicht Waymarked Trails.
 
 <img src="images/17-wandern-profil.png" width="300" alt="Wanderprofil ohne bekannte Kletterpassagen mit Hinweis auf fehlende OSM-Angaben und externe Wanderkarte">
 
@@ -57,7 +57,7 @@ Neue Aufnahmen **20** und **21** vom 5. Oktober 2026 zeigen die Korrektur für Z
 
 ## Kartenansichten
 
-Neu am 5. Oktober 2026: Das Ebenensymbol in Planung und Fahrt öffnet die Kartenwahl; dieselbe Auswahl steht unter Einstellungen → Karten zur Verfügung. Bei jedem vollständigen App-Start erscheint wieder **Standard · Deutsch**. Tabwechsel und kurze Hintergrundpausen erhalten die gewählte Ansicht. Bilder 01/02, 11, 12/14 sowie 25–29 wurden im Simulator mit der öffentlichen, gekennzeichneten Heidelberg-Beispieltour aktualisiert. Satellit ist eine Online-Luftbildkarte ohne Ortsbeschriftungen; Topografisch zeigt OpenTopoMap-Gelände und Höhenlinien. Routing und Wanderprüfung ändern sich dadurch nicht.
+Neu am 5. Oktober 2026: Das Ebenensymbol in Planung und Fahrt öffnet die Kartenwahl; dieselbe Auswahl steht unter Einstellungen → Karten zur Verfügung. Bei vollständigem App-Start erscheint **Standard · Deutsch**; eine gespeicherte Seewegplanung oder aktive Seefahrt öffnet die Seekarte. Tabwechsel und kurze Hintergrundpausen erhalten die gewählte Ansicht. Bilder 01/02, 11, 12/14 sowie 25–29 wurden im Simulator mit der öffentlichen, gekennzeichneten Heidelberg-Beispieltour aktualisiert. Satellit ist eine Online-Luftbildkarte ohne Ortsbeschriftungen; Topografisch zeigt OpenTopoMap-Gelände und Höhenlinien. Die übrigen Grundkartenstile ändern Routing und Wanderprüfung nicht; Seekarte wählt seit 14. Oktober automatisch Seeweg.
 
 | Hell | Detailreich | Dunkel |
 | --- | --- | --- |
@@ -66,6 +66,44 @@ Neu am 5. Oktober 2026: Das Ebenensymbol in Planung und Fahrt öffnet die Karten
 | Satellit | Topografisch |
 | --- | --- |
 | <img src="images/28-karte-satellit.png" width="300" alt="Öffentliche Heidelberg-Beispieltour auf Esri-Satellitenbildern"> | <img src="images/29-karte-topografisch.png" width="300" alt="Öffentliche Heidelberg-Beispieltour auf OpenTopoMap mit Höhenlinien"> |
+
+Am **14. Oktober 2026** mit **Seekarte · OpenSeaMap**, automatischer **Seeweg**-Profilwahl und optionalen **EMODnet-Wassertiefen** aktualisiert. **55** zeigt öffentliche Tribunj-Beispielpunkte mit absichtlich nicht erreichbarer Beispiel-API: keine berechnete Route und ein ausdrücklicher Serverhinweis. Die Kartenwahl aktiviert nun Seeweg und erhält damit die Seekarte über Neustarts. **11/56/62** zeigen Bootseinstellungen und die Tiefenebene mit gespeicherten Testwerten **2,7 m / 5,5 kn**; die tatsächlichen Standardwerte sind **2 m / 4 kn**. Keine privaten Zugangswerte oder Fahrtdaten.
+
+| Seekarte · OpenSeaMap | Auswahl in den Einstellungen |
+| --- | --- |
+| <img src="images/55-karte-seekarte.png" width="300" alt="Öffentliche Beispielpunkte am Meer um Tribunj mit OpenSeaMap-Seezeichen über der OpenStreetMap-Grundkarte"> | <img src="images/56-einstellungen-seekarte.png" width="300" alt="Bootseinstellungen und gewählte Seekarte mit zuschaltbaren EMODnet-Wassertiefen"> |
+
+Seekarte: © [OpenStreetMap-Mitwirkende](https://www.openstreetmap.org/copyright), Seezeichen © [OpenSeaMap](https://www.openseamap.org). [Nutzungshinweise](https://www.openseamap.org/index.php?id=imprint&L=1). Simulatoraufnahmen mit öffentlichen Tribunj-Beispielpunkten, kein Feldtest. Wiederholen mit `scripts/seed_gallery.py --device DEVICE --elevation --seamap` und `MapStyleTests/testSeaMapExampleAndSettingsScreenshots`; die übrigen Kartenstilaufnahmen verwenden weiter Heidelberg.
+
+### Seeweg planen und auf See fahren
+
+Aktuelle Aufnahmen **57–65** vom **14. Oktober 2026**: öffentliche Planung **Tribunj–Šibenik · Seeweg-Beispiel** mit zwei Start-/Zielpunkten. Der echte Wasserweg-Algorithmus berechnet rund **6,9 sm und zwölf Kursabschnitte** anhand des öffentlichen OSM-Snapshots und nativer EMODnet-Zellen. Fährlinien erhalten keinen Vorteil; die gesamte Linie wird gegen Wasserfläche und Tiefenmaske geprüft. Unbekannte Tiefen sind sichtbar gekennzeichnet. Die lokale HTTPS-Test-API ersetzt nur die Geodatenabrufe durch öffentliche Snapshots; sie ist kein installierter Pi.
+
+| Seewegprofil | Automatische Wasserroute | Wegpunkte und Kurse |
+| --- | --- | --- |
+| <img src="images/57-seeweg-profil.png" width="250" alt="Seewegprofil mit Küstenprüfung und ohne Fahrradoptionen"> | <img src="images/58-seeweg-planung.png" width="250" alt="Automatisch berechnete öffentliche Wasserroute von Tribunj nach Šibenik mit 6,9 Seemeilen und zwölf Kursabschnitten"> | <img src="images/59-seeweg-kurse.png" width="250" alt="Automatisch erzeugte Kurswechsel mit rechtweisenden Kursen, Seemeilen und Koordinaten"> |
+
+| Maritime Fahrt | Aufzeichnung pausiert |
+| --- | --- |
+| <img src="images/60-seekarte-fahren.png" width="300" alt="Gekennzeichnetes GPS-Beispiel auf der Seekarte mit großem Kurs über Grund, Knoten und Peilung zum nächsten Wegpunkt"> | <img src="images/61-seekarte-pause.png" width="300" alt="Pausierte maritime Aufzeichnung mit Seekarte und Fortsetzen ohne Fahrradkommunikation"> |
+
+**60/61** zeigen ausdrücklich synthetisches **GPS-Beispiel · Tribunj–Šibenik**, das der berechneten Route folgt. Kurs über Grund stammt aus dieser Bewegung, nicht aus dem Telefonkompass. Bei Pause kann sich das Boot weiter bewegen; die Aufzeichnung bleibt unterbrochen. Norden bleibt oben; Fahrradverbindung, Höhenprofil und Straßenansagen entfallen. Alle übernommenen Aufnahmen visuell geprüft. Gesamtstrecke und Reststrecke bleiben sichtbar; ETA verwendet das Durchschnittstempo aus Einstellungen und bleibt in Pause leer. EMODnet-Rasterprüfung ist keine bestätigte nautische Befahrbarkeit; keine reale Seefahrt oder Hindernisprüfung.
+
+Wiederholen: `seed_gallery.py --device DEVICE --elevation --seamap`, lokaler HTTPS-Beispielserver `tests/fixtures/marine_server.py` auf Port 18445, danach `MarineRoutingUITests/testAutomaticWaterRouteAndMarineRideAcrossPauseAndRestart`. Der Test prüft die echte automatische Berechnung, Kursanzeige, Streckenaufzeichnung, Pause, Neustart, Fortsetzen und Speichern. [Testdaten und Herkunft](../tests/fixtures/README.md) · [Algorithmus und Grenzen](ARCHITEKTUR.md#seeweg-und-maritime-navigation-13-oktober-2026).
+
+### Bootseinstellungen, EMODnet und lange Törns
+
+**62** zeigt gespeicherte Beispielwerte nach Neustart. Für **63/64** wurden wieder 2 m und 4 kn eingestellt. Die grobe Tiefenebene liegt unter den Seezeichen; ihr Hinweis **nicht zur Navigation geeignet** bleibt sichtbar. Gesamtstrecke und ETA erscheinen in der maritimen Fahrt. **65** zeigt eine zuvor mit echten Anbieterdaten berechnete, gespeicherte Beispielplanung zum Wasserpunkt vor Ancona: **98,8 sm / zwei Abschnitte / etwa 24 h 41 min bei 4 kn**. Der UI-Test prüft ihre Darstellung; die getrennte abschließende Pi-Liveberechnung ergab 98,17 sm und drei Abschnitte. Beide sind öffentliche technische Beispiele, keine Freigabe einer Seeroute.
+
+| Gespeicherte Bootswerte | Tiefen in der Planung |
+| --- | --- |
+| <img src="images/62-boot-einstellungen.png" width="300" alt="Persistierte Beispielwerte 2,7 Meter Tiefgang und 5,5 Knoten Durchschnittstempo"> | <img src="images/63-emodnet-planung.png" width="300" alt="EMODnet-Tiefen über der Tribunj-Planung mit Hinweis auf unbekannte Tiefen"> |
+
+| Gesamtstrecke und ETA | Langer Törn nach Ancona |
+| --- | --- |
+| <img src="images/64-emodnet-fahren-eta.png" width="300" alt="Maritime Fahransicht mit Gesamtstrecke, Reststrecke und geschätzter Ankunft"> | <img src="images/65-seeweg-ancona.png" width="300" alt="Öffentliche Ancona-Beispielplanung mit 98,8 Seemeilen und rund 24 Stunden 41 Minuten"> |
+
+Tiefen: **EMODnet DTM 2024**, [CC BY 4.0 / Nutzungsbedingungen](https://emodnet.ec.europa.eu/en/terms-use-emodnet-online-services-data-and-data-products). Nicht zur Navigation geeignet. Wiederholen zusätzlich mit `MarineRoutingUITests/testBoatSettingsPersistAndDepthLayerWorksAfterRestart` und `MarineRoutingUITests/testLongAnconaExampleUsesStoredDepthPlanWithoutDistanceCutoff`. Alle Bilder visuell geprüft; keine privaten Nutzerbilder übernommen.
 
 Satellitenbilder: Esri World Imagery · Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community. Topografische Kartendaten: © OpenStreetMap-Mitwirkende, SRTM; Kartendarstellung: © [OpenTopoMap](https://opentopomap.org/about) ([CC-BY-SA](https://creativecommons.org/licenses/by-sa/3.0/)). Die Quellhinweise sind zusätzlich über die Karteninformation der App erreichbar. Die Rasterauflösung ist quellenabhängig; größere Zoomstufen vergrößern vorhandene Bildkacheln. Keine Offline-Pakete oder Feldtests.
 

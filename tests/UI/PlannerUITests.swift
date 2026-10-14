@@ -575,6 +575,7 @@ final class RideLocationTests: XCTestCase {
         app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
         app.launchEnvironment["BIKENAVI_START_LOCATION_TEST"] = "delayed"
         app.launchEnvironment["BIKENAVI_FREE_RIDE_TEST"] = "1"
+        app.launchEnvironment["BIKENAVI_MARINE_PREVIEW"] = "0"
         app.launch()
         XCTAssertTrue(app.tabBars.buttons["Fahren"].waitForExistence(timeout: 20))
         app.tabBars.buttons["Fahren"].tap()
@@ -800,6 +801,44 @@ final class WalkingOptionsTests: XCTestCase {
 }
 
 final class MapStyleTests: XCTestCase {
+    func testSeaMapExampleAndSettingsScreenshots() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://beispiel.invalid"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launchEnvironment["BIKENAVI_PLAN_ID"] = "68230F66-22D9-43FD-8E11-EF984F8EEA75"
+        app.launch()
+        let menu = app.buttons["mapStyleMenu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 20))
+        let title = app.textFields["tourName"].value as? String
+        XCTAssertEqual(title, "Tribunj · Seekartenbeispiel", "Nur öffentliche Galerie-Beispieldaten verwenden")
+        if app.buttons["waypoints"].exists { app.buttons["togglePlanningDetails"].tap() }
+        menu.tap()
+        app.buttons["Seekarte · OpenSeaMap"].tap()
+        XCTAssertEqual(menu.value as? String, "Seekarte · OpenSeaMap")
+        let ready = expectation(description: "OpenSeaMap-Onlinekacheln laden")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 20) { ready.fulfill() }
+        wait(for: [ready], timeout: 25)
+        capture(app, "55-karte-seekarte")
+        app.tabBars.buttons["Einstellungen"].tap()
+        app.swipeUp()
+        XCTAssertTrue(app.buttons["settingsMapStyle"].label.contains("Seekarte · OpenSeaMap"))
+        capture(app, "56-einstellungen-seekarte")
+        app.tabBars.buttons["Planen"].tap()
+        XCTAssertEqual(menu.value as? String, "Seekarte · OpenSeaMap")
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertEqual(menu.value as? String, "Seekarte · OpenSeaMap")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(menu.waitForExistence(timeout: 20))
+        XCTAssertEqual(menu.value as? String, "Seekarte · OpenSeaMap")
+        if !app.buttons["routeProfile"].exists { app.buttons["togglePlanningDetails"].tap() }
+        XCTAssertTrue(app.buttons["routeProfile"].label.contains("Seeweg"))
+        XCTAssertEqual(app.textFields["tourName"].value as? String, title)
+    }
+
     func testStylesSwitchAcrossTabsAndRestartWithGermanDefault() {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -860,6 +899,147 @@ final class MapStyleTests: XCTestCase {
     }
 }
 
+
+final class MarineRoutingUITests: XCTestCase {
+    func testAutomaticWaterRouteAndMarineRideAcrossPauseAndRestart() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://127.0.0.1:18445"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = "marine-qa-" + String(repeating: "a", count: 40)
+        app.launchEnvironment["BIKENAVI_PLAN_ID"] = "960E36CE-B7A2-48B4-B49A-6DA189641DAD"
+        app.launchEnvironment["BIKENAVI_MARINE_PREVIEW"] = "1"
+        app.launch()
+        XCTAssertTrue(app.buttons["mapStyleMenu"].waitForExistence(timeout: 20))
+        XCTAssertEqual(app.textFields["tourName"].value as? String, "Tribunj–Šibenik · Seeweg-Beispiel")
+        if !app.buttons["routeProfile"].exists { app.buttons["togglePlanningDetails"].tap() }
+        app.buttons["routeProfile"].tap()
+        XCTAssertTrue(app.buttons["travelMode_sea"].waitForExistence(timeout: 5))
+        app.buttons["travelMode_cycling"].tap()
+        capture(app, "06-profil")
+        app.buttons["travelMode_hiking"].tap()
+        capture(app, "17-wandern-profil")
+        app.buttons["travelMode_sea"].tap()
+        XCTAssertFalse(app.switches["Elektrische Unterstützung"].exists)
+        capture(app, "57-seeweg-profil")
+        app.buttons["Übernehmen"].tap()
+        XCTAssertTrue(app.buttons["Wegpunkte und Kurse"].waitForExistence(timeout: 30))
+        XCTAssertFalse(app.buttons["Höhenprofil und Wegbeläge"].exists)
+        XCTAssertFalse(app.buttons["routeDescription"].exists)
+        capture(app, "58-seeweg-planung")
+        app.buttons["Wegpunkte und Kurse"].tap()
+        XCTAssertTrue(app.staticTexts["Deine Wegpunkte"].waitForExistence(timeout: 5))
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["Kurs rechtweisend"].firstMatch.waitForExistence(timeout: 5))
+        capture(app, "59-seeweg-kurse")
+        app.buttons["Fertig"].tap()
+        app.tabBars.buttons["Fahren"].tap()
+        XCTAssertTrue(app.buttons["Pause"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["marineCourse"].waitForExistence(timeout: 5))
+        let courseAvailable = expectation(for: NSPredicate(format: "label CONTAINS %@", "°"), evaluatedWith: app.staticTexts["marineCourse"])
+        wait(for: [courseAvailable], timeout: 5)
+        XCTAssertTrue(app.staticTexts["marineSpeed"].label.contains("kn"))
+        XCTAssertTrue(app.staticTexts["Gesamtstrecke"].exists)
+        XCTAssertTrue(app.staticTexts["marineETA"].label.contains(":"))
+        XCTAssertTrue(app.staticTexts["marineTargetBearing"].exists || app.otherElements["marineTargetBearing"].exists)
+        XCTAssertFalse(app.buttons["bikeConnection"].exists)
+        XCTAssertFalse(app.buttons["Höhenprofil"].exists)
+        capture(app, "60-seekarte-fahren")
+        XCTAssertFalse(app.staticTexts["0,000 sm"].exists, "Das bewegte GPS-Beispiel muss tatsächlich Strecke aufzeichnen.")
+        app.buttons["Pause"].tap()
+        XCTAssertTrue(app.buttons["Fortsetzen"].waitForExistence(timeout: 5))
+        capture(app, "61-seekarte-pause")
+        app.terminate()
+        app.launch()
+        app.tabBars.buttons["Fahren"].tap()
+        XCTAssertTrue(app.buttons["Fortsetzen"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["marineCourse"].exists)
+        XCTAssertFalse(app.buttons["bikeConnection"].exists)
+        app.buttons["Fortsetzen"].tap()
+        XCTAssertTrue(app.buttons["Pause"].waitForExistence(timeout: 5))
+        app.buttons["Tour beenden"].tap()
+        app.buttons["Speichern und beenden"].tap()
+        let tours = expectation(for: NSPredicate(format: "isSelected == true"), evaluatedWith: app.tabBars.buttons["Touren"])
+        wait(for: [tours], timeout: 10)
+    }
+    func testBoatSettingsPersistAndDepthLayerWorksAfterRestart() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://127.0.0.1:18445"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = "marine-qa-" + String(repeating: "a", count: 40)
+        app.launchEnvironment["BIKENAVI_PLAN_ID"] = "960E36CE-B7A2-48B4-B49A-6DA189641DAD"
+        app.launchEnvironment["BIKENAVI_MARINE_PREVIEW"] = "1"
+        func reveal(_ element: XCUIElement) {
+            for _ in 0..<6 { if element.isHittable && element.frame.maxY < app.frame.maxY - 150 && element.frame.minY > 110 { return }; app.swipeUp() }
+            XCTAssertTrue(element.isHittable)
+        }
+        func enter(_ field: String, _ value: String) {
+            let text = app.textFields[field]
+            reveal(text); text.tap()
+            text.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 12) + value)
+            app.buttons["Fertig"].tap()
+        }
+        app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Einstellungen"].waitForExistence(timeout: 20))
+        app.tabBars.buttons["Einstellungen"].tap()
+        enter("boatDraft", "2,7")
+        enter("boatSpeedKnots", "5,5")
+        capture(app, "62-boot-einstellungen")
+        let toggle = app.switches["waterDepthToggle"]
+        reveal(toggle)
+        if toggle.value as? String != "1" { toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap() }
+        let enabled = expectation(for: NSPredicate(format: "value == %@", "1"), evaluatedWith: toggle)
+        wait(for: [enabled], timeout: 5)
+        capture(app, "56-einstellungen-seekarte")
+        app.terminate(); app.launch()
+        app.tabBars.buttons["Einstellungen"].tap()
+        reveal(app.textFields["boatDraft"])
+        XCTAssertTrue((app.textFields["boatDraft"].value as? String ?? "").contains("2,7"))
+        XCTAssertTrue((app.textFields["boatSpeedKnots"].value as? String ?? "").contains("5,5"))
+        enter("boatDraft", "2,0")
+        enter("boatSpeedKnots", "4,0")
+        reveal(toggle)
+        XCTAssertEqual(toggle.value as? String, "1")
+        app.tabBars.buttons["Planen"].tap()
+        XCTAssertTrue(app.buttons["Wegpunkte und Kurse"].waitForExistence(timeout: 30))
+        capture(app, "63-emodnet-planung")
+        app.tabBars.buttons["Fahren"].tap()
+        XCTAssertTrue(app.buttons["Pause"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["marineETA"].label.contains(":"))
+        capture(app, "64-emodnet-fahren-eta")
+        app.buttons["Tour beenden"].tap()
+        app.buttons["Speichern und beenden"].tap()
+        app.tabBars.buttons["Einstellungen"].tap()
+        reveal(toggle); toggle.tap()
+    }
+    func testLongAnconaExampleUsesStoredDepthPlanWithoutDistanceCutoff() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = "https://beispiel.invalid"
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launchEnvironment["BIKENAVI_PLAN_ID"] = "7C9D88D1-CED7-4C5E-A22D-CCF1E6E06388"
+        app.launchEnvironment["BIKENAVI_MARINE_PREVIEW"] = "0"
+        app.launch()
+        XCTAssertTrue(app.buttons["mapStyleMenu"].waitForExistence(timeout: 20))
+        XCTAssertEqual(app.buttons["mapStyleMenu"].value as? String, "Seekarte · OpenSeaMap")
+        if !app.buttons["routeProfile"].exists { app.buttons["togglePlanningDetails"].tap() }
+        XCTAssertTrue(app.buttons["Wegpunkte und Kurse"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["98,8 sm"].exists)
+        capture(app, "65-seeweg-ancona")
+        app.terminate()
+    }
+    private func capture(_ app: XCUIApplication, _ name: String) {
+        let ready = expectation(description: "Öffentliche Onlinekarte laden")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { ready.fulfill() }
+        wait(for: [ready], timeout: 8)
+        let image = XCTAttachment(screenshot: app.screenshot())
+        image.name = "Gallery-" + name
+        image.lifetime = .keepAlways
+        add(image)
+    }
+}
 
 /// Run with the disposable HTTPS example server from the navigation QA workflow.
 final class BlogProgressUITests: XCTestCase {

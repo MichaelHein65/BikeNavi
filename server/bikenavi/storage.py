@@ -77,13 +77,18 @@ class Storage:
         if payload["document"]["localNavigation"] is None:
             payload["document"].pop("localNavigation")
         nav = payload["document"].get("localNavigation")
+        if nav and nav.get("marineNextWaypointIndex") is None:
+            nav.pop("marineNextWaypointIndex", None)
         if nav and nav.get("skippedWaypointOrdinals") is None:
             nav.pop("skippedWaypointOrdinals", None)
         if payload["document"]["profile"].get("travelMode") is None:
             payload["document"]["profile"].pop("travelMode", None)
+        for field in ("boatDraft", "boatSpeedKnots"):
+            if payload["document"]["profile"].get(field) is None:
+                payload["document"]["profile"].pop(field, None)
         route = payload["document"].get("route")
         if route:
-            for field in ("walkingStartIndex", "walkingDistance", "cyclingDistance", "unmappedDestinationDistance"):
+            for field in ("walkingStartIndex", "walkingDistance", "cyclingDistance", "unmappedDestinationDistance", "marineDraft", "marineDepthSource", "marineDepthUncertain"):
                 if route.get(field) is None:
                     route.pop(field, None)
         if route and route.get("waypointIndices") is None:

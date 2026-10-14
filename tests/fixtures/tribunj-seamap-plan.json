@@ -1,0 +1,24 @@
+{
+  "id": "68230F66-22D9-43FD-8E11-EF984F8EEA75",
+  "kind": "plan",
+  "title": "Tribunj · Seekartenbeispiel",
+  "usesAutomaticTitle": false,
+  "createdAt": 1790146800,
+  "updatedAt": 1790146800,
+  "waypoints": [
+    {
+      "id": "BEAA04B2-48B9-4114-9340-94D1A9B46A85",
+      "name": "Tribunj · Beispielpunkt",
+      "coordinate": {"latitude": 43.753333, "longitude": 15.75}
+    },
+    {
+      "id": "A8E66D7D-82D6-4B65-93C8-6DF2D2B8F88D",
+      "name": "Meer vor Tribunj · Beispielpunkt",
+      "coordinate": {"latitude": 43.73, "longitude": 15.71}
+    }
+  ],
+  "profile": {"bike": "touring", "electric": true, "surface": "any", "gentleHills": true},
+  "track": [],
+  "movingDuration": 0,
+  "recordingState": "none"
+}

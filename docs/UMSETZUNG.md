@@ -1,6 +1,14 @@
 # Umsetzungsstand – Version 0.4.0
 
-Stand: 13. Oktober 2026. Dies ist eine Entwicklungsfassung vor 1.0, keine für lange Touren freigegebene Navigations-App.
+Stand: 14. Oktober 2026. Dies ist eine Entwicklungsfassung vor 1.0, keine für lange Touren freigegebene Navigations-App.
+
+## Seekarte, Tiefen und Törnplanung auf iPhone und Pi (14. Oktober 2026)
+
+**Seekarte · OpenSeaMap** wählt automatisch **Seeweg**. Der Pi berechnet Wasserverbindungen aus OSM-Küsten und Inseln, ohne Fährbevorzugung und ohne feste Streckenbegrenzung. Kartierte Fahrwasser werden leicht bevorzugt; jede Suchkante und vereinfachte Kurslinie muss innerhalb der abgeleiteten Wasserfläche bleiben. EMODnet-Rasterwerte berücksichtigen den gespeicherten Tiefgang (Standard 2 m); bekannte zu flache Zellen werden gemieden. Unbekannte Küstentiefen bleiben ausdrücklich gekennzeichnet. **Nicht zur Navigation geeignet**: Wasserstand, Hindernisse und Sperrungen sind nicht geprüft. Daten-/Zeitbudgets begrenzen weiterhin einzelne Berechnungen. [Algorithmus und Grenzen](ARCHITEKTUR.md#emodnet-bootskonfiguration-und-lange-seewege-14-oktober-2026).
+
+Die EMODnet-Online-Ebene lässt sich für verfügbare Meeresgebiete unabhängig vom Kartenstil zuschalten. **Dein Boot** speichert Tiefgang und Durchschnittstempo (Standard 4 kn). Maritime Fahrt zeigt GPS-Kurs, Wegpunktpeilung, kn/sm, Gesamtstrecke, Reststrecke und geschätzte ETA mit nordorientierter Karte; Fahrradkommunikation entfällt. **Aktuelle Fassung auf Pi und Michaels iPhone 15 Pro installiert und App erfolgreich gestartet.**
+
+Prüfstand: **154 Swift- und 235 Backendtests**, zehn native iOS-Tests, drei abschließende maritime UI-Szenarien und separate automatische Karten-/Profilwahl erfolgreich. Simulator- und signierter Gerätebuild samt Signaturprüfung erfolgreich. Pi-Backup mit **260 Archivdatensätzen** wiederhergestellt; Backend/PostgreSQL gesund und 14 laufende Module abgeglichen. Live-HTTPS: Ancona **98,17 sm / 19,6 s**, Biograd **18,23 sm / 22,0 s**, Šibenik **6,94 sm / 4,4 s**; Tiefenmetadaten, Zeitabschätzung, Zugangsschutz und Landpunktabweisung geprüft. Keine nautische Feldprüfung. Das vorhandene öffentliche Šibenik-Beispiel unter Touren → Geplant wird beim Öffnen mit aktuellem Tiefgang neu berechnet. [Öffentliche Bilder 55–65](BILDSCHIRME.md#seeweg-planen-und-auf-see-fahren).
 
 ## Entwicklungsstand nach 0.4.0 (13. Oktober 2026)
 
@@ -33,7 +41,7 @@ Unveröffentlichte Weiterentwicklung bei **0.4.0 (4)**. Die App mit freier Fahrt
 - Fahrradtyp, E-Unterstützung, Wunsch nach sanften Steigungen und drei Belagsoptionen.
 - Echte ORS-Routen mit Linie, Abbiegehinweisen, Höhenprofil, Wegbelägen und Warnungen.
 - Koordinaten- und Plus-Code-Suche, Fahrprofile für Rad, Rad&Wandern und Wandern sowie ein klar ausgewiesener Abstellpunkt vor dem Wanderanteil. Nicht erfasste Zielzugänge werden mit ihrer Restdistanz genannt, ohne einen Weg zu erfinden.
-- Kartenansichten für Standard, Hell, Detailreich, Dunkel, Satellit und Topografisch. Die Standardkarte erscheint bei jedem vollständigen App-Start; die Auswahl bleibt innerhalb der Sitzung in Planung, Fahrt und Einstellungen erhalten.
+- Kartenansichten für Standard, Hell, Detailreich, Dunkel, Satellit, Topografisch und Seekarte · OpenSeaMap. Die Seekarte ist eine Online-Grundkarte mit Seezeichen. Seeweg berechnet Wasserverbindungen anhand der Küsten, bevorzugt erfasste Seewege und liefert Kurswechsel; maritime Fahrtansicht mit GPS-Kurs und nautischen Einheiten, ohne Fahrradkommunikation. Für Rad-/Wanderplanungen erscheint die Standardkarte beim vollständigen App-Start; Seeweg stellt die Seekarte wieder her; die Auswahl bleibt innerhalb der Sitzung in Planung, Fahrt und Einstellungen erhalten.
 - Die Planungsansicht färbt die Route abschnittsweise nach dem Untergrund; eine Legende erläutert die Farben. Fehlende Daten bleiben grau. Ältere gespeicherte Routen können über den eingeblendeten Hinweis neu berechnet werden, um Abschnittsdaten zu erhalten.
 - Der Datenbereich lässt sich nach unten auf den Tourtitel einklappen und nach oben wieder vollständig öffnen. Ein Pfeil bietet dieselbe Funktion ohne Wischgeste; die gewählte Darstellung bleibt beim nächsten Start erhalten.
 - Ein eigenes App-Icon mit Fahrrad und Navigationspfeil ist im Asset-Katalog eingebunden.

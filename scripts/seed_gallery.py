@@ -28,9 +28,12 @@ def main():
     parser.add_argument("--elevation", action="store_true", help="Use the public DEM elevation example for the plan")
     parser.add_argument("--bike-and-hike", action="store_true", help="Synthetic cycle/walk split of the public route, for UI illustration only")
     parser.add_argument("--unmapped-destination", action="store_true", help="Synthetic POI beyond the mapped network, UI illustration only")
+    parser.add_argument("--seamap", action="store_true", help="Add labelled public Tribunj map and Seeweg plans without a precomputed sea route")
     parser.add_argument("--blog", type=Path, help="Public labelled HTML example from scripts/smoke_blog.py")
     parser.add_argument("--journal", action="store_true", help="Two labelled synthetic blog stations and a GPS test photo in the simulator library")
     args = parser.parse_args()
+    subprocess.run(["xcrun", "simctl", "boot", args.device], capture_output=True)
+    subprocess.run(["xcrun", "simctl", "bootstatus", args.device, "-b"], check=True, stdout=subprocess.DEVNULL)
     subprocess.run(["xcrun", "simctl", "terminate", args.device, BUNDLE], capture_output=True)
     container = Path(subprocess.check_output(
         ["xcrun", "simctl", "get_app_container", args.device, BUNDLE, "data"], text=True).strip())
@@ -102,6 +105,11 @@ def main():
         for document in [plan, ride]:
             record = dict(document=document, revision=0, dirty=True, deleted=False, mutationID=identifier(document["id"]))
             db.execute("INSERT OR REPLACE INTO documents VALUES (?, ?)", (document["id"], json.dumps(record).encode()))
+        if args.seamap:
+            for fixture in ["tribunj-seamap-plan.json", "tribunj-sibenik-sea-plan.json", "tribunj-ancona-sea-plan.json"]:
+                document = json.loads((ROOT / "tests/fixtures" / fixture).read_text())
+                record = dict(document=document, revision=0, dirty=True, deleted=False, mutationID=identifier(document["id"]))
+                db.execute("INSERT OR REPLACE INTO documents VALUES (?, ?)", (document["id"], json.dumps(record).encode()))
         for i, name in enumerate(["Neckarufer · Beispiel", "Pause am Fluss · Beispiel", "Tourziel · Beispiel"]):
             place = dict(id=identifier(name), name=name, coordinate=route["coordinates"][[0, 65, -1][i]], createdAt=STAMP)
             db.execute("INSERT OR REPLACE INTO places VALUES (?, ?)", (place["id"], json.dumps(place).encode()))
@@ -115,6 +123,8 @@ def main():
     if args.journal:
         subprocess.run(["xcrun", "simctl", "addmedia", args.device, str(ROOT / "tests/fixtures/blog-photo-gps-example.jpg")], check=True)
     print("Public Heidelberg route and labelled synthetic example ride prepared in simulator.")
+    if args.seamap:
+        print("Public Tribunj seamap and two-point Seeweg plans prepared; no precomputed route or recorded voyage.")
 
 
 if __name__ == "__main__":
