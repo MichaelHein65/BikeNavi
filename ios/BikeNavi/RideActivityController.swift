@@ -4,6 +4,9 @@ import Foundation
 @MainActor
 final class RideActivityController {
     var marinePresentation = false
+    var carPresentation = false
+    var carLookAhead = 500.0
+    var carGPSDate: Date?
     private var activity: Activity<RideActivityAttributes>?
     private var lastState: RideActivityAttributes.ContentState?
 
@@ -17,13 +20,14 @@ final class RideActivityController {
                 instruction: marinePresentation ? "Deine Spur auf See wird aufgezeichnet" : route == nil ? "Dein Weg wird aufgezeichnet" : "Position auf der Route wird ermittelt",
                 distanceMeters: 0,
                 remainingMeters: 0,
-                symbol: marinePresentation ? "sailboat.fill" : "location.north.fill",
-                status: marinePresentation ? "Auf See" : route == nil ? "Freie Fahrt" : "Navigation läuft"
+                symbol: marinePresentation ? "sailboat.fill" : carPresentation ? "car.fill" : "location.north.fill",
+                status: marinePresentation ? "Auf See" : carPresentation ? "Autofahrt" : route == nil ? "Freie Fahrt" : "Navigation läuft",
+                carNavigation: carPresentation ? true : nil
             )
             do {
                 activity = try Activity.request(
                     attributes: RideActivityAttributes(tourName: tourName),
-                    content: ActivityContent(state: state, staleDate: nil),
+                    content: ActivityContent(state: state, staleDate: carPresentation ? Date().addingTimeInterval(5) : nil),
                     pushType: nil
                 )
                 lastState = state
@@ -69,13 +73,18 @@ final class RideActivityController {
             state = .init(instruction: "Position auf der Route wird ermittelt", distanceMeters: 0,
                           remainingMeters: 0, symbol: "location.north.fill", status: "Navigation läuft")
         }
-        if !marinePresentation, var diagramProgress = progress, let route {
+        state.carNavigation = carPresentation ? true : nil
+        if carPresentation, let progress, progress.distanceFromRoute > 35, !paused, !rerouting {
+            state = .init(instruction: "Gespeicherte Karte prüfen · Pkw-Neuberechnung benötigt Internet und Pi", distanceMeters: 0,
+                remainingMeters: rounded(progress.remaining), symbol: "car.fill", status: "Route verlassen", carNavigation: true)
+        }
+        if !marinePresentation, var diagramProgress = progress, let route, !carPresentation || diagramProgress.distanceFromRoute <= 35 {
             // Quantization keeps the diagram stable and avoids unnecessary
             // ActivityKit updates for every individual GPS meter.
             diagramProgress.traveled = (diagramProgress.traveled / 15).rounded(.down) * 15
             let diagramHeading = headingDegrees.map { ($0 / 10).rounded() * 10 }
             if let preview = NavigationPreviewBuilder.make(route: route, progress: diagramProgress,
-                                                           headingDegrees: diagramHeading) {
+                                                           headingDegrees: diagramHeading, lookAhead: carPresentation ? carLookAhead : 350) {
                 state.routePoints = preview.points.map { .init(x: $0.x, y: $0.y, surface: $0.surface) }
                 state.currentPointIndex = preview.currentPointIndex
                 state.maneuverPointIndex = preview.maneuverPointIndex
@@ -86,9 +95,10 @@ final class RideActivityController {
                 }
             }
         }
-        guard state != lastState else { return }
+        guard carPresentation || state != lastState else { return }
         lastState = state
-        Task { await activity.update(ActivityContent(state: state, staleDate: nil)) }
+        let staleDate = carPresentation && !paused ? (carGPSDate?.addingTimeInterval(5) ?? Date()) : nil
+        Task { await activity.update(ActivityContent(state: state, staleDate: staleDate)) }
     }
 
     func end() {

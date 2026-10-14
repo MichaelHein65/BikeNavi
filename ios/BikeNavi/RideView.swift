@@ -9,8 +9,19 @@ struct RideView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
         NavigationStack {
-            if state.isMarinePresentation {
+            if state.hasConflictingApplicationRide {
+                VStack(spacing: 18) {
+                    Image(systemName: state.activeRide?.profile.mode.symbol ?? "location.fill").font(.system(size: 52)).foregroundStyle(Theme.accent)
+                    Text("Eine andere Fahrt ist noch geöffnet").font(.title2.bold()).multilineTextAlignment(.center)
+                    Text(state.activeRide?.title ?? "").foregroundStyle(.secondary)
+                    Button("Fahrt fortsetzen") { state.resumeApplicationRide() }.buttonStyle(.borderedProminent).tint(Theme.forest)
+                        .accessibilityIdentifier("resumeConflictingRide")
+                    Text("Beende diese Fahrt, bevor du eine neue Aufzeichnung beginnst.").font(.subheadline).multilineTextAlignment(.center)
+                }.padding(26).frame(maxWidth: .infinity, maxHeight: .infinity).background(Theme.paper)
+            } else if state.isMarinePresentation {
                 MarineRideView()
+            } else if state.activeRide?.profile.mode == .car {
+                CarRideView()
             } else if let ride = state.activeRide {
                 VStack(spacing: 0) {
                     HStack(spacing: 12) {
@@ -21,7 +32,7 @@ struct RideView: View {
                                 Text("Deine Pause").font(.headline)
                                 Text("Fortsetzen, wenn du bereit bist").font(.subheadline)
                             } else if ride.route == nil {
-                                Text("Freie Fahrt").font(.headline)
+                                Text(ride.profile.mode == .hiking ? "Freie Wanderung" : "Freie Fahrt").font(.headline)
                                 Text("Dein Weg wird aufgezeichnet").font(.subheadline)
                             } else if state.rerouting {
                                 Text("Route wird angepasst").font(.headline)
@@ -35,7 +46,7 @@ struct RideView: View {
                                     Text(progress.nextManeuver?.instruction ?? "Folge der Route bis zum Ziel").font(.subheadline).lineLimit(3)
                                 }
                             } else {
-                                Text("Gute Fahrt!").font(.headline)
+                                Text(state.isWalkingSection ? "Gute Wanderung!" : "Gute Fahrt!").font(.headline)
                                 Text("Position auf der Route wird ermittelt").font(.subheadline)
                             }
                         }
@@ -44,7 +55,7 @@ struct RideView: View {
                         .background(Theme.forest).foregroundStyle(.white)
                     RouteMap(styleURL: state.mapStyleURL, route: state.ridingRoute, waypoints: ride.waypoints,
                              track: ride.track, follow: ride.recordingState == .recording,
-                             followHeading: ride.recordingState == .recording, showWaterDepths: state.showWaterDepths,
+                             followHeading: ride.recordingState == .recording, hikingNavigation: state.isWalkingSection, showWaterDepths: false,
                              navigationPosition: state.progress?.snappedPosition ?? state.location.coordinate,
                              navigationHeading: state.location.navigationHeading,
                              colorBySurface: true, topOverlayInset: 40, onError: { mapError = $0 })
@@ -67,9 +78,9 @@ struct RideView: View {
                             if ride.route != nil {
                                 rideMetric("Reststrecke", Format.distance(state.progress?.remaining ?? state.ridingRoute?.distance ?? 0))
                             }
-                            rideMetric("Gefahren", Format.distance(ride.recordedDistance))
+                            rideMetric(state.isWalkingSection ? "Gegangen" : "Gefahren", Format.distance(ride.recordedDistance))
                             rideMetric("Tempo", "\(Int((ride.track.last?.speed ?? 0) * 3.6)) km/h")
-                            rideMetric("Fahrzeit", Format.duration(ride.movingDuration))
+                            rideMetric(state.isWalkingSection ? "Gehzeit" : "Fahrzeit", Format.duration(ride.movingDuration))
                             if ride.route != nil {
                                 TimelineView(.periodic(from: .now, by: 15)) { context in
                                     rideMetric("ETA", arrivalTime(ride: ride, now: context.date))
@@ -81,7 +92,7 @@ struct RideView: View {
                                 .frame(maxWidth: .infinity, minHeight: 44)
                         }.accessibilityIdentifier("captureBlogPoint")
                         Divider()
-                        BikeTelemetryView(compact: true)
+                        if ride.profile.mode.supportsBike && !state.isWalkingSection { BikeTelemetryView(compact: true) }
                         HStack(spacing: 8) {
                             Button { state.togglePause() } label: {
                                 Label(ride.recordingState == .paused ? "Fortsetzen" : "Pause", systemImage: ride.recordingState == .paused ? "play.fill" : "pause.fill")
@@ -136,7 +147,7 @@ struct RideView: View {
             } else if !state.plan.canCalculateRoute || state.plan.route == nil {
                 VStack(spacing: 0) {
                     RouteMap(styleURL: state.mapStyleURL, route: nil, focus: state.location.coordinate ?? state.mapFocus,
-                             follow: true, showWaterDepths: state.showWaterDepths, navigationPosition: state.location.coordinate,
+                             follow: true, hikingNavigation: state.plan.profile.mode == .hiking, showWaterDepths: false, navigationPosition: state.location.coordinate,
                              onError: { mapError = $0 })
                         .accessibilityIdentifier("rideMap")
                         .overlay(alignment: .topLeading) {
@@ -150,7 +161,7 @@ struct RideView: View {
                         }
                         .onChange(of: state.mapStyleURL) { _, _ in mapError = nil }
                     VStack(spacing: 12) {
-                        Text(state.waitingForRideLocation ? "Standort wird ermittelt …" : "Freie Fahrt")
+                        Text(state.waitingForRideLocation ? "Standort wird ermittelt …" : state.plan.profile.mode == .hiking ? "Freie Wanderung" : "Freie Fahrt")
                             .font(.headline)
                         Text("Dein Weg wird ab der aktuellen GPS-Position aufgezeichnet.")
                             .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
@@ -166,7 +177,7 @@ struct RideView: View {
             } else {
                 ScrollView {
                   VStack(spacing: 22) {
-                    Image(systemName: "bicycle").font(.system(size: 76, weight: .light)).foregroundStyle(Theme.accent)
+                    Image(systemName: state.plan.profile.mode.symbol).font(.system(size: 76, weight: .light)).foregroundStyle(Theme.accent)
                     Text(state.waitingForRideLocation ? "Standort wird ermittelt …" : "Bereit für draußen?").font(.system(.title, design: .rounded, weight: .bold))
                     Text("Plane deine Strecke und starte deine Tour.\nDein Weg wird unterwegs gespeichert.")
                         .multilineTextAlignment(.center).foregroundStyle(.secondary)
@@ -175,7 +186,7 @@ struct RideView: View {
                         Button("Standortsuche abbrechen") { state.cancelRideStart() }
                     }
                     Button("Zur Routenplanung") { state.tab = 0 }.buttonStyle(.borderedProminent).tint(Theme.forest).foregroundStyle(.white).controlSize(.large)
-                    BikeTelemetryView().padding(.top, 12)
+                    if state.plan.profile.mode.supportsBike { BikeTelemetryView().padding(.top, 12) }
                   }.padding(26).frame(maxWidth: .infinity)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Theme.paper)
                     .navigationTitle("Fahren")

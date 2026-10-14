@@ -21,7 +21,7 @@ struct PlannerView: View {
         NavigationStack {
             ZStack(alignment: .top) {
                 RouteMap(styleURL: state.mapStyleURL, route: state.plan.profile.mode == .sea && !MarineNavigation.current(state.plan.route) ? nil : state.plan.route, waypoints: state.plan.waypoints, savedPlaces: state.savedPlaces,
-                         focus: state.mapFocus, fitRevision: state.mapRevision, marineNavigation: state.plan.profile.mode == .sea, showWaterDepths: state.showWaterDepths, colorBySurface: state.plan.profile.mode != .sea, topOverlayInset: 170, hasStart: !state.plan.isAwaitingStart,
+                         focus: state.mapFocus, fitRevision: state.mapRevision, marineNavigation: state.plan.profile.mode == .sea, carNavigation: state.plan.profile.mode == .car, showWaterDepths: state.showWaterDepths && state.plan.profile.mode == .sea, colorBySurface: state.plan.profile.mode != .sea && state.plan.profile.mode != .car, topOverlayInset: 170, hasStart: !state.plan.isAwaitingStart,
                          onTap: {
                              if editingTourName { finishEditingName() }
                              else { state.selectedPoint = $0; choosingPoint = true }
@@ -48,7 +48,7 @@ struct PlannerView: View {
                     }
                     HStack(spacing: 10) {
                         Button { showSearch = true } label: {
-                            HStack { Image(systemName: "magnifyingglass"); Text("Wohin zieht es dich?"); Spacer() }
+                            HStack { Image(systemName: "magnifyingglass"); Text(state.plan.profile.mode == .car ? "Wohin möchtest du fahren?" : state.plan.profile.mode == .sea ? "Wohin möchtest du segeln?" : state.plan.profile.mode == .hiking ? "Wohin möchtest du wandern?" : "Wohin zieht es dich?"); Spacer() }
                                 .font(.subheadline).foregroundStyle(Theme.ink).padding(14).background(Theme.paper, in: RoundedRectangle(cornerRadius: 18))
                         }.accessibilityIdentifier("placeSearch")
                         Button { state.useCurrentLocation() } label: {
@@ -160,7 +160,7 @@ struct PlannerView: View {
             if detailsExpanded {
                 HStack {
                     Button { showProfile = true } label: {
-                        Label(state.plan.profile.title, systemImage: state.plan.profile.mode.symbol)
+                        Label((state.plan.profile.mode == .cycling ? state.plan.profile.title : state.plan.profile.mode.homeTitle), systemImage: state.plan.profile.mode.symbol)
                             .font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.75)
                     }.buttonStyle(.bordered).accessibilityIdentifier("routeProfile")
                     Button { showSavedPlaces = true } label: {
@@ -168,7 +168,7 @@ struct PlannerView: View {
                     }.buttonStyle(.bordered)
                     Spacer(minLength: 0)
                 }
-                Text(state.plan.profile.mode == .sea ? "Wasserwege · Seewege bevorzugt" : state.plan.profile.mode == .hiking ? "Ohne Klettern" : state.plan.profile.surface.title)
+                Text(state.plan.profile.mode == .sea ? "Wasserwege · Seewege bevorzugt" : state.plan.profile.mode == .hiking ? "Ohne Klettern" : state.plan.profile.mode == .car ? state.plan.profile.drivingOptions.summary : state.plan.profile.surface.title)
                     .font(.caption).foregroundStyle(Theme.secondaryInk)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("surfacePreferenceSummary")
@@ -200,8 +200,8 @@ struct PlannerView: View {
                             Metric(label: "Erster Kurs", value: MarineNavigation.legs(MarineNavigation.navigationPoints(state.plan)).first.map { MarineNavigation.course($0.course) } ?? "—")
                         } else {
                             Metric(label: "Strecke", value: Format.distance(route.distance))
-                            Metric(label: "Fahrzeit ca.", value: Format.duration(RouteTravelTime(route: route, profile: state.plan.profile).total))
-                            Metric(label: "Anstieg", value: route.hasElevation ? "\(Int(route.ascent.rounded())) m" : "–")
+                            Metric(label: state.plan.profile.mode == .hiking ? "Gehzeit ca." : "Fahrzeit ca.", value: Format.duration(RouteTravelTime(route: route, profile: state.plan.profile).total))
+                            if state.plan.profile.mode != .car { Metric(label: "Anstieg", value: route.hasElevation ? "\(Int(route.ascent.rounded())) m" : "–") }
                         }
                     }
                     if state.plan.profile.mode == .sea {
@@ -209,6 +209,13 @@ struct PlannerView: View {
                         Text(MarineNavigation.depthWarning).font(.caption).foregroundStyle(Theme.secondaryInk)
                         if let draft = route.marineDraft {
                             Text("Tiefgang: " + draft.formatted(.number.precision(.fractionLength(1))) + " m · Fahrzeit ca. " + Format.duration(MarineNavigation.travelTime(distance: route.distance, speedKnots: state.boatSpeedKnots) ?? 0)).font(.caption)
+                        }
+                    } else if state.plan.profile.mode == .car {
+                        Text(CarNavigation.trafficNotice).font(.caption).foregroundStyle(.secondary)
+                        Text(CarNavigation.onlineNotice).font(.caption).foregroundStyle(.secondary)
+                        if let missing = route.destinationAccessDistance {
+                            Label("Pkw-Zufahrt · noch ca. " + Format.distance(missing) + " Luftlinie zum Ziel", systemImage: "parkingsign.circle")
+                                .font(.caption).foregroundStyle(.orange)
                         }
                     } else {
                     if let missing = route.unmappedDestinationDistance {
@@ -240,12 +247,12 @@ struct PlannerView: View {
                     }
                     HStack(spacing: 8) {
                         Button { showDetails = true } label: {
-                            Image(systemName: state.plan.profile.mode == .sea ? "list.number" : "chart.xyaxis.line").font(.system(size: 20, weight: .semibold))
+                            Image(systemName: state.plan.profile.mode == .sea || state.plan.profile.mode == .car ? "list.number" : "chart.xyaxis.line").font(.system(size: 20, weight: .semibold))
                                 .frame(width: 52)
                         }
                             .buttonStyle(PlanningActionStyle(background: Theme.accent.opacity(0.10)))
-                            .accessibilityLabel(state.plan.profile.mode == .sea ? "Wegpunkte und Kurse" : "Höhenprofil und Wegbeläge")
-                        if state.plan.profile.mode != .sea {
+                            .accessibilityLabel(state.plan.profile.mode == .sea ? "Wegpunkte und Kurse" : state.plan.profile.mode == .car ? "Pkw-Routendetails" : "Höhenprofil und Wegbeläge")
+                        if state.plan.profile.mode != .sea && state.plan.profile.mode != .car {
                         Button { showRouteDescription = true } label: {
                             Label("Beschreibung", systemImage: "sparkles")
                                 .lineLimit(1).minimumScaleFactor(0.85)
@@ -532,30 +539,26 @@ struct SavedPlaceEditor: View {
 }
 
 struct ProfileView: View {
+    @State private var originalProfile: RidingProfile?
     @EnvironmentObject var state: AppState
     @Environment(\.dismiss) var dismiss
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    ForEach(TravelMode.allCases, id: \.self) { mode in
-                        Button { state.plan.profile.mode = mode } label: {
-                            HStack {
-                                Label(mode.title, systemImage: mode.symbol)
-                                Spacer()
-                                if state.plan.profile.mode == mode { Image(systemName: "checkmark.circle.fill") }
-                            }
-                        }.foregroundStyle(.primary).accessibilityIdentifier("travelMode_" + mode.rawValue)
-                    }
+                    Label(state.plan.profile.mode.homeTitle, systemImage: state.plan.profile.mode.symbol)
+                        .font(.headline).accessibilityIdentifier("selectedApplicationProfile")
                 } header: { Text("Unterwegs") } footer: {
                     Text(state.plan.profile.mode == .sea ? "Setze Wegpunkte im Wasser. Der Pi berechnet Verbindungen anhand der Küsten und bevorzugt erfasste Seewege. EMODnet-Rasterwerte berücksichtigen den Tiefgang aus Einstellungen. Nicht zur Navigation geeignet; keine Prüfung von Wasserstand, Hindernissen und aktuellen Sperrungen."
+                         : state.plan.profile.mode == .car
+                         ? "Pkw-Routen mit Einbahnstraßen und Abbiegeverbotsdaten. Schnellste Route ohne Live-Verkehr; aktuelle Beschilderung beachten."
                          : state.plan.profile.mode == .bikeAndHike
                          ? "Mit dem Rad so nah wie möglich zum Ziel, dann zu Fuß. Der berechnete Übergang wird als „Rad abstellen“ markiert. Zwischenziele werden mit dem Rad angefahren."
                          : state.plan.profile.mode == .hiking
                          ? "Einfache Wanderwege ohne bekannte Kletterpassagen (höchstens SAC T1). Fehlende Schwierigkeitsangaben bleiben möglich."
                          : "Die gesamte Tour mit dem Rad fahren.")
                 }
-                if state.plan.profile.mode != .hiking && state.plan.profile.mode != .sea {
+                if state.plan.profile.mode == .cycling || state.plan.profile.mode == .bikeAndHike {
                 Section("Dein Fahrrad") {
                     Picker("Fahrradtyp", selection: $state.plan.profile.bike) { ForEach(Bike.allCases, id: \.self) { Text($0.title).tag($0) } }
                     Toggle("Elektrische Unterstützung", isOn: $state.plan.profile.electric)
@@ -571,11 +574,32 @@ struct ProfileView: View {
                 }
                 Section { Toggle("Sanfte Steigungen bevorzugen", isOn: $state.plan.profile.gentleHills) }
                 }
-                if state.plan.profile.mode != .hiking && state.plan.profile.mode != .sea {
+                if state.plan.profile.mode == .cycling || state.plan.profile.mode == .bikeAndHike {
                 Section("Schnellauswahl") {
                     Button("Meine Tour · Schotter erlaubt") { state.plan.profile.surface = .any }
                     Button("Gemeinsam · befestigte Wege bevorzugen") { state.plan.profile.surface = .preferPaved }
                 }
+                }
+                if state.plan.profile.mode == .sea {
+                    BoatSettingsSection(draft: $state.boatDraft, speed: $state.boatSpeedKnots, profile: true)
+                }
+                if state.plan.profile.mode == .car {
+                    Section("Deine Auto-Route") {
+                        Toggle("Autobahnen vermeiden", isOn: Binding(get: { state.plan.profile.drivingOptions.avoidHighways }, set: { value in
+                            var options = state.plan.profile.drivingOptions; options.avoidHighways = value; state.plan.profile.carOptions = options
+                        })).accessibilityIdentifier("carAvoidHighways")
+                        Toggle("Mautstraßen vermeiden", isOn: Binding(get: { state.plan.profile.drivingOptions.avoidTolls }, set: { value in
+                            var options = state.plan.profile.drivingOptions; options.avoidTolls = value; state.plan.profile.carOptions = options
+                        })).accessibilityIdentifier("carAvoidTolls")
+                        Toggle("Fähren vermeiden", isOn: Binding(get: { state.plan.profile.drivingOptions.avoidFerries }, set: { value in
+                            var options = state.plan.profile.drivingOptions; options.avoidFerries = value; state.plan.profile.carOptions = options
+                        })).accessibilityIdentifier("carAvoidFerries")
+                    }
+                    Section("Unterwegs") {
+                        Text("Auto-Zoom folgt dem Tempo und den nächsten Abbiegungen. Nach manueller Kartenbewegung mit „Fahransicht“ oder nach zehn Sekunden automatisch zurückkehren.")
+                        Text(CarNavigation.onlineNotice)
+                        Text("Die Standardkarte folgt beim Fahren automatisch der hellen oder dunklen iPhone-Darstellung.")
+                    }
                 }
                 if state.plan.profile.mode == .hiking || state.plan.profile.mode == .bikeAndHike {
                     Section {
@@ -584,9 +608,10 @@ struct ProfileView: View {
                         Link("Freie Wanderkarte · Waymarked Trails", destination: URL(string: "https://hiking.waymarkedtrails.org/")!)
                     } header: { Text("Kartendaten") }
                 }
-            }.navigationTitle("So bist du unterwegs").navigationBarTitleDisplayMode(.inline)
+            }.navigationTitle(state.plan.profile.mode.homeTitle + " · Einstellungen").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Übernehmen") { dismiss() } } }
-                .onDisappear { state.invalidateRoute() }
+                .onAppear { originalProfile = state.plan.profile }
+                .onDisappear { if let originalProfile, originalProfile != state.plan.profile { state.invalidateRoute() } }
         }
     }
 }
@@ -631,11 +656,22 @@ struct RouteDetailsView: View {
         if let current = state.plan.route, current.id == originalRoute.id { return current }
         return originalRoute
     }
+    private var isCar: Bool { route.carTimeSections != nil }
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var state: AppState
     var body: some View {
         NavigationStack {
             List {
+                if isCar {
+                    Section("Pkw-Route") {
+                        HStack { Metric(label: "Strecke", value: Format.distance(route.distance)); Metric(label: "Fahrzeit ca.", value: Format.duration(route.duration)) }
+                        Text(CarNavigation.trafficNotice).font(.caption)
+                        if let gap = route.destinationAccessDistance {
+                            Label("Pkw-Zufahrt erreicht · " + Format.distance(gap) + " Luftlinie zum Ziel", systemImage: "parkingsign.circle")
+                            Text("Restweg und Restzeit sind nicht berechnet. Zugang vor Ort prüfen.").font(.caption)
+                        }
+                    }
+                } else {
                 Section {
                     HStack { Metric(label: "Strecke", value: Format.distance(route.distance)); Metric(label: "Anstieg", value: route.hasElevation ? "\(Int(route.ascent.rounded())) m" : "–"); Metric(label: "Abstieg", value: route.hasElevation ? "\(Int(route.descent.rounded())) m" : "–") }
                         .padding(.vertical, 8)
@@ -676,11 +712,12 @@ struct RouteDetailsView: View {
                         HStack { Text(surface.name); Spacer(); Text("\(Int(surface.percentage.rounded())) %").monospacedDigit().foregroundStyle(.secondary) }
                     }
                 }
+                }
                 if !route.warnings.isEmpty { Section("Zur Route") { ForEach(route.warnings, id: \.self) { Text($0).font(.subheadline) } } }
                 Section { OfflineDownloadView(route: route) }
                 Section("Abbiegehinweise") {
                     ForEach(Array(route.maneuvers.enumerated()), id: \.offset) { _, maneuver in
-                        Label(maneuver.instruction, systemImage: maneuver.symbol).font(.subheadline)
+                        Label(isCar ? maneuver.carInstruction : maneuver.instruction, systemImage: maneuver.symbol).font(.subheadline)
                     }
                 }
             }.navigationTitle("Deine Strecke").navigationBarTitleDisplayMode(.inline)

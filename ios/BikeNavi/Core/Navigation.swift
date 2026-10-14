@@ -13,7 +13,7 @@ struct RouteTracker {
     private(set) var lastProgress = 0.0
     private(set) var lastTimestamp: Double?
 
-    mutating func update(position: Coordinate, timestamp: Double, route: CalculatedRoute, heading: Double? = nil, accuracy: Double = 5) -> RouteProgress? {
+    mutating func update(position: Coordinate, timestamp: Double, route: CalculatedRoute, heading: Double? = nil, accuracy: Double = 5, carNavigation: Bool = false) -> RouteProgress? {
         guard route.coordinates.count > 1 else { return nil }
         let radians = Double.pi / 180
         let scaleX = cos(position.latitude * radians) * 111_320
@@ -25,7 +25,7 @@ struct RouteTracker {
         let elapsed = max(0, timestamp - (lastTimestamp ?? timestamp))
         // A local window avoids jumping to the return leg of a loop. After a long
         // interruption the window grows to permit recovery without fake progress.
-        let maximumForward = lastTimestamp == nil ? Double.infinity : min(400, max(200, elapsed * 20))
+        let maximumForward = lastTimestamp == nil ? Double.infinity : min(carNavigation ? 6000 : 400, max(200, elapsed * (carNavigation ? 70 : 20)))
         var best: (distance: Double, progress: Double, point: Coordinate, directionMatches: Bool)?
         for i in 0..<(route.coordinates.count - 1) {
             guard cumulative[i + 1] >= max(0, lastProgress - 150),
@@ -41,16 +41,18 @@ struct RouteTracker {
             let progress = cumulative[i] + t * (cumulative[i + 1] - cumulative[i])
             let directionMatches = heading.map { LocalGeometry.angle($0, LocalGeometry.bearing(a, b)) <= 65 } ?? true
             let projected = Coordinate(latitude: a.latitude + t * (b.latitude-a.latitude), longitude: a.longitude + t * (b.longitude-a.longitude))
-            if best == nil || distance < best!.distance - 1 { best = (distance, progress, projected, directionMatches) }
+            let score = distance + (carNavigation && !directionMatches ? 60 : 0)
+            let bestScore = best.map { $0.distance + (carNavigation && !$0.directionMatches ? 60 : 0) } ?? .infinity
+            if best == nil || score < bestScore - 1 { best = (distance, progress, projected, directionMatches) }
         }
         guard let best else { return nil }
         let magnet = best.distance <= 25 && accuracy >= 0 && accuracy <= 25 && best.directionMatches
         if magnet { lastProgress = best.progress; lastTimestamp = timestamp }
         let next = route.maneuvers.first { m in
-            m.coordinateIndex < cumulative.count && cumulative[m.coordinateIndex] > lastProgress + 12
+            m.coordinateIndex >= 0 && m.coordinateIndex < cumulative.count && cumulative[m.coordinateIndex] > lastProgress + (carNavigation ? 2 : 12)
         }
         return RouteProgress(traveled: lastProgress, remaining: max(0, cumulative.last! - lastProgress),
-                             distanceFromRoute: best.distance, nextManeuver: next,
+                             distanceFromRoute: carNavigation && !best.directionMatches ? max(60, best.distance) : best.distance, nextManeuver: next,
                              distanceToManeuver: next.map { max(0, cumulative[$0.coordinateIndex] - lastProgress) } ?? 0,
                              snappedPosition: magnet ? best.point : nil)
     }
@@ -84,7 +86,7 @@ struct NavigationPreviewRoadPoint: Equatable {
 /// can be sent to a Live Activity without map tiles or network access.
 enum NavigationPreviewBuilder {
     static func make(route: CalculatedRoute, progress: RouteProgress,
-                     headingDegrees: Double? = nil) -> NavigationPreview? {
+                     headingDegrees: Double? = nil, lookAhead: Double = 350) -> NavigationPreview? {
         guard route.coordinates.count > 1 else { return nil }
         var cumulative = [0.0]
         for index in 1..<route.coordinates.count {
@@ -93,7 +95,7 @@ enum NavigationPreviewBuilder {
         guard let total = cumulative.last, total > 1 else { return nil }
         let traveled = min(total, max(0, progress.traveled))
         let start = max(0, traveled - 50)
-        let end = min(total, traveled + 350)
+        let end = min(total, traveled + (lookAhead.isFinite ? min(2200, max(180, lookAhead)) : 350))
         guard end - start > 1 else { return nil }
 
         var distances = (0...24).map { start + (end - start) * Double($0) / 24 }
@@ -223,7 +225,7 @@ struct ReroutePolicy {
 }
 
 enum TrackFilter {
-    static func accepts(_ point: TrackPoint, after previous: TrackPoint?, now: Double) -> Bool {
+    static func accepts(_ point: TrackPoint, after previous: TrackPoint?, now: Double, mode: TravelMode = .cycling) -> Bool {
         guard point.accuracy >= 0, point.accuracy <= 50,
               abs(now - point.timestamp) < 15,
               (-90...90).contains(point.coordinate.latitude),
@@ -233,7 +235,7 @@ enum TrackFilter {
         guard elapsed >= 3 else { return false }
         let distance = previous.coordinate.distance(to: point.coordinate)
         // Avoid impossible GPS jumps while leaving ordinary cycling speeds intact.
-        return distance / elapsed < 35 && (distance >= 3 || elapsed >= 20)
+        return distance / elapsed < (mode == .car ? 75 : 35) && (distance >= 3 || elapsed >= 20)
     }
 }
 

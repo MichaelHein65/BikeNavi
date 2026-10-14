@@ -25,6 +25,12 @@ WARNING = "Wasserweg anhand erfasster OSM-Küsten; erfasste Fahrwasser und empfo
 DATA_ERROR = "Küsten- und Seewegdaten sind unvollständig. Es wird keine ungeprüfte Verbindung berechnet."
 
 
+class WaterConnectionError(HTTPException):
+    """Search connectivity failure, eligible for a bounded wider/finer retry."""
+    def __init__(self, detail):
+        super().__init__(422, detail)
+
+
 class WaterArea:
     def __init__(self, data, bounds, draft=2.0):
         south, west, north, east = bounds
@@ -101,8 +107,15 @@ class WaterArea:
 
     def route(self, request, deadline=None):
         deadline = deadline or time.monotonic() + 25
+        try:
+            return self._route_on_grid(request, deadline, 120_000)
+        except WaterConnectionError:
+            # A long passage must not erase narrow channels from its search raster.
+            return self._route_on_grid(request, deadline, 480_000)
+
+    def _route_on_grid(self, request, deadline, grid_limit):
         left, bottom, right, top = self.region.bounds
-        step = max(35, math.sqrt((right-left)*(top-bottom) / 120_000))
+        step = max(35, math.sqrt((right-left)*(top-bottom) / grid_limit))
         width, height = math.floor((right-left)/step)+1, math.floor((top-bottom)/step)+1
         xs = left + np.tile(np.arange(width), height) * step
         ys = bottom + np.repeat(np.arange(height), width) * step
@@ -127,7 +140,7 @@ class WaterArea:
                     if wet[node] and connects(point, coordinate(node)):
                         nodes.append((math.dist(point, coordinate(node)), node))
             if not nodes:
-                raise HTTPException(422, "Der Wegpunkt hat keinen erreichbaren Wasseranschluss. Es wird keine Landverbindung verwendet.")
+                raise WaterConnectionError("Der Wegpunkt hat keinen erreichbaren Wasseranschluss im Suchraster. Es wird keine Landverbindung verwendet.")
             return sorted(nodes)[:12]
 
         def search(start, goal):
@@ -172,7 +185,7 @@ class WaterArea:
                         distances[neighbor], parents[neighbor] = candidate, node
                         heapq.heappush(queue, (candidate + math.dist(coordinate(neighbor), goal), candidate, neighbor))
             if best_goal is None:
-                raise HTTPException(422, "Keine durchgehende Wasserverbindung im erfassten Gebiet gefunden. Es wird nicht über Land geroutet.")
+                raise WaterConnectionError("Keine durchgehende Wasserverbindung im erfassten Suchbereich gefunden. Enge Passagen können im Suchraster fehlen. Es wird nicht über Land geroutet.")
             path = []
             node = best_goal
             while node is not None:
@@ -276,6 +289,14 @@ class MarineRouter:
             raise HTTPException(503,"Die Wasserwegsuche hat ihr Zeitlimit erreicht. Es wird keine ungeprüfte Verbindung verwendet.") from error
 
     async def _route(self, request):
+        try:
+            return await self._route_in_bounds(request, 1500)
+        except WaterConnectionError:
+            # Coastal/island detours can leave the initial rectangle even on short trips.
+            # Keep the existing outer 80-second budget across both attempts.
+            return await self._route_in_bounds(request, 6000)
+
+    async def _route_in_bounds(self, request, margin_metres):
         points = request.waypoints
         if any(abs(p.coordinate.latitude)>85 for p in points):
             raise HTTPException(422,"Seeweg nur zwischen 85° Süd und 85° Nord.")
@@ -284,7 +305,7 @@ class MarineRouter:
         if east - west > 180:
             raise HTTPException(422, "Seewege über die Datumsgrenze werden derzeit nicht unterstützt. Die aktuelle Seewegplanung kann diese Ozeanpassage nicht berechnen.")
         scale = math.cos(math.radians((south+north)/2))
-        margin = 1500/111_195
+        margin = margin_metres/111_195
         bounds = (math.floor((south-margin)/.02)*.02,math.floor((west-margin/scale)/.02)*.02,
                   math.ceil((north+margin)/.02)*.02,math.ceil((east+margin/scale)/.02)*.02)
         if bounds[0]<-85 or bounds[2]>85 or bounds[1]<-180 or bounds[3]>180:
@@ -310,12 +331,15 @@ class MarineRouter:
             constrained.prepared = prep(constrained.water)
             constrained.corridors = area.corridors.intersection(constrained.water) if area.corridors is not None else None
             constrained.preferred = prep(constrained.corridors) if constrained.corridors is not None else None
+            draft_label = f"{draft:g}".replace(".", ",")
+            for ordinal, waypoint in enumerate(request.waypoints, 1):
+                point = Point(area.project(waypoint.coordinate.longitude, waypoint.coordinate.latitude))
+                if not constrained.prepared.contains(point):
+                    raise HTTPException(422, f"Wegpunkt {ordinal} liegt in einer für {draft_label} m Tiefgang gesperrten EMODnet-Rasterzelle. Küsten- und Hafenbereiche können im Raster zu grob aufgelöst sein; dies ist keine Aussage über die tatsächliche Hafentiefe. Wähle einen anderen Wasserpunkt und prüfe amtliche Seekarten. Keine Navigationsfreigabe.")
             try:
                 result = await asyncio.to_thread(constrained.route, request)
-            except HTTPException as error:
-                if error.status_code == 422:
-                    raise HTTPException(422, 'Mit diesem Tiefgang wurde keine durchgehend tiefere EMODnet-Rasterverbindung gefunden. Bekannte flache Rasterzellen werden gemieden; keine Navigationsfreigabe.') from error
-                raise
+            except WaterConnectionError as error:
+                raise WaterConnectionError(f"Für {draft_label} m Tiefgang wurde im Suchbereich keine durchgehende EMODnet-Rasterverbindung gefunden. Zu flache Zellen bleiben gesperrt; enge Hafenpassagen können im Tiefen- oder Suchraster fehlen. Dies bestätigt kein tatsächliches Tiefgangproblem. Zusätzliche Wasserpunkte können bei der Planung helfen; amtliche Seekarten prüfen. Keine Navigationsfreigabe.") from error
             line = LineString([area.project(c['longitude'],c['latitude']) for c in result['coordinates']])
             result['marineDepthUncertain'] = not known_depth_water.covers(line)
             if result['marineDepthUncertain']:

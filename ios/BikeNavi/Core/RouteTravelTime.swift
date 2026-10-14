@@ -25,6 +25,27 @@ struct RouteTravelTime {
         guard route.coordinates.count > 1 else { legs = []; return }
         let lengths = zip(route.coordinates, route.coordinates.dropFirst()).map { $0.distance(to: $1) }
         let geometryDistance = lengths.reduce(0, +)
+        if profile.mode == .car {
+            var seconds = lengths.map { geometryDistance > 0 ? route.duration * $0 / geometryDistance : 0 }
+            if let sections = route.carTimeSections {
+                var cursor = 0
+                var valid = true
+                for section in sections {
+                    guard section.startIndex == cursor, section.endIndex > cursor, section.endIndex < route.coordinates.count,
+                          section.seconds.isFinite, section.seconds >= 0 else { valid = false; break }
+                    let distance = lengths[section.startIndex..<section.endIndex].reduce(0, +)
+                    for index in section.startIndex..<section.endIndex {
+                        seconds[index] = distance > 0 ? section.seconds * lengths[index] / distance : 0
+                    }
+                    cursor = section.endIndex
+                }
+                if !valid || cursor != lengths.count || abs(seconds.reduce(0, +) - route.duration) > 1 {
+                    seconds = lengths.map { geometryDistance > 0 ? route.duration * $0 / geometryDistance : 0 }
+                }
+            }
+            legs = lengths.indices.map { Leg(distance: lengths[$0], seconds: seconds[$0]) }
+            return
+        }
         let scale = route.distance > 0 && geometryDistance > 0 ? route.distance / geometryDistance : 1
         var surfaces = Array(repeating: SurfaceKind.unknown, count: lengths.count)
         for section in route.coloredSections {

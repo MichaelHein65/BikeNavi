@@ -211,6 +211,8 @@ class ORS:
             raise HTTPException(502, "Der Kartendienst ist gerade nicht erreichbar.") from error
 
     async def route(self, request: RouteRequest, include_context: bool = True, route_validator=None) -> dict:
+        if request.profile.travelMode == "car":
+            return await self.car_route(request)
         if request.profile.travelMode == "sea":
             from .marine import MarineRouter
             if not hasattr(self, "marine"):
@@ -295,6 +297,73 @@ class ORS:
             route["warnings"].append("Für diese Route fehlen Angaben zur Wegbeschaffenheit.")
         route["intersectionContexts"] = await self.intersection_contexts(route) if include_context else []
         return route
+
+    async def car_route(self, request: RouteRequest) -> dict:
+        from pydantic import ValidationError
+        from .models import Route
+        options = request.profile.carOptions
+        avoid = []
+        if options:
+            avoid = [feature for enabled, feature in (
+                (options.avoidHighways, "highways"), (options.avoidTolls, "tollways"),
+                (options.avoidFerries, "ferries")) if enabled]
+        payload = {
+            "coordinates": [[w.coordinate.longitude, w.coordinate.latitude] for w in request.waypoints],
+            "preference": "fastest", "instructions": True, "language": "de",
+            "radiuses": [100] * (len(request.waypoints) - 1) + [350],
+            "options": {"avoid_features": avoid} if avoid else {},
+        }
+        if request.startBearing is not None:
+            payload["bearings"] = [[request.startBearing, 60]] + [[] for _ in request.waypoints[1:]]
+            payload["optimized"] = False
+        try:
+            async with asyncio.timeout(ROUTE_DEADLINE_SECONDS):
+                data = await self.request("POST", "/v2/directions/driving-car/geojson",
+                                          timeout=ROUTE_TIMEOUT, json=payload)
+            route = parse_route(data)
+            props = data["features"][0]["properties"]
+            indices = route["waypointIndices"]
+            if (not isinstance(indices, list) or len(indices) != len(request.waypoints)
+                    or any(type(i) is not int or not 0 <= i < len(route["coordinates"]) for i in indices)
+                    or indices != sorted(indices) or indices[0] != 0 or indices[-1] != len(route["coordinates"]) - 1):
+                raise ValueError("Invalid car waypoint indices")
+            sections = []
+            maneuvers = []
+            for segment in props["segments"]:
+                for step in segment["steps"]:
+                    start, end = step["way_points"]
+                    seconds = step["duration"]
+                    if (type(start) is not int or type(end) is not int or not 0 <= start <= end < len(route["coordinates"])
+                            or not isinstance(seconds, (float, int)) or not math.isfinite(seconds) or seconds < 0):
+                        raise ValueError("Invalid car step")
+                    if end > start:
+                        sections.append({"startIndex": start, "endIndex": end, "seconds": seconds})
+                    elif seconds != 0:
+                        raise ValueError("Car step duration without geometry")
+                    maneuver = {"instruction": step["instruction"], "distance": step["distance"],
+                                "coordinateIndex": start, "type": step["type"]}
+                    if step.get("name") and step["name"] != "-":
+                        maneuver["roadName"] = step["name"]
+                    if step.get("exit_number") is not None:
+                        maneuver["exitNumber"] = step["exit_number"]
+                    maneuvers.append(maneuver)
+            route.update(maneuvers=maneuvers, carTimeSections=sections, intersectionContexts=[],
+                         provider="openrouteservice · Pkw", warnings=["Fahrzeit geschätzt · ohne Live-Verkehr"])
+            for ordinal, waypoint in enumerate(request.waypoints):
+                gap = _distance_m(waypoint.coordinate.model_dump(), route["coordinates"][indices[ordinal]])
+                if ordinal < len(request.waypoints) - 1 and gap > 50:
+                    raise HTTPException(422, "Start oder Zwischenziel liegt zu weit von einer Pkw-Zufahrt entfernt. Bitte einen erreichbaren Straßenpunkt wählen.")
+                if ordinal == len(request.waypoints) - 1 and gap > 20:
+                    if gap > 350:
+                        raise ValueError("Destination exceeds snap radius")
+                    route["destinationAccessDistance"] = gap
+                    route["warnings"].append(f"Pkw-Route endet an der erreichbaren Straße: etwa {math.ceil(gap)} m Luftlinie zum gewählten Ziel. Zugang vor Ort prüfen; Restweg und Restzeit sind nicht berechnet.")
+            Route.model_validate(route)
+            return route
+        except TimeoutError as error:
+            raise HTTPException(502, "Die Pkw-Routenberechnung hat ihr Zeitlimit erreicht.") from error
+        except (KeyError, IndexError, TypeError, ValueError, ValidationError) as error:
+            raise HTTPException(502, "Der Routingdienst hat unvollständige Pkw-Routen- oder Fahrzeitdaten geliefert.") from error
 
     async def intersection_contexts(self, route: dict) -> list[dict]:
         if not self.overpass_url:

@@ -42,12 +42,18 @@ struct RouteMap: UIViewRepresentable {
     var follow = false
     var followHeading = false
     var marineNavigation = false
+    var carNavigation = false
+    var hikingNavigation = false
     var showWaterDepths = false
     var navigationPosition: Coordinate?
     var navigationHeading: Double?
+    var navigationLookAhead = 500.0
+    var navigationProgress: Double?
+    var navigationResumeID = 0
     var colorBySurface = false
     var topOverlayInset: CGFloat = 65
     var hasStart = true
+    var onNavigationSuspended: ((Bool) -> Void)?
     var onTap: ((Coordinate) -> Void)?
     var onSavedPlaceTap: ((SavedPlace) -> Void)?
     var onError: ((String) -> Void)?
@@ -86,12 +92,16 @@ struct RouteMap: UIViewRepresentable {
         let wasFollowing = c.parent.follow
         let wasMarine = c.parent.marineNavigation
         c.parent = self
+        if c.navigationResumeID != navigationResumeID {
+            c.navigationResumeID = navigationResumeID
+            c.resetNavigationInteraction()
+        }
         map.isRotateEnabled = !marineNavigation
         map.isPitchEnabled = !marineNavigation
         if wasFollowing != follow || wasMarine != marineNavigation { c.resetNavigationInteraction() }
         if map.styleURL?.absoluteString != styleURL { map.styleURL = URL(string: styleURL) }
         let auth = CLLocationManager().authorizationStatus
-        map.showsUserLocation = navigationPosition == nil && (auth == .authorizedAlways || auth == .authorizedWhenInUse)
+        map.showsUserLocation = !(carNavigation && followHeading) && navigationPosition == nil && (auth == .authorizedAlways || auth == .authorizedWhenInUse)
         if follow && !followHeading && map.showsUserLocation {
             map.userTrackingMode = .follow
         }
@@ -132,6 +142,7 @@ struct RouteMap: UIViewRepresentable {
         var focus: Coordinate?
         var fitRevision: UUID?
         var hasLoadedStyle = false
+        var navigationResumeID = 0
         init(_ parent: RouteMap) { self.parent = parent }
         @objc func tapped(_ gesture: UITapGestureRecognizer) {
             guard let map, gesture.state == .ended else { return }
@@ -251,12 +262,26 @@ struct RouteMap: UIViewRepresentable {
                 map?.removeAnnotation(navigationPin)
             }
             updateNavigationCamera()
+            updateCarMarker()
+        }
+
+        private func updateCarMarker() {
+            guard parent.carNavigation, let map, let view = map.view(for: navigationPin),
+                  let arrow = view.viewWithTag(71404) else { return }
+            arrow.transform = CGAffineTransform(rotationAngle: (lastNavigationHeading - map.camera.heading) * .pi / 180)
         }
 
         func resetNavigationInteraction() {
             resumeNavigation?.cancel()
             resumeNavigation = nil
+            let wasSuspended = navigationSuspended
             navigationSuspended = false
+            if wasSuspended { notifySuspension(false) }
+        }
+
+        private func notifySuspension(_ suspended: Bool) {
+            let callback = parent.onNavigationSuspended
+            DispatchQueue.main.async { callback?(suspended) }
         }
 
         func updateNavigationCamera() {
@@ -286,11 +311,11 @@ struct RouteMap: UIViewRepresentable {
             }
             // The camera target (our position) sits at 80% of the map's height.
             map.contentInset = UIEdgeInsets(top: map.bounds.height * 0.6, left: 0, bottom: 0, right: 0)
-            // Request the SDK maximum; MapLibre also caps pitch for the padded viewport
-            // so the visible ground cannot cross the horizon.
+            // Use a shallower car perspective; MapLibre caps both modes for the padded viewport.
             let camera = MLNMapCamera(lookingAtCenter: position, altitude: 100,
-                                      pitch: 60, heading: lastNavigationHeading)
+                                      pitch: parent.carNavigation ? 45 : parent.hikingNavigation ? 30 : 60, heading: lastNavigationHeading)
             let location = CLLocation(latitude: position.latitude, longitude: position.longitude)
+            let lookAhead = parent.carNavigation ? min(3000, max(180, parent.navigationLookAhead)) : parent.hikingNavigation ? 150 : 500
             // Calibrate using the actual projection, including pitch, latitude and viewport size.
             // All changes are synchronous so intermediate cameras never render as animations.
             for _ in 0..<4 {
@@ -298,10 +323,28 @@ struct RouteMap: UIViewRepresentable {
                 let farEdge = map.convert(CGPoint(x: map.bounds.midX, y: 0), toCoordinateFrom: map)
                 let distance = location.distance(from: CLLocation(latitude: farEdge.latitude, longitude: farEdge.longitude))
                 guard distance.isFinite, distance > 0 else { break }
-                if abs(distance - 500) < 0.1 { break }
-                camera.altitude *= 500 / distance
+                if abs(distance - lookAhead) < 0.1 { break }
+                camera.altitude *= lookAhead / distance
+            }
+            // Curved approaches need lateral room as well as forward distance.
+            // Include the upcoming path in the viewport while retaining the low anchor.
+            if parent.carNavigation, let route = parent.route, let traveled = parent.navigationProgress {
+                let distances = LocalRouteMetrics.distances(route)
+                let indices = distances.indices.filter { distances[$0] >= traveled && distances[$0] <= traveled + lookAhead }
+                let stride = max(1, indices.count / 40)
+                let selected = indices.enumerated().filter { $0.offset % stride == 0 || $0.offset == indices.count - 1 }.map { $0.element }
+                for _ in 0..<6 {
+                    map.setCamera(camera, animated: false)
+                    let outside = selected.contains { index in
+                        let point = map.convert(route.coordinates[index].cl, toPointTo: map)
+                        return point.x < 28 || point.x > map.bounds.width - 28 || point.y < 36 || point.y > map.bounds.height * 0.94
+                    }
+                    if !outside { break }
+                    camera.altitude *= 1.3
+                }
             }
             map.setCamera(camera, animated: false)
+            updateCarMarker()
         }
 
         private func isManualChange(_ reason: MLNCameraChangeReason) -> Bool {
@@ -312,6 +355,7 @@ struct RouteMap: UIViewRepresentable {
 
         private func suspendNavigation() {
             guard parent.follow, (parent.followHeading || parent.marineNavigation), !applyingNavigationCamera else { return }
+            if !navigationSuspended { notifySuspension(true) }
             navigationSuspended = true
             resumeNavigation?.cancel()
             let work = DispatchWorkItem { [weak self] in
@@ -395,17 +439,27 @@ struct RouteMap: UIViewRepresentable {
             if let title = annotation.title, title.hasPrefix("mode:"), let code = Int(title.dropFirst(5)) {
                 return UIColor(BikeTelemetryView.modeColor(code) ?? .gray)
             }
-            return annotation.title == "track" ? .systemOrange : parent.marineNavigation ? UIColor(red: 0.04, green: 0.18, blue: 0.27, alpha: 1) : UIColor(Theme.forest)
+            return annotation.title == "track" ? .systemOrange : parent.carNavigation ? .systemBlue : parent.marineNavigation ? UIColor(red: 0.04, green: 0.18, blue: 0.27, alpha: 1) : UIColor(Theme.forest)
         }
-        func mapView(_ mapView: MLNMapView, lineWidthForPolylineAnnotation annotation: MLNPolyline) -> CGFloat { parent.marineNavigation ? 3 : 5 }
+        func mapView(_ mapView: MLNMapView, lineWidthForPolylineAnnotation annotation: MLNPolyline) -> CGFloat { parent.marineNavigation ? 3 : parent.carNavigation ? 7 : 5 }
         func mapView(_ mapView: MLNMapView, viewFor annotation: MLNAnnotation) -> MLNAnnotationView? {
             if (annotation as AnyObject) === navigationPin {
                 let view = MLNAnnotationView(reuseIdentifier: "navigation-position")
-                view.frame = CGRect(x: 0, y: 0, width: 20, height: 20)
+                let size: CGFloat = parent.carNavigation ? 34 : 20
+                view.frame = CGRect(x: 0, y: 0, width: size, height: size)
                 view.backgroundColor = .systemBlue
-                view.layer.cornerRadius = 10
+                view.layer.cornerRadius = size / 2
                 view.layer.borderColor = UIColor.white.cgColor
                 view.layer.borderWidth = 3
+                if parent.carNavigation {
+                    let arrow = UIImageView(image: UIImage(systemName: "location.north.fill"))
+                    arrow.tag = 71404
+                    arrow.frame = view.bounds.insetBy(dx: 8, dy: 8)
+                    arrow.tintColor = .white
+                    arrow.contentMode = .scaleAspectFit
+                    view.addSubview(arrow)
+                    view.accessibilityLabel = "Aktuelle Fahrtrichtung"
+                }
                 return view
             }
             guard annotation is MLNPointAnnotation else { return nil }

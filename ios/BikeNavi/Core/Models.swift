@@ -75,16 +75,17 @@ enum SurfacePreference: String, Codable, CaseIterable {
 }
 
 enum TravelMode: String, Codable, CaseIterable {
-    case cycling, bikeAndHike, hiking, sea
+    case cycling, bikeAndHike, hiking, sea, car
     var title: String {
         switch self {
         case .cycling: "Rad"
         case .bikeAndHike: "Rad&Wandern"
         case .hiking: "Wandern"
         case .sea: "Seeweg"
+        case .car: "Auto"
         }
     }
-    var symbol: String { self == .sea ? "sailboat.fill" : self == .hiking ? "figure.hiking" : "bicycle" }
+    var symbol: String { self == .car ? "car.fill" : self == .sea ? "sailboat.fill" : self == .hiking ? "figure.hiking" : "bicycle" }
 }
 
 struct RidingProfile: Codable, Equatable {
@@ -100,6 +101,8 @@ struct RidingProfile: Codable, Equatable {
     var gentleHills = false
     var boatDraft: Double?
     var boatSpeedKnots: Double?
+    var carOptions: CarOptions?
+    var drivingOptions: CarOptions { carOptions ?? CarOptions() }
     var title: String { mode == .cycling ? (electric ? "E-" : "") + bike.title : mode.title }
 }
 
@@ -108,10 +111,22 @@ struct Maneuver: Codable, Equatable {
     var distance: Double
     var coordinateIndex: Int
     var type: Int
+    var roadName: String?
+    var exitNumber: Int?
+    var carInstruction: String {
+        var text = instruction
+        if let exitNumber, (type == 7 || type == 8), !text.localizedCaseInsensitiveContains("ausfahrt") {
+            text += ", \(exitNumber). Ausfahrt nehmen"
+        }
+        if let roadName, !roadName.isEmpty, roadName != "-", !text.localizedCaseInsensitiveContains(roadName) {
+            text += " · " + roadName
+        }
+        return text
+    }
     var symbol: String {
         switch type {
-        case 0, 2, 4: "arrow.turn.up.left"
-        case 1, 3, 5: "arrow.turn.up.right"
+        case 0, 2, 4, 12: "arrow.turn.up.left"
+        case 1, 3, 5, 13: "arrow.turn.up.right"
         case 7, 8: "arrow.trianglehead.2.clockwise.rotate.90"
         case 9: "arrow.uturn.down"
         case 10: "flag.checkered"
@@ -194,6 +209,8 @@ struct CalculatedRoute: Codable, Identifiable, Equatable {
     var walkingStartIndex: Int?
     var walkingDistance: Double?
     var cyclingDistance: Double?
+    var carTimeSections: [CarTimeSection]?
+    var destinationAccessDistance: Double?
     var bicycleParking: Coordinate? {
         guard let index = walkingStartIndex, index > 0, index < coordinates.count,
               index < coordinates.count - 1 || (walkingDistance == 0 && (unmappedDestinationDistance ?? 0) > 20) else { return nil }
@@ -386,6 +403,7 @@ struct Mutation: Codable {
 struct RouteRequest: Codable {
     var waypoints: [Waypoint]
     var profile: RidingProfile
+    var startBearing: Double?
 }
 
 enum Format {

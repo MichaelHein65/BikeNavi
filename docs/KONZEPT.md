@@ -172,3 +172,49 @@ Offene Daten und öffentlich angebotene Server sind getrennt zu bewerten. Quelle
 - Plan nach einer Fahrt verändern: die historische Route bleibt erhalten.
 - Serverbestand aus einer Sicherung wiederherstellen.
 - Routing mit bekannten Asphalt-, Schotter- und Waldabschnitten prüfen; unbekannte Daten und nicht erfüllbare Ausschlüsse sichtbar behandeln.
+
+## 10. Auto-Modus: bestätigtes Zielbild (14.10.2026)
+
+Der Auto-Modus soll als eigenes Pkw-Fahrprofil ergänzt werden. Die folgenden Anforderungen und Ausbauschritte sind im Gespräch bestätigt; sie beschreiben das Zielbild. Die erste Ausbaustufe ist im lokalen Quellstand umgesetzt; tatsächlich geprüfter Stand und verbleibende Grenzen stehen in [UMSETZUNG.md](UMSETZUNG.md#auto-modus-und-auto-zoom-14-oktober-2026). Suche, Favoriten, Zwischenziele und Reiseaufzeichnung sollen weiterverwendet werden. Fahrradwerte wie Motorleistung und Trittfrequenz entfallen in der Auto-Ansicht.
+
+### Erste Ausbaustufe
+
+- Schnellste Route als Standard; Autobahnen, Mautstraßen und Fähren jeweils vermeidbar. Pkw-Zufahrt, Einbahnstraßen, Abbiegeverbote und getrennte Fahrbahnen müssen in der Routenberechnung berücksichtigt werden.
+- Vorhandene OpenStreetMap-basierte OpenFreeMap-Karten weiterverwenden; Straßen, Straßennamen und Straßennummern gegenüber Belagsfarben hervorheben. Als Ausgangspunkt für das Routing das Pkw-Profil `driving-car` der bestehenden openrouteservice-Anbindung prüfen: [Routing-Optionen](https://giscience.github.io/openrouteservice/api-reference/endpoints/directions/routing-options).
+- Frühzeitige, an Tempo und Manöver angepasste Sprachhinweise mit Straßennamen, Kreisverkehrsausfahrten und Autobahnausfahrten; bei kurzen Abständen auch das anschließende Manöver ankündigen.
+- Automatische Online-Neuberechnung vom aktuellen Standort zum nächsten verbindlichen Zwischenziel beziehungsweise zum Endziel. GPS-Ungenauigkeit und Parallelstraßen berücksichtigen. Das bestehende lokale Fahrradnetz darf nicht zur Pkw-Rückführung verwendet werden.
+- Große, ruhige Fahrtansicht mit nächstem Manöver, Entfernung, Straßenname, Ankunft, Restzeit und Reststrecke; Nachtansicht und automatischer Zoom gehören zur ersten Ausbaustufe.
+- Gespeicherte Route und Hinweise bei Verbindungsverlust weiterverwenden; nicht verfügbare Neuberechnung kenntlich machen. Bei GPS-Ausfall keine vermeintlich gemessene Position oder gesicherte Routenabweichung ableiten. Sprachausgabe über das Autoradio praktisch prüfen.
+- Bei nicht mit dem Pkw erreichbaren Zielen den tatsächlich erreichbaren Endpunkt und verbleibenden Zugang verständlich zeigen. Fahrzeit zunächst aus Straßenmerkmalen schätzen und als Schätzung ohne Live-Verkehr kennzeichnen.
+
+### Auto-Zoom nach Geschwindigkeit und nächsten Aktionen
+
+Der Auto-Zoom ist eine Kernanforderung. Geschwindigkeit bestimmt die Grundansicht; Entfernung, verbleibende Zeit und Art der bevorstehenden Aktion bestimmen die situationsbezogene Ansicht. Die exakten Schwellen und Übergangszeiten werden bei der Umsetzung und praktischen Prüfung festgelegt.
+
+- Bei höherem Tempo mehr Strecke voraus zeigen; bei niedrigem Tempo mehr lokale Straßendetails. Position im unteren Kartenbereich halten.
+- Vor einer Abbiegung, Ausfahrt oder einem Kreisverkehr rechtzeitig den Kartenausschnitt auf die Entscheidung ausrichten. Die aktuelle Position, die Zufahrt und das Manöver sollen zusammen erkennbar bleiben. Hohe Geschwindigkeit darf diese Orientierung nicht durch einen zu weiten Kartenausschnitt verdrängen.
+- Bei zwei dicht aufeinanderfolgenden Manövern beide Aktionen soweit sinnvoll gemeinsam zeigen; zwischen ihnen kein unnötiges Heraus- und Hineinzoomen.
+- Nach dem Manöver sanft zur geschwindigkeitsabhängigen Grundansicht zurückkehren. Geschwindigkeit glätten und Zustandswechsel mit Haltezeiten beziehungsweise getrennten Ein-/Austrittsschwellen stabilisieren, damit die Karte im Stop-and-go nicht pumpt.
+- Bei manuellem Verschieben oder Zoomen die automatische Kamera vorübergehend aussetzen. Eine deutlich erkennbare Aktion zur Rückkehr in die automatische Ansicht anbieten; Zeitpunkt und Verhalten einer automatischen Rückkehr noch festlegen.
+- Ohne aktive Route nur nach Geschwindigkeit zoomen. Bei Pause, GPS-Ausfall oder Neuberechnung eine ruhige Ansicht halten; kein Zoom auf einen veralteten Abbiegepunkt.
+
+Zur Abnahme gehören Stadtverkehr, Stop-and-go, hohe Geschwindigkeit vor einer Ausfahrt, Kreisverkehr, zwei unmittelbar folgende Abbiegungen, verpasste Ausfahrt, manueller Karteneingriff und GPS-Ausfall. Simulatorprüfungen und tatsächliche Fahrprüfungen getrennt dokumentieren.
+
+### Späterer Ausbau zum professionellen Auto-Navi
+
+Diese Funktionen bleiben ausdrücklich Teil des gewünschten Zielbilds und sollen nach der ersten Ausbaustufe weiterverfolgt werden:
+
+- **Spurführung:** empfohlene Fahrspuren vor Abbiegungen und Ausfahrten; verfügbare Daten und Abdeckung vor Zusagen prüfen.
+- **Tempolimits:** zulässige Geschwindigkeit anzeigen, soweit verlässliche Daten vorliegen; unbekannte, bedingte oder zeitabhängige Angaben als solche behandeln.
+- **Parkplatz- und Tankstellensuche:** geeignete Ziele entlang der Route oder nahe dem Ziel finden und als Zwischenziel übernehmen.
+- **CarPlay:** Planung und Führung über eine für das Fahrzeugdisplay geeignete Bedienung.
+- **Live-Verkehr:** Staus und aktuelle Sperrungen bei Routenwahl, Alternativen und Ankunftszeit berücksichtigen; dafür ist eine zusätzliche aktuelle Datenquelle erforderlich.
+
+Als ergänzende Idee bleibt die Auto-Anfahrt zum Start einer Fahrradtour mit Parkplatz und anschließendem Wechsel zum Rad-Profil vorgemerkt; der genaue Ablauf ist noch offen. Vollständige Offline-Neuberechnung für Pkw ist ebenfalls eine eigene spätere Entscheidung und setzt ein geeignetes Straßennetz mit Pkw-Regeln voraus.
+
+
+## Universeller Einstieg im Claystyle
+
+Der Startbildschirm stellt die Entscheidung „Womit geht’s los?“ vor die Routenplanung. Fünf deutlich beschriftete Kacheln mit plastischen, bunten Bildern stehen für Fahrrad, Auto, Wandern, Fahrrad & Wandern und Segeln. Vier kompakte Kacheln und eine breite Segelkachel bilden eine ruhige Auswahl. Alle fünf Kacheln passen gemeinsam auf eine Seite ohne Scrollen, auch mit einer fortsetzbaren Fahrt. Bilder, Abstände und Zusatztexte passen sich der verfügbaren Höhe an. Die Bildsprache bleibt freundlich, die Bedienung nativ und mit vollständigen VoiceOver-Beschriftungen nutzbar.
+
+Die Auswahl bestimmt Planung, persönliche Profilwünsche, Kartengrundansicht und die unterwegs benötigten Werte. Weitere Modusschalter innerhalb der Planung entfallen. Pro Anwendung bleiben eigene Entwürfe erhalten; ein sichtbarer Rückweg „Start“ führt zur Auswahl. Eine vorhandene Fahrt bekommt einen direkten Einstieg zum Fortsetzen und wird beim Erkunden einer anderen Anwendung nicht beendet. Das globale Tourarchiv bleibt vom Startbildschirm erreichbar. Das zuvor vereinbarte professionelle Auto-Zielbild im Abschnitt „Späterer Ausbau“ bleibt erhalten.

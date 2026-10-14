@@ -74,6 +74,14 @@ enum MarineNavigation {
         let toTarget = leg(from: Waypoint(name: "GPS", coordinate: position), to: points[target]).distance
         return toTarget + legs(Array(points[target...])).reduce(0) { $0 + $1.distance }
     }
+    static func settingInput(_ text: String, range: ClosedRange<Double>) -> Double? {
+        let input = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Accept either decimal separator, but no grouping, exponents or partial parsing.
+        guard input.range(of: #"^[0-9]+([.,][0-9]+)?$"#, options: .regularExpression) != nil,
+              let value = Double(input.replacingOccurrences(of: ",", with: ".")),
+              value.isFinite, range.contains(value) else { return nil }
+        return value
+    }
     static func setting(_ value: Double, range: ClosedRange<Double>, fallback: Double) -> Double {
         value.isFinite && range.contains(value) ? value : fallback
     }

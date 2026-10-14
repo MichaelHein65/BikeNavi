@@ -89,4 +89,16 @@ final class MarineNavigationTests: XCTestCase {
         XCTAssertEqual(MarineNavigation.setting(2.7, range: 0.1...20, fallback: 2), 2.7)
     }
 
+    func testBoatSettingInputAllowsCommaOrPointAndRejectsIncompleteOrInvalidNumbers() {
+        for text in ["2", "2,0", "2.0", " 2,0 "] {
+            XCTAssertEqual(MarineNavigation.settingInput(text, range: 0.1...20), 2)
+        }
+        XCTAssertEqual(MarineNavigation.settingInput("0,1", range: 0.1...20), 0.1)
+        XCTAssertEqual(MarineNavigation.settingInput("20", range: 0.1...20), 20)
+        XCTAssertEqual(MarineNavigation.settingInput("5.5", range: 0.5...50), 5.5)
+        for text in ["", "0", "0,", "2,", "21", "-2", "NaN", "inf", "2m", "2,5.0", "1e1"] {
+            XCTAssertNil(MarineNavigation.settingInput(text, range: 0.1...20), text)
+        }
+    }
+
 }

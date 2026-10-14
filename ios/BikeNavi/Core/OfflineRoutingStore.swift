@@ -55,6 +55,9 @@ actor OfflineRoutingStore {
     func calculate(document: TourDocument, api: APIClient?,
                    progress: @Sendable (Int, Int) async -> Void) async throws -> CalculatedRoute {
         if document.profile.mode == .sea && api == nil { throw MarineNavigation.Failure.server }
+        if document.profile.mode == .car && api == nil {
+            throw APIError(status: 0, message: "Auto-Routen benötigen Internet und einen aktualisierten Pi. Gespeicherte Routen bleiben nutzbar.")
+        }
         if let api { return try await api.route(document, includeContext: false) }
         return try await plan(document: document, api: nil, progress: progress).0
     }

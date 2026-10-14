@@ -15,12 +15,12 @@ struct BikeNaviRideActivityWidget: Widget {
                     .frame(width: 162, height: 132)
                     .layoutPriority(1)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(context.state.status).font(.caption).foregroundStyle(.white.opacity(0.7))
-                    if context.state.distanceMeters > 0 {
+                    Text(context.isStale && context.state.carNavigation == true ? "GPS-Signal fehlt" : context.state.status).font(.caption).foregroundStyle(.white.opacity(0.7))
+                    if context.state.distanceMeters > 0 && !(context.isStale && context.state.carNavigation == true) {
                         Text("In \(RideActivityFormat.distance(context.state.distanceMeters))")
                             .font(.system(size: 27, weight: .heavy, design: .rounded)).monospacedDigit()
                     }
-                    Text(context.state.instruction).font(.subheadline.bold()).lineLimit(3)
+                    Text(context.isStale && context.state.carNavigation == true ? "Auf aktuellen Standort warten" : context.state.instruction).font(.subheadline.bold()).lineLimit(3)
                     Spacer(minLength: 2)
                     if context.state.remainingMeters > 0 {
                         HStack(spacing: 5) {
@@ -43,10 +43,10 @@ struct BikeNaviRideActivityWidget: Widget {
                     Image(systemName: context.state.symbol).font(.title2.bold()).foregroundStyle(.green)
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    Text(context.state.instruction).font(.subheadline).lineLimit(2)
+                    Text(context.isStale && context.state.carNavigation == true ? "Auf aktuellen Standort warten" : context.state.instruction).font(.subheadline).lineLimit(2)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    if context.state.distanceMeters > 0 {
+                    if context.state.distanceMeters > 0 && !(context.isStale && context.state.carNavigation == true) {
                         Text(RideActivityFormat.distance(context.state.distanceMeters)).font(.headline).monospacedDigit()
                     }
                 }
@@ -67,7 +67,7 @@ struct BikeNaviRideActivityWidget: Widget {
             } compactLeading: {
                 Image(systemName: context.state.symbol).foregroundStyle(.green)
             } compactTrailing: {
-                Text(context.state.distanceMeters > 0 ? RideActivityFormat.distance(context.state.distanceMeters) : "Bike")
+                Text(context.isStale && context.state.carNavigation == true ? "GPS" : context.state.distanceMeters > 0 ? RideActivityFormat.distance(context.state.distanceMeters) : context.state.carNavigation == true ? "Auto" : "Bike")
                     .font(.caption2).monospacedDigit()
             } minimal: {
                 Image(systemName: context.state.symbol).foregroundStyle(.green)
@@ -110,7 +110,7 @@ private struct RoutePreviewView: View {
                             segment.addLine(to: position(points[index], in: size))
                             let traveled = index <= (state.currentPointIndex ?? 0)
                             context.stroke(segment,
-                                           with: .color(surfaceColor(points[index].surface).opacity(traveled ? 0.32 : 1)),
+                                           with: .color((state.carNavigation == true ? Color.blue : surfaceColor(points[index].surface)).opacity(traveled ? 0.32 : 1)),
                                            style: StrokeStyle(lineWidth: 6.5, lineCap: .round, lineJoin: .round))
                         }
                     }

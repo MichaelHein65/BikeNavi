@@ -20,14 +20,21 @@ class Waypoint(Model):
     coordinate: Coordinate
 
 
+class CarOptions(Model):
+    avoidHighways: bool = False
+    avoidTolls: bool = False
+    avoidFerries: bool = False
+
+
 class Profile(Model):
-    travelMode: Literal["cycling", "bikeAndHike", "hiking", "sea"] | None = None
+    travelMode: Literal["cycling", "bikeAndHike", "hiking", "sea", "car"] | None = None
     bike: Literal["touring", "gravel", "mountain", "road"] = "touring"
     electric: bool = True
     surface: Literal["any", "preferPaved", "pavedOnly"] = "any"
     gentleHills: bool = False
     boatDraft: float | None = Field(default=None, ge=0.1, le=20)
     boatSpeedKnots: float | None = Field(default=None, ge=0.5, le=50)
+    carOptions: CarOptions | None = None
 
 
 class Maneuver(Model):
@@ -35,6 +42,14 @@ class Maneuver(Model):
     distance: float = Field(ge=0)
     coordinateIndex: int = Field(ge=0)
     type: int
+    roadName: str | None = Field(default=None, max_length=1000)
+    exitNumber: int | None = Field(default=None, ge=1, le=100)
+
+
+class CarTimeSection(Model):
+    startIndex: int = Field(ge=0)
+    endIndex: int = Field(gt=0)
+    seconds: float = Field(ge=0)
 
 
 class Surface(Model):
@@ -89,9 +104,19 @@ class Route(Model):
     walkingStartIndex: int | None = Field(default=None, ge=0)
     walkingDistance: float | None = Field(default=None, ge=0)
     cyclingDistance: float | None = Field(default=None, ge=0)
+    carTimeSections: list[CarTimeSection] | None = Field(default=None, max_length=100_000)
+    destinationAccessDistance: float | None = Field(default=None, gt=20, le=500)
 
     @model_validator(mode="after")
     def check_indices(self):
+        if self.carTimeSections is not None:
+            cursor = 0
+            for section in self.carTimeSections:
+                if section.startIndex != cursor or not cursor < section.endIndex < len(self.coordinates):
+                    raise ValueError("Ungültige Pkw-Fahrzeitabschnitte")
+                cursor = section.endIndex
+            if cursor != len(self.coordinates) - 1 or abs(sum(s.seconds for s in self.carTimeSections) - self.duration) > 1:
+                raise ValueError("Pkw-Fahrzeitabschnitte passen nicht zur Route")
         if ((self.marineDraft is None) != (self.marineDepthSource is None)
                 or (self.marineDepthUncertain is not None and self.marineDraft is None)):
             raise ValueError("Unvollständige Tiefenplanung")
@@ -144,6 +169,8 @@ class LocalNavigationState(Model):
     usedUnpaved: float = Field(default=0, ge=0)
     routeProgress: float = Field(default=0, ge=0)
     skippedWaypointOrdinals: list[int] | None = Field(default=None, max_length=48)
+    carRoute: Route | None = None
+    carPendingWaypointOrdinals: list[int] | None = Field(default=None, max_length=49)
 
 
 class Document(Model):
@@ -168,6 +195,16 @@ class Document(Model):
     @model_validator(mode="after")
     def check_local_navigation(self):
         nav = self.localNavigation
+        if nav and (nav.carRoute is not None or nav.carPendingWaypointOrdinals is not None):
+            if self.kind != "ride" or self.profile.travelMode != "car" or self.route is None:
+                raise ValueError("Pkw-Navigation benötigt eine Pkw-Fahrt mit Route")
+            pending = nav.carPendingWaypointOrdinals
+            if (not pending or pending != sorted(set(pending)) or pending[-1] != len(self.waypoints) - 1
+                    or any(i <= 0 or i >= len(self.waypoints) for i in pending)):
+                raise ValueError("Ungültige verbleibende Pkw-Ziele")
+            active = nav.carRoute or self.route
+            if nav.carRoute is not None and (active.waypointIndices is None or not len(pending) + 1 <= len(active.waypointIndices) <= len(self.waypoints)):
+                raise ValueError("Pkw-Ersatzroute passt nicht zu den verbleibenden Zielen")
         if nav and nav.marineNextWaypointIndex is not None:
             if self.kind != "ride" or self.profile.travelMode != "sea" or self.route is None or not 1 <= nav.marineNextWaypointIndex <= len(self.route.coordinates):
                 raise ValueError("Ungültiger nächster nautischer Wegpunkt")
@@ -190,6 +227,7 @@ class Mutation(Model):
 class RouteRequest(Model):
     waypoints: list[Waypoint] = Field(min_length=2, max_length=50)
     profile: Profile
+    startBearing: float | None = Field(default=None, ge=0, lt=360)
 
 
 class BikeMeasurement(Model):

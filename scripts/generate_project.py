@@ -30,8 +30,15 @@ for path in files:
     builds.append(obj(relative + "/build", f"isa = PBXBuildFile; fileRef = {ref};"))
 app = obj("app", 'isa = PBXFileReference; explicitFileType = wrapper.application; path = BikeNavi.app; sourceTree = BUILT_PRODUCTS_DIR;')
 test_app = obj("ui-test-product", 'isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = BikeNaviUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR;')
-test_ref = obj("ui-test-file", 'isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = tests/UI/PlannerUITests.swift; sourceTree = SOURCE_ROOT;')
-refs.append(test_ref)
+ui_test_builds = []
+for path in sorted((ROOT / "tests/UI").glob("*.swift")):
+    relative = path.relative_to(ROOT).as_posix()
+    # Retain the original file identities for the established UI suite.
+    name = "ui-test-file" if path.name == "PlannerUITests.swift" else relative
+    ref = obj(name, f'isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "{relative}"; sourceTree = SOURCE_ROOT;')
+    refs.append(ref)
+    build_name = "ui-test-build" if path.name == "PlannerUITests.swift" else relative + "/build"
+    ui_test_builds.append(obj(build_name, f"isa = PBXBuildFile; fileRef = {ref};"))
 map_test_app = obj("map-test-product", 'isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = BikeNaviMapTests.xctest; sourceTree = BUILT_PRODUCTS_DIR;')
 map_test_builds = []
 for path in sorted((ROOT / "tests/iOS").glob("*.swift")):
@@ -60,6 +67,12 @@ refs.append(assets)
 asset_build = obj("assets-build", f"isa = PBXBuildFile; fileRef = {assets};")
 map_style_builds = []
 for path in sorted((ROOT / "ios/BikeNavi/MapStyles").glob("*.json")):
+    relative = path.relative_to(ROOT).as_posix()
+    ref = obj(relative, f'isa = PBXFileReference; lastKnownFileType = text.json; path = "{relative}"; sourceTree = SOURCE_ROOT;')
+    refs.append(ref)
+    map_style_builds.append(obj(relative + "/build", f"isa = PBXBuildFile; fileRef = {ref};"))
+# Public road-route fixture for the Debug-only simulator preview. No private ride data.
+for path in sorted((ROOT / "ios/BikeNavi/PreviewData").glob("*.json")):
     relative = path.relative_to(ROOT).as_posix()
     ref = obj(relative, f'isa = PBXFileReference; lastKnownFileType = text.json; path = "{relative}"; sourceTree = SOURCE_ROOT;')
     refs.append(ref)
@@ -124,8 +137,7 @@ widget_dependency = obj("widget-dependency", f"isa = PBXTargetDependency; target
 widget_embed_build = obj("widget-embed-build", f"isa = PBXBuildFile; fileRef = {widget_app}; settings = {{ ATTRIBUTES = (RemoveHeadersOnCopy,); }};")
 embed_extensions = obj("embed-extensions", f'isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = ({widget_embed_build},); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0;')
 target = obj("target", f'isa = PBXNativeTarget; buildConfigurationList = {config_list}; buildPhases = ({sources},{frameworks},{resources},{embed_extensions},); buildRules = (); dependencies = ({widget_dependency},); name = BikeNavi; packageProductDependencies = ({product},); productName = BikeNavi; productReference = {app}; productType = "com.apple.product-type.application";')
-test_build = obj("ui-test-build", f"isa = PBXBuildFile; fileRef = {test_ref};")
-test_sources = obj("ui-test-sources", f"isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ({test_build},); runOnlyForDeploymentPostprocessing = 0;")
+test_sources = obj("ui-test-sources", f"isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ({','.join(ui_test_builds)},); runOnlyForDeploymentPostprocessing = 0;")
 test_configs = []
 for name in ["Debug", "Release"]:
     test_configs.append(obj("ui-config-" + name, f'''isa = XCBuildConfiguration; name = {name}; buildSettings = {{

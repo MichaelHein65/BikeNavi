@@ -1,0 +1,182 @@
+{
+  "id": "7f3e12de-5819-468c-aa89-2a6a1671b311",
+  "coordinates": [
+    {
+      "longitude": 8.681495,
+      "latitude": 49.414599,
+      "altitude": null
+    },
+    {
+      "longitude": 8.68147,
+      "latitude": 49.414599,
+      "altitude": null
+    },
+    {
+      "longitude": 8.681488,
+      "latitude": 49.41465,
+      "altitude": null
+    },
+    {
+      "longitude": 8.681423,
+      "latitude": 49.415746,
+      "altitude": null
+    },
+    {
+      "longitude": 8.681656,
+      "latitude": 49.41659,
+      "altitude": null
+    },
+    {
+      "longitude": 8.681826,
+      "latitude": 49.417081,
+      "altitude": null
+    },
+    {
+      "longitude": 8.681881,
+      "latitude": 49.417392,
+      "altitude": null
+    },
+    {
+      "longitude": 8.682461,
+      "latitude": 49.417389,
+      "altitude": null
+    },
+    {
+      "longitude": 8.682676,
+      "latitude": 49.417387,
+      "altitude": null
+    },
+    {
+      "longitude": 8.682781,
+      "latitude": 49.417386,
+      "altitude": null
+    },
+    {
+      "longitude": 8.683023,
+      "latitude": 49.417384,
+      "altitude": null
+    },
+    {
+      "longitude": 8.683595,
+      "latitude": 49.417372,
+      "altitude": null
+    },
+    {
+      "longitude": 8.68536,
+      "latitude": 49.417365,
+      "altitude": null
+    },
+    {
+      "longitude": 8.685299,
+      "latitude": 49.417726,
+      "altitude": null
+    },
+    {
+      "longitude": 8.685035,
+      "latitude": 49.419211,
+      "altitude": null
+    },
+    {
+      "longitude": 8.685026,
+      "latitude": 49.419265,
+      "altitude": null
+    },
+    {
+      "longitude": 8.686493,
+      "latitude": 49.419427,
+      "altitude": null
+    },
+    {
+      "longitude": 8.686507,
+      "latitude": 49.419429,
+      "altitude": null
+    }
+  ],
+  "distance": 888.6,
+  "duration": 189.1,
+  "ascent": 0,
+  "descent": 0,
+  "maneuvers": [
+    {
+      "instruction": "Weiter westlich auf Gerhart-Hauptmann-Straße",
+      "distance": 1.8,
+      "coordinateIndex": 0,
+      "type": 11,
+      "roadName": "Gerhart-Hauptmann-Straße"
+    },
+    {
+      "instruction": "Biegen Sie rechts auf Wielandtstraße ab",
+      "distance": 313.8,
+      "coordinateIndex": 1,
+      "type": 1,
+      "roadName": "Wielandtstraße"
+    },
+    {
+      "instruction": "Biegen Sie rechts auf Mönchhofstraße ab",
+      "distance": 251.7,
+      "coordinateIndex": 6,
+      "type": 1,
+      "roadName": "Mönchhofstraße"
+    },
+    {
+      "instruction": "Biegen Sie links auf Keplerstraße ab",
+      "distance": 212.6,
+      "coordinateIndex": 12,
+      "type": 0,
+      "roadName": "Keplerstraße"
+    },
+    {
+      "instruction": "Biegen Sie rechts auf Moltkestraße ab",
+      "distance": 108.7,
+      "coordinateIndex": 15,
+      "type": 1,
+      "roadName": "Moltkestraße"
+    },
+    {
+      "instruction": "Sie erreichen Moltkestraße (geradeaus)",
+      "distance": 0.0,
+      "coordinateIndex": 17,
+      "type": 10
+    }
+  ],
+  "surfaces": [],
+  "surfaceSections": [],
+  "waypointIndices": [
+    0,
+    17
+  ],
+  "warnings": [
+    "Fahrzeit geschätzt · ohne Live-Verkehr",
+    "Öffentliche ORS-Straßenroute Heidelberg vom 14.10.2026. GPS und Tempo in der Vorschau sind simuliert; keine Fahrtaufzeichnung."
+  ],
+  "provider": "openrouteservice · Pkw",
+  "calculatedAt": 1791998123.034561,
+  "carTimeSections": [
+    {
+      "startIndex": 0,
+      "endIndex": 1,
+      "seconds": 0.4
+    },
+    {
+      "startIndex": 1,
+      "endIndex": 6,
+      "seconds": 75.3
+    },
+    {
+      "startIndex": 6,
+      "endIndex": 12,
+      "seconds": 36.2
+    },
+    {
+      "startIndex": 12,
+      "endIndex": 15,
+      "seconds": 51.0
+    },
+    {
+      "startIndex": 15,
+      "endIndex": 17,
+      "seconds": 26.1
+    }
+  ],
+  "intersectionContexts": []
+}

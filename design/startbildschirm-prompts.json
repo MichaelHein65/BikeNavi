@@ -1,0 +1,36 @@
+{
+  "tool": "built-in image_gen",
+  "transparent_background": true,
+  "assets": [
+    {
+      "mode": "cycling",
+      "asset": "HomeCycling",
+      "prompt": "Use case: stylized-concept. Asset type: one small illustration for a native iPhone app's colorful activity-selection tile. Style: premium playful 3D clay sculpture, hand-modelled matte soft clay, rounded chunky shapes, subtle imperfections, soft studio ambient occlusion, gentle shadow, cohesive friendly miniature icon family. Composition: one centered compact subject, square canvas, three-quarter view, generous clean margin, instantly recognizable at small size. No text, no letters, no logo, no border, no watermark. Real transparent background; preserve soft contact shadow with alpha. Subject: A cheerful green touring bicycle with two clearly defined wheels, orange saddle, cream tire edges; simple accurate bicycle silhouette.",
+      "output": "ios/BikeNavi/Assets.xcassets/HomeCycling.imageset/illustration.png"
+    },
+    {
+      "mode": "car",
+      "asset": "HomeCar",
+      "prompt": "Use case: stylized-concept. Asset type: one small illustration for a native iPhone app's colorful activity-selection tile. Style: premium playful 3D clay sculpture, hand-modelled matte soft clay, rounded chunky shapes, subtle imperfections, soft studio ambient occlusion, gentle shadow, cohesive friendly miniature icon family. Composition: one centered compact subject, square canvas, three-quarter view, generous clean margin, instantly recognizable at small size. No text, no letters, no logo, no border, no watermark. Real transparent background; preserve soft contact shadow with alpha. Subject: A friendly rounded sky-blue compact car, warm orange small accents, cream headlights and chunky dark wheels; no brand.",
+      "output": "ios/BikeNavi/Assets.xcassets/HomeCar.imageset/illustration.png"
+    },
+    {
+      "mode": "hiking",
+      "asset": "HomeHiking",
+      "prompt": "Use case: stylized-concept. Asset type: one small illustration for a native iPhone app's colorful activity-selection tile. Style: premium playful 3D clay sculpture, hand-modelled matte soft clay, rounded chunky shapes, subtle imperfections, soft studio ambient occlusion, gentle shadow, cohesive friendly miniature icon family. Composition: one centered compact subject, square canvas, three-quarter view, generous clean margin, instantly recognizable at small size. No text, no letters, no logo, no border, no watermark. Real transparent background; preserve soft contact shadow with alpha. Subject: A pair of warm orange hiking boots next to a small lavender hiking backpack, simple recognizable outdoor walking equipment.",
+      "output": "ios/BikeNavi/Assets.xcassets/HomeHiking.imageset/illustration.png"
+    },
+    {
+      "mode": "bikeAndHike",
+      "asset": "HomeBikeAndHike",
+      "prompt": "Use case: stylized-concept. Asset type: one small illustration for a native iPhone app's colorful activity-selection tile. Style: premium playful 3D clay sculpture, hand-modelled matte soft clay, rounded chunky shapes, subtle imperfections, soft studio ambient occlusion, gentle shadow, cohesive friendly miniature icon family. Composition: one centered compact subject, square canvas, three-quarter view, generous clean margin, instantly recognizable at small size. No text, no letters, no logo, no border, no watermark. Real transparent background; preserve soft contact shadow with alpha. Subject: A green touring bicycle and a small orange hiking boot with lavender backpack grouped together as one balanced compact icon; both cycling and hiking clearly recognizable, bicycle is the largest element.",
+      "output": "ios/BikeNavi/Assets.xcassets/HomeBikeAndHike.imageset/illustration.png"
+    },
+    {
+      "mode": "sea",
+      "asset": "HomeSea",
+      "prompt": "Use case: stylized-concept. Asset type: one small illustration for a native iPhone app's colorful activity-selection tile. Style: premium playful 3D clay sculpture, hand-modelled matte soft clay, rounded chunky shapes, subtle imperfections, soft studio ambient occlusion, gentle shadow, cohesive friendly miniature icon family. Composition: one centered compact subject, square canvas, three-quarter view, generous clean margin, instantly recognizable at small size. No text, no letters, no logo, no border, no watermark. Real transparent background; preserve soft contact shadow with alpha. Subject: A small friendly cream sailing boat with one large coral-orange sail and a smaller pale-yellow sail, resting on a few soft turquoise clay wave shapes; unmistakable sailing icon.",
+      "output": "ios/BikeNavi/Assets.xcassets/HomeSea.imageset/illustration.png"
+    }
+  ]
+}

@@ -13,6 +13,24 @@ Am **9. Oktober 2026** wurden **01** (belagsabhängige Fahrzeit), **12/14** (ETA
 | --- | --- |
 | <img src="images/42-blog-fortschritt.png" width="300" alt="Öffentliche Beispieltour mit sichtbarem ersten Arbeitsschritt und verstrichener Zeit"> | <img src="images/43-blog-schreiben.png" width="300" alt="Öffentliche Beispieltour mit drittem Arbeitsschritt beim Schreiben und gesperrter Erstellungstaste"> |
 
+## Universeller Startbildschirm
+
+Neu am **14. Oktober 2026**: Der App-Start zeigt fünf bunte Clay-Kacheln. Eine Auswahl öffnet den eigenen Planungsbereich; ein sichtbarer Rückweg **Start** führt zur Auswahl. Die bisherigen Modusschalter entfallen. **Fahrt fortsetzen** öffnet die laufende/pausierte Aufzeichnung; eine andere Kachel ersetzt diese Fahrt nicht. **Alle Touren** zeigt das globale Archiv, innerhalb einer Anwendung sind deren eigene Touren sichtbar.
+
+| Einstieg mit fünf Anwendungen | Bestehende Fahrt fortsetzen |
+| --- | --- |
+| <img src="images/72-start-clay.png" width="300" alt="Pastellfarbener Startbildschirm mit Clay-Bildern für Fahrrad, Auto, Wandern, Fahrrad und Wandern sowie Segeln"> | <img src="images/74-start-fortsetzen.png" width="300" alt="Startbildschirm mit direkter Rückkehr zur öffentlichen Heidelberger Auto-Beispielfahrt"> |
+
+Auch auf dem **iPhone SE (3. Generation, 4,7 Zoll)** passen alle fünf Kacheln auf eine Seite. Die UI-Prüfung kontrolliert vollständig sichtbare und antippbare Kachelrahmen ohne ScrollView, mit und ohne fortsetzbare Autofahrt. Auf kompakten Bildschirmen erhält die Auswahl mehr Platz, indem Zusatztexte und Bilder kürzer bzw. kleiner werden; mit aktiver Fahrt entfällt gegebenenfalls die Fragezeile.
+
+| Kompaktes iPhone | Kompaktes iPhone mit fortsetzbarer Fahrt |
+| --- | --- |
+| <img src="images/77-start-kompakt.png" width="300" alt="Alle fünf Clay-Kacheln vollständig auf einem 4,7-Zoll-iPhone ohne Scrollen"> | <img src="images/78-start-kompakt-fortsetzen.png" width="300" alt="Alle fünf Kacheln und die Fortsetzen-Aktion gemeinsam auf einem kompakten iPhone"> |
+
+Die fünf Illustrationen wurden mit dem **eingebauten Imagegen-Werkzeug** generiert und als transparente PNGs in den Assetkatalog übernommen. [Vollständige Prompts und Bildpfade](../design/startbildschirm-prompts.json). Die Bilder zeigen die echte native Oberfläche im Simulator. Es werden ausschließlich öffentliche Beispielplanungen bzw. synthetische GPS-Daten verwendet. Die App wurde anschließend auf dem iPhone installiert und gestartet; diese Aufnahmen bleiben Simulatorbilder und sind kein Feldtest. Alle fünf Kacheln bleiben gleichzeitig auf einer Seite sichtbar. Höhe und Zusatztexte passen sich der Bildschirmgröße und einer vorhandenen Fahrt an. Auch eine sehr große Systemschrift erzeugt auf Home keine zweite Seite; die Kachelbeschriftungen behalten hier eine begrenzte Größe und vollständige VoiceOver-Namen.
+
+**01/02, 06/17, 11–14, 57, 68–71** wurden mit dem neuen Einstieg und den passenden Anwendungseinstellungen erneuert. Die übrigen älteren Galerieaufnahmen dokumentieren ihren jeweils genannten Entwicklungsstand und können noch die frühere Moduswahl zeigen.
+
 ## Planung
 
 Die drei Aktionen am unteren Kartenrand haben eine gemeinsame Höhe und Kapsel-Form. Höhenprofil als kompakte Symboltaste, **Beschreibung** und **Tour starten** als gleich breite Texttasten; abgestufte Grüntöne verdeutlichen die Hauptaktion. Bild 01 am 11. Oktober 2026 mit öffentlichen Beispieldaten erneuert, per Simulator-UI-Lauf erfasst und visuell geprüft.
@@ -27,7 +45,7 @@ Die drei Aktionen am unteren Kartenrand haben eine gemeinsame Höhe und Kapsel-F
 
 | Ortssuche | Fahrprofil |
 | --- | --- |
-| <img src="images/05-suche.png" width="300" alt="Koordinatensuche mit einem öffentlichen Heidelberger Beispielpunkt und gespeicherten Beispielorten"> | <img src="images/06-profil.png" width="300" alt="Rad, Rad&Wandern, Wandern und Seeweg neben Fahrradtyp und Belagswünschen"> |
+| <img src="images/05-suche.png" width="300" alt="Koordinatensuche mit einem öffentlichen Heidelberger Beispielpunkt und gespeicherten Beispielorten"> | <img src="images/06-profil.png" width="300" alt="Fahrrad-Einstellungen mit Fahrradtyp und Belagswünschen, ohne weitere Modusauswahl"> |
 
 | Routendetails |
 | --- |
@@ -37,9 +55,17 @@ Die Ortssuche **05** zeigt die Eingabe `49,4100; 8,7000` und den lokal normalisi
 
 ## Rad&Wandern und Wandern
 
-**06/17** am 14. Oktober 2026 im separaten Dokumentationssimulator erneuert. **06** zeigt die vier Optionen **Rad**, **Rad&Wandern**, **Wandern**, **Seeweg**. Der UI-Test prüft Auswahl, ausgeblendete Fahrradoptionen bei Wanderung und die Speicherung nach App-Neustart. **17** zeigt das konservative Wanderprofil und den Link zur freien Wanderübersicht Waymarked Trails.
+**06/17** am 14. Oktober 2026 mit dem universellen Einstieg erneuert. **06** enthält ausschließlich Fahrrad-Einstellungen, **17** das konservative Wanderprofil und die externe Wanderübersicht Waymarked Trails. Die passende Anwendung wird auf dem Startbildschirm gewählt. **73** zeigt Fahrrad & Wandern mit Radprofil und Erklärung des Abstellpunkts.
+
+<img src="images/73-rad-wandern-profil.png" width="300" alt="Fahrrad-und-Wandern-Einstellungen mit Radprofil, Belagswunsch und Erklärung des Übergangs zu Fuß">
 
 <img src="images/17-wandern-profil.png" width="300" alt="Wanderprofil ohne bekannte Kletterpassagen mit Hinweis auf fehlende OSM-Angaben und externe Wanderkarte">
+
+**75** zeigt die vollständige Auswahl bei sehr großer Systemschrift ohne Scrollen, **76** die freie Wanderung mit näherer topografischer Karte, **Gegangen** und **Gehzeit**, ohne Fahrradwerte. Für 76 liefert das Debug-Standortszenario nach fünf Sekunden einen synthetischen frischen GPS-Punkt in Heidelberg. Keine berechnete Wanderstrecke und keine tatsächliche Wanderung.
+
+| Einstieg mit großer Schrift | Freie Wanderung |
+| --- | --- |
+| <img src="images/75-start-grosse-schrift.png" width="300" alt="Alle fünf Clay-Kacheln auf einer Seite bei sehr großer Systemschrift"> | <img src="images/76-wandern-unterwegs.png" width="300" alt="Freie Wanderung mit topografischer Karte, Gehzeit und zurückgelegter Strecke ohne Fahrradtelemetrie"> |
 
 Die Aufnahmen **18** und **19** verwenden ausschließlich eine **synthetische Rad-/Wanderaufteilung** der öffentlichen Heidelberger Beispielgeometrie für die Darstellung. Der Titel und die Routenwarnung kennzeichnen dies; die dargestellte Abstellposition ist kein live berechneter Stellplatz und kein Feldtest. Der UI-Test prüft getrennte Entfernungen und Abstellkoordinaten ohne Serverzugang. In echten Berechnungen entsteht der Übergang nur aus verbundenen Rad-/Fußrouten.
 
@@ -57,7 +83,7 @@ Neue Aufnahmen **20** und **21** vom 5. Oktober 2026 zeigen die Korrektur für Z
 
 ## Kartenansichten
 
-Neu am 5. Oktober 2026: Das Ebenensymbol in Planung und Fahrt öffnet die Kartenwahl; dieselbe Auswahl steht unter Einstellungen → Karten zur Verfügung. Bei vollständigem App-Start erscheint **Standard · Deutsch**; eine gespeicherte Seewegplanung oder aktive Seefahrt öffnet die Seekarte. Tabwechsel und kurze Hintergrundpausen erhalten die gewählte Ansicht. Bilder 01/02, 11, 12/14 sowie 25–29 wurden im Simulator mit der öffentlichen, gekennzeichneten Heidelberg-Beispieltour aktualisiert. Satellit ist eine Online-Luftbildkarte ohne Ortsbeschriftungen; Topografisch zeigt OpenTopoMap-Gelände und Höhenlinien. Die übrigen Grundkartenstile ändern Routing und Wanderprüfung nicht; Seekarte wählt seit 14. Oktober automatisch Seeweg.
+Neu am 5. Oktober 2026: Das Ebenensymbol in Planung und Fahrt öffnet die Kartenwahl; dieselbe Auswahl steht unter Einstellungen → Karten zur Verfügung. Beim App-Start erscheint die Anwendungsauswahl. Fahrrad/Auto/Kombination öffnen **Standard · Deutsch**, Wandern **Topografisch**, Segeln **Seekarte**. Tabwechsel und kurze Hintergrundpausen erhalten die gewählte Ansicht. Bilder 01/02, 11, 12/14 sowie 25–29 wurden im Simulator mit der öffentlichen, gekennzeichneten Heidelberg-Beispieltour aktualisiert. Satellit ist eine Online-Luftbildkarte ohne Ortsbeschriftungen; Topografisch zeigt OpenTopoMap-Gelände und Höhenlinien. Die übrigen Grundkartenstile ändern Routing und Wanderprüfung nicht; Die Segel-Kachel bestimmt Seewege; der Kartenstil ändert keine Anwendung.
 
 | Hell | Detailreich | Dunkel |
 | --- | --- | --- |
@@ -67,13 +93,13 @@ Neu am 5. Oktober 2026: Das Ebenensymbol in Planung und Fahrt öffnet die Karten
 | --- | --- |
 | <img src="images/28-karte-satellit.png" width="300" alt="Öffentliche Heidelberg-Beispieltour auf Esri-Satellitenbildern"> | <img src="images/29-karte-topografisch.png" width="300" alt="Öffentliche Heidelberg-Beispieltour auf OpenTopoMap mit Höhenlinien"> |
 
-Am **14. Oktober 2026** mit **Seekarte · OpenSeaMap**, automatischer **Seeweg**-Profilwahl und optionalen **EMODnet-Wassertiefen** aktualisiert. **55** zeigt öffentliche Tribunj-Beispielpunkte mit absichtlich nicht erreichbarer Beispiel-API: keine berechnete Route und ein ausdrücklicher Serverhinweis. Die Kartenwahl aktiviert nun Seeweg und erhält damit die Seekarte über Neustarts. **11/56/62** zeigen Bootseinstellungen und die Tiefenebene mit gespeicherten Testwerten **2,7 m / 5,5 kn**; die tatsächlichen Standardwerte sind **2 m / 4 kn**. Keine privaten Zugangswerte oder Fahrtdaten.
+Am **14. Oktober 2026** mit **Seekarte · OpenSeaMap**, automatischer **Seeweg**-Profilwahl und optionalen **EMODnet-Wassertiefen** aktualisiert. **55** zeigt öffentliche Tribunj-Beispielpunkte mit absichtlich nicht erreichbarer Beispiel-API: keine berechnete Route und ein ausdrücklicher Serverhinweis. Die ältere Aufnahme zeigt die damalige automatische Seewegwahl über den Kartenstil. Im aktuellen Einstieg öffnet die Segel-Kachel direkt die Seekarte; Kartenstile ändern keine Anwendung mehr. **56/62** zeigen die korrigierten sichtbaren Bootsfelder mit **2 m / 5,5 kn** und der Tiefenebene; **57** zeigt dieselbe Bearbeitung im Segelprofil mit **2,7 m / 5,5 kn**; die tatsächlichen Standardwerte sind **2 m / 4 kn**. Keine privaten Zugangswerte oder Fahrtdaten.
 
 | Seekarte · OpenSeaMap | Auswahl in den Einstellungen |
 | --- | --- |
 | <img src="images/55-karte-seekarte.png" width="300" alt="Öffentliche Beispielpunkte am Meer um Tribunj mit OpenSeaMap-Seezeichen über der OpenStreetMap-Grundkarte"> | <img src="images/56-einstellungen-seekarte.png" width="300" alt="Bootseinstellungen und gewählte Seekarte mit zuschaltbaren EMODnet-Wassertiefen"> |
 
-Seekarte: © [OpenStreetMap-Mitwirkende](https://www.openstreetmap.org/copyright), Seezeichen © [OpenSeaMap](https://www.openseamap.org). [Nutzungshinweise](https://www.openseamap.org/index.php?id=imprint&L=1). Simulatoraufnahmen mit öffentlichen Tribunj-Beispielpunkten, kein Feldtest. Wiederholen mit `scripts/seed_gallery.py --device DEVICE --elevation --seamap` und `MapStyleTests/testSeaMapExampleAndSettingsScreenshots`; die übrigen Kartenstilaufnahmen verwenden weiter Heidelberg.
+Seekarte: © [OpenStreetMap-Mitwirkende](https://www.openstreetmap.org/copyright), Seezeichen © [OpenSeaMap](https://www.openseamap.org). [Nutzungshinweise](https://www.openseamap.org/index.php?id=imprint&L=1). Die ältere Karte verwendet öffentliche Tribunj-Beispielpunkte; die korrigierten Einstellungen verwenden synthetische Bootswerte. Kein Feldtest. Wiederholen mit `scripts/seed_gallery.py --device DEVICE --elevation --seamap` und `MapStyleTests/testSeaMapExampleAndSettingsScreenshots`; die übrigen Kartenstilaufnahmen verwenden weiter Heidelberg.
 
 ### Seeweg planen und auf See fahren
 
@@ -93,11 +119,11 @@ Wiederholen: `seed_gallery.py --device DEVICE --elevation --seamap`, lokaler HTT
 
 ### Bootseinstellungen, EMODnet und lange Törns
 
-**62** zeigt gespeicherte Beispielwerte nach Neustart. Für **63/64** wurden wieder 2 m und 4 kn eingestellt. Die grobe Tiefenebene liegt unter den Seezeichen; ihr Hinweis **nicht zur Navigation geeignet** bleibt sichtbar. Gesamtstrecke und ETA erscheinen in der maritimen Fahrt. **65** zeigt eine zuvor mit echten Anbieterdaten berechnete, gespeicherte Beispielplanung zum Wasserpunkt vor Ancona: **98,8 sm / zwei Abschnitte / etwa 24 h 41 min bei 4 kn**. Der UI-Test prüft ihre Darstellung; die getrennte abschließende Pi-Liveberechnung ergab 98,17 sm und drei Abschnitte. Beide sind öffentliche technische Beispiele, keine Freigabe einer Seeroute.
+**56/57/62** wurden nach der Eingabekorrektur am 14. Oktober neu aufgenommen und visuell geprüft. **62** zeigt die gespeicherten Beispielwerte 2 m/5,5 kn, mit absichtlich eingegebenem Dezimalpunkt im Tiefgangsfeld; Komma ist ebenfalls möglich. Der zugehörige UI-Test prüft anschließend die Speicherung über Neustart. Aufnahme aus dem dedizierten Dokumentationssimulator mit öffentlichen/synthetischen Beispielen und ohne Serverzugang; keine reale Nutzerfahrt. Die neuen Felder und „Bootswerte speichern“ stehen in Einstellungen und Segelprofil bereit. Wiederholen mit `MarineRoutingUITests/testBoatSettingsAllowClearingDecimalInputAndValidateOnCompletion`. Für **63/64** wurden wieder 2 m und 4 kn eingestellt. Die grobe Tiefenebene liegt unter den Seezeichen; ihr Hinweis **nicht zur Navigation geeignet** bleibt sichtbar. Gesamtstrecke und ETA erscheinen in der maritimen Fahrt. **65** zeigt eine zuvor mit echten Anbieterdaten berechnete, gespeicherte Beispielplanung zum Wasserpunkt vor Ancona: **98,8 sm / zwei Abschnitte / etwa 24 h 41 min bei 4 kn**. Der UI-Test prüft ihre Darstellung; die getrennte abschließende Pi-Liveberechnung ergab 98,17 sm und drei Abschnitte. Beide sind öffentliche technische Beispiele, keine Freigabe einer Seeroute.
 
 | Gespeicherte Bootswerte | Tiefen in der Planung |
 | --- | --- |
-| <img src="images/62-boot-einstellungen.png" width="300" alt="Persistierte Beispielwerte 2,7 Meter Tiefgang und 5,5 Knoten Durchschnittstempo"> | <img src="images/63-emodnet-planung.png" width="300" alt="EMODnet-Tiefen über der Tribunj-Planung mit Hinweis auf unbekannte Tiefen"> |
+| <img src="images/62-boot-einstellungen.png" width="300" alt="Editierbare Bootswerte mit Beispiel 2 Meter Tiefgang, 5,5 Knoten und Speichertaste"> | <img src="images/63-emodnet-planung.png" width="300" alt="EMODnet-Tiefen über der Tribunj-Planung mit Hinweis auf unbekannte Tiefen"> |
 
 | Gesamtstrecke und ETA | Langer Törn nach Ancona |
 | --- | --- |
@@ -291,3 +317,23 @@ Zur Reproduktion den öffentlichen Bestand und `route_descriptions` wie oben zur
 | <img src="images/66-ropotnica-untiefen.png" width="300" alt="Öffentliches Ropotnica-Testbeispiel: drei Kursabschnitte um die kartierte Untiefe"> | <img src="images/67-seeweg-neuberechnung.png" width="300" alt="Alte Ancona-Beispielplanung ohne Kurslinie, mit Route berechnen"> |
 
 `seed_gallery.py --seamap --device UUID` auf dem dedizierten Dokumentationssimulator, danach `MarineRoutingUITests/testRopotnicaHazardDetourAndOutdatedRoute`. Kein Testserver erforderlich; `beispiel.invalid` verhindert Pi-Zugriff. Beide Aufnahmen aus bestandenem UI-Lauf exportiert und visuell geprüft. Öffentliche OSM-/EMODnet-Daten wie oben attribuiert; keine privaten Nutzerbilder und kein nautischer Feldtest.
+
+
+## Auto-Modus und Auto-Zoom
+
+**68–71** zeigen den lokalen Auto-Modus vom 14. Oktober 2026 mit einer **tatsächlich von openrouteservice berechneten öffentlichen Pkw-Straßenroute in Heidelberg**. Nur GPS-Standpunkt und Tempo sind für die Bedienungsprüfung simuliert; die Linie folgt dem gerouteten Straßennetz. Das ist kein Feldtest oder Nachweis aktueller Beschilderung. Mit dem universellen Einstieg zeigt **06** nur die Radoptionen und **69** nur die Autooptionen; die Auswahl der Anwendung erfolgt auf Home.
+
+| Pkw-Planung | Auto-Profil |
+| --- | --- |
+| <img src="images/68-auto-planung.png" width="300" alt="Öffentliche Heidelberger Pkw-Straßenroute: schnellste Pkw-Route und Fahrzeit ohne Live-Verkehr"> | <img src="images/69-auto-profil.png" width="300" alt="Auto-Profil im öffentlichen Testbeispiel mit getrennten Optionen für Autobahnen, Maut und Fähren"> |
+
+| Fahren mit Auto-Zoom | Automatische Nachtansicht |
+| --- | --- |
+| <img src="images/70-auto-fahren.png" width="300" alt="Öffentliche Pkw-Beispielroute mit simuliertem Standort: große Abbiegeanweisung, Straßenroute, Auto-Zoom, Restzeit und Ankunft"> | <img src="images/71-auto-nacht.png" width="300" alt="Dieselbe öffentliche Pkw-Beispielroute mit simuliertem Standort und dunkler Karte und dunkler Fahrtoberfläche"> |
+
+Die beiden `CarModeUITests` prüfen Auto-Profiloptionen einschließlich Erhalt beim erneuten Öffnen der Einstellungen, fehlende Bike-Anzeigen, manuelle Kartenbewegung mit **Fahransicht**, Pause/Fortsetzen und Speichern ins Archiv. Der Fahrtlauf wurde zusätzlich mit dunkler iPhone-Darstellung erfolgreich geprüft. Alle fünf neuen/aktualisierten Bilder wurden visuell geprüft. Die App bleibt **0.4.0 (4)**. Nach diesen Simulatoraufnahmen wurden App und Pi aktualisiert und eine öffentliche Pkw-Route über den Pi geprüft; die Bilder sind keine Geräteaufnahmen und kein Feldtest.
+
+Zur Reproduktion auf dem separaten Dokumentationssimulator `CarModeUITests` ausführen. Das Debug-Startflag `BIKENAVI_CAR_PREVIEW=1` lädt die öffentliche Straßenroute aus `ios/BikeNavi/PreviewData/heidelberg-car-route.json` und erzeugt laufende simulierte GPS-Fixes auf ihrem Startpunkt; Pi-Adresse und Token bleiben leer. Helle/dunkle Systemdarstellung vor dem jeweiligen Lauf wählen und die `Gallery-68`–`70`-Anhänge exportieren; der dunkle Fahrtanhang wird als **71** geführt. Karten: OpenFreeMap/OpenMapTiles, Daten © OpenStreetMap-Mitwirkende; Quellen über die sichtbare Karten-Attribution. Simulatoraufzeichnungen, Testprotokolle und Buildprodukte bleiben außerhalb von Git.
+
+
+Zur Reproduktion des neuen Einstiegs `HomeUITests` auf dem Dokumentationssimulator ausführen. Die Kachel-/Profilprüfung verwendet `BIKENAVI_CAR_PREVIEW=1`, einen leeren Server und die öffentliche ORS-Pkw-Route. Die entstehenden anderen Entwürfe enthalten keine erfundenen Rad-/Wander-/Seewegverbindungen. Getrennte Kern-/AppState-Tests prüfen wiederholtes Öffnen und Neustart der gespeicherten Entwürfe sowie Erhalt bestehender Aufzeichnungen. Simulatoranhänge als Gallery-72–76 exportieren; kompakte Wiederholung von 72/74 als 77/78 führen; allgemeine Profile als 06/17/57/73. Allgemeine Archiv-/Bedienungstests gehen ebenfalls durch den echten Startbildschirm.

@@ -4,6 +4,33 @@ import MapLibre
 
 final class RouteMapTests: XCTestCase {
     @MainActor
+    func testCarCameraChangesScaleAndManualExplorationOffersExplicitResume() throws {
+        let (map, coordinator) = try fixture()
+        coordinator.parent.carNavigation = true
+        coordinator.parent.follow = true
+        coordinator.parent.followHeading = true
+        coordinator.parent.navigationHeading = 0
+        coordinator.parent.navigationLookAhead = 350
+        coordinator.parent.navigationProgress = 0
+        coordinator.updateNavigationCamera()
+        let cityAltitude = map.camera.altitude
+        coordinator.parent.navigationLookAhead = 1600
+        coordinator.updateNavigationCamera()
+        // The city frame may already widen to include the curved approach.
+        XCTAssertGreaterThan(map.camera.altitude, cityAltitude * 1.3)
+        coordinator.mapView(map, regionWillChangeWith: .gesturePinch, animated: false)
+        XCTAssertTrue(coordinator.navigationSuspended)
+        let held = map.camera.altitude
+        coordinator.parent.navigationLookAhead = 200
+        coordinator.updateNavigationCamera()
+        XCTAssertEqual(map.camera.altitude, held)
+        coordinator.resetNavigationInteraction()
+        coordinator.updateNavigationCamera()
+        XCTAssertFalse(coordinator.navigationSuspended)
+        XCTAssertLessThan(map.camera.altitude, held)
+        map.delegate = nil
+    }
+    @MainActor
     func testMarineCameraUsesRawPositionAndKeepsNorthUpAndUserZoom() throws {
         let (map, coordinator) = try fixture()
         map.setZoomLevel(14, animated: false)

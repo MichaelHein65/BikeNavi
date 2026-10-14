@@ -29,17 +29,20 @@ enum MapStyle: String, CaseIterable, Identifiable {
 
 struct MapStyleMenu: View {
     @EnvironmentObject var state: AppState
+    private var mode: TravelMode { state.tab == 1 ? (state.activeRide?.profile.mode ?? state.plan.profile.mode) : state.plan.profile.mode }
     var body: some View {
         Menu {
             Picker("Kartenansicht", selection: $state.selectedMapStyle) {
-                ForEach(MapStyle.allCases.filter { $0 != .custom || !state.customMapStyleURL.isEmpty }) { style in
+                ForEach(MapStyle.allCases.filter { ($0 != .custom || !state.customMapStyleURL.isEmpty) && (mode == .sea || $0 != .seamap) }) { style in
                     Text(style.title).tag(style)
                 }
             }
+            if mode == .sea {
             Toggle("EMODnet-Wassertiefen", isOn: $state.showWaterDepths).accessibilityIdentifier("mapWaterDepthToggle")
             Text("EMODnet · nicht zur Navigation geeignet")
             if state.showWaterDepths {
                 Link("Tiefenlegende (Meter)", destination: URL(string: "https://ows.emodnet-bathymetry.eu/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetLegendGraphic&LAYER=emodnet:mean_multicolour&FORMAT=image/png")!)
+            }
             }
         } label: {
             Image(systemName: "square.3.layers.3d").font(.title3).frame(width: 44, height: 44)

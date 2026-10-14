@@ -8,6 +8,8 @@ struct LocalNavigationState: Codable, Equatable {
     var usedUnpaved = 0.0
     var routeProgress = 0.0
     var skippedWaypointOrdinals: [Int]?
+    var carRoute: CalculatedRoute?
+    var carPendingWaypointOrdinals: [Int]?
 }
 
 struct LocalConnection {

@@ -340,3 +340,70 @@ def test_drying_emodnet_maximum_is_not_overridden_by_negative_mean():
             cells = await DepthTiles(client).tile((437,157))
             assert list(cells[:,2]) == [0,-1]
     asyncio.run(run())
+
+
+def test_svendborg_korsor_two_metre_draft_needs_wider_search_and_keeps_depth_and_hazards():
+    import asyncio
+    import gzip
+    import numpy as np
+    from unittest.mock import AsyncMock
+    from bikenavi.marine import MarineRouter
+    from shapely.prepared import prep
+    fixture_path = Path(__file__).resolve().parents[2] / 'tests/fixtures/svendborg-korsor-marine.json.gz'
+    with gzip.open(fixture_path, 'rt') as source:
+        fixture = json.load(source)
+
+    async def run():
+        def upstream(req):
+            pytest.fail('Public frozen regression must not need the network')
+        async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as http:
+            router = MarineRouter(http, '')
+            bounds_used = []
+            async def coast_data(bounds):
+                bounds_used.append(bounds)
+                return fixture['coasts']['initial' if bounds[0] > 55 else 'wide']
+            router.coast_data = coast_data
+            router.depths.tile = AsyncMock(side_effect=lambda key: np.asarray(fixture['depthTiles'][f'{key[0]},{key[1]}'], dtype=float))
+            masks = []
+            original_depths = router.depths.area
+            async def depths(area, provisional, draft):
+                allowed, known = await original_depths(area, provisional, draft)
+                masks.append((area, allowed, known))
+                return allowed, known
+            router.depths.area = depths
+            req = request(((10.619, 55.0585), (11.139, 55.334)))
+            req.profile.boatDraft = 2
+            route = await router.route(req)
+            assert len(bounds_used) == 2
+            assert bounds_used == [(55.04, 10.58, 55.36, 11.18), (55.0, 10.52, 55.4, 11.24)]
+            assert 28 < route['distance'] / 1852 < 30
+            assert route['marineDraft'] == 2
+            assert route['marineDepthUncertain']  # No claim of harbour depth clearance.
+            assert route['coordinates'][0] == req.waypoints[0].coordinate.model_dump(exclude_none=True)
+            assert route['coordinates'][-1] == req.waypoints[-1].coordinate.model_dump(exclude_none=True)
+            area, allowed, known = masks[-1]
+            line = LineString([area.project(c['longitude'], c['latitude']) for c in route['coordinates']])
+            assert prep(area.water.intersection(allowed)).covers(line)
+            assert not area.obstacles.intersects(line)
+            assert not known.covers(line)
+    asyncio.run(run())
+
+
+def test_depth_blocked_waypoint_names_point_and_draft_without_widening_or_lowering_draft():
+    import asyncio
+    from unittest.mock import AsyncMock
+    from bikenavi.marine import MarineRouter
+    from shapely.geometry import box
+    async def run():
+        async with httpx.AsyncClient() as http:
+            router = MarineRouter(http, '')
+            router.coast_data = AsyncMock(return_value=coast())
+            router.depths.area = AsyncMock(return_value=(box(0, 0, 0, 0), box(0, 0, 0, 0)))
+            with pytest.raises(HTTPException) as error:
+                await router.route(request())
+            assert error.value.status_code == 422
+            assert 'Wegpunkt 1' in error.value.detail and '2 m' in error.value.detail
+            assert 'keine Aussage über die tatsächliche Hafentiefe' in error.value.detail
+            assert router.coast_data.await_count == 1
+            assert router.depths.area.call_args.args[2] == 2
+    asyncio.run(run())

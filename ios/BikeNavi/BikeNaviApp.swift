@@ -37,11 +37,25 @@ struct AppRoot: View {
     @Environment(\.scenePhase) private var phase
     init(store: LocalStore) { _state = StateObject(wrappedValue: AppState(store: store)) }
     var body: some View {
-        TabView(selection: $state.tab) {
+        Group {
+          if let mode = state.applicationMode {
+            VStack(spacing: 0) {
+                HStack {
+                    Button { state.returnToHome() } label: { Label("Start", systemImage: "house.fill") }
+                        .accessibilityIdentifier("returnHome")
+                    Spacer()
+                    Label(mode.homeTitle, systemImage: mode.symbol).font(.subheadline.bold())
+                        .accessibilityIdentifier("applicationTitle")
+                }.font(.subheadline.weight(.semibold)).padding(.horizontal, 18).padding(.vertical, 9)
+                    .background(Theme.paper)
+                TabView(selection: $state.tab) {
             PlannerView().tabItem { Label("Planen", systemImage: "map") }.tag(0)
-            RideView().tabItem { Label("Fahren", systemImage: "location.north.line") }.tag(1)
+            RideView().tabItem { Label(mode == .hiking ? "Gehen" : mode == .sea ? "Segeln" : "Fahren", systemImage: mode.symbol) }.tag(1)
             LibraryView().tabItem { Label("Touren", systemImage: "point.topleft.down.to.point.bottomright.curvepath") }.tag(2)
             SettingsView().tabItem { Label("Einstellungen", systemImage: "slider.horizontal.3") }.tag(3)
+                }
+            }
+          } else { HomeView() }
         }
         .environmentObject(state)
         .environmentObject(bike)
@@ -61,11 +75,8 @@ struct AppRoot: View {
             }
         }
         .onAppear { state.updateScreenAwake(sceneActive: phase == .active) }
-        .onChange(of: state.isMarinePresentation, initial: true) { _, marine in
-            bike.setSuspended(marine)
-            bike.monitor(state.tab == 1 && !marine, for: .rideScreen)
-            bike.monitor(state.activeRide != nil && !marine, for: .activeRide)
-        }
+        .onChange(of: state.workspaceSupportsBike, initial: true) { _, _ in updateBikeMonitoring() }
+        .onChange(of: state.applicationMode) { _, _ in updateBikeMonitoring() }
         .onChange(of: phase) { _, value in
             state.updateScreenAwake(sceneActive: value == .active)
             if value == .active { state.becameActive(); Task { await state.sync() } }
@@ -73,12 +84,19 @@ struct AppRoot: View {
         }
         .onChange(of: state.tab, initial: true) { _, tab in
             state.cancelRideStart()
-            bike.monitor(tab == 1 && !state.isMarinePresentation, for: .rideScreen)
-            if tab == 1 { state.openRide() }
+            updateBikeMonitoring()
+            if tab == 1 && state.applicationMode != nil { state.openRide() }
         }
         .onChange(of: state.activeRide?.id, initial: true) { _, id in
-            bike.monitor(id != nil && !state.isMarinePresentation, for: .activeRide)
+            updateBikeMonitoring()
         }
+    }
+    private func updateBikeMonitoring() {
+        let inBikeWorkspace = state.applicationMode?.supportsBike == true
+        let bikeRide = state.activeRideSupportsBike
+        bike.setSuspended(!inBikeWorkspace && !bikeRide)
+        bike.monitor(state.tab == 1 && inBikeWorkspace && !state.hasConflictingApplicationRide, for: .rideScreen)
+        bike.monitor(bikeRide, for: .activeRide)
     }
 }
 

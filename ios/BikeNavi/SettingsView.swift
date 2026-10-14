@@ -4,7 +4,6 @@ import MediaPlayer
 struct SettingsView: View {
     @EnvironmentObject var state: AppState
     @Environment(\.scenePhase) private var scenePhase
-    @FocusState private var editingBoat: Bool
     var body: some View {
         NavigationStack {
             Form {
@@ -31,40 +30,28 @@ struct SettingsView: View {
                     Text("Verbinde dein iPhone mit Tailscale. Hier gehört BIKENAVI_TOKEN hinein. Der openrouteservice-Schlüssel bleibt auf dem Server.")
                 }
                 if let notice = state.notice { Section("Status") { Text(notice).font(.subheadline) } }
-                Section {
-                    HStack {
-                        Text("Tiefgang"); Spacer()
-                        TextField("2", value: $state.boatDraft, format: .number.precision(.fractionLength(1)))
-                            .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 80)
-                            .focused($editingBoat).accessibilityIdentifier("boatDraft")
-                        Text("m")
-                    }
-                    HStack {
-                        Text("Durchschnittstempo"); Spacer()
-                        TextField("4", value: $state.boatSpeedKnots, format: .number.precision(.fractionLength(1)))
-                            .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 80)
-                            .focused($editingBoat).accessibilityIdentifier("boatSpeedKnots")
-                        Text("kn")
-                    }
-                } header: { Text("Dein Boot") } footer: {
-                    Text("Bleibt auf diesem iPhone gespeichert. Der Tiefgang wird bei neuen Seewegplanungen mit EMODnet-Rasterwerten verglichen. Keine Navigationsfreigabe. Das Durchschnittstempo dient der geschätzten Fahrzeit und ETA; Standard 2 m und 4 kn.")
+                if state.applicationMode == .sea {
+                BoatSettingsSection(draft: $state.boatDraft, speed: $state.boatSpeedKnots)
                 }
                 Section {
                     Picker("Kartenansicht", selection: $state.selectedMapStyle) {
-                        ForEach(MapStyle.allCases) { style in Text(style.title).tag(style) }
+                        ForEach(state.applicationMapStyles) { style in Text(style.title).tag(style) }
                     }.accessibilityIdentifier("settingsMapStyle")
-                    Text("Standard beim App-Start · Seeweg öffnet die Seekarte").font(.footnote).foregroundStyle(.secondary)
+                    Text("Passende Grundkarte für " + (state.applicationMode ?? state.plan.profile.mode).homeTitle).font(.footnote).foregroundStyle(.secondary)
                     if state.selectedMapStyle == .custom {
                         TextField("HTTPS-Adresse des Kartenstils", text: $state.customMapStyleURL)
                             .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     }
+                    if state.applicationMode == .sea {
                     Toggle("EMODnet-Wassertiefen", isOn: $state.showWaterDepths).accessibilityIdentifier("waterDepthToggle")
                     Text("Nicht zur Navigation geeignet · grobe Tiefenübersicht für verfügbare Meeresgebiete").font(.footnote).foregroundStyle(.secondary)
+                    }
                     Toggle("Eigener Kartenserver für Offline-Pakete", isOn: $state.offlineMapsAllowed)
                 } header: { Text("Karten") } footer: {
-                    Text("Seekarte zeigt OpenSeaMap-Seezeichen und öffnet die maritime Fahrtansicht ohne Fahrradverbindung. Das Profil Seeweg berechnet Wasserwege über den Pi und bevorzugt erfasste Seewege. EMODnet-Rastertiefen werden bei der Planung berücksichtigt; Wasserstand und Hindernisse werden nicht geprüft. Öffentliche Kartenansichten benötigen Internet. Offline-Downloads sind nur mit eigenem Kartenstil und Kartenserver verfügbar.")
+                    if state.applicationMode == .sea { Text("Seekarte zeigt OpenSeaMap-Seezeichen und öffnet die maritime Fahrtansicht ohne Fahrradverbindung. Das Profil Seeweg berechnet Wasserwege über den Pi und bevorzugt erfasste Seewege. EMODnet-Rastertiefen werden bei der Planung berücksichtigt; Wasserstand und Hindernisse werden nicht geprüft. Öffentliche Kartenansichten benötigen Internet. Offline-Downloads sind nur mit eigenem Kartenstil und Kartenserver verfügbar.") }
+                    else { Text("Öffentliche Kartenansichten benötigen Internet. Für vollständige Offline-Pakete einen eigenen Kartenstil und Kartenserver einrichten.") }
                 }
-                if !state.isMarinePresentation { Section("Dein Bike") {
+                if state.applicationMode?.supportsBike == true { Section("Dein Bike") {
                     NavigationLink { BikeBluetoothTestView() } label: {
                         Label("Bosch Kiox 500 · Verbindung testen", systemImage: "bicycle")
                     }
@@ -86,7 +73,6 @@ struct SettingsView: View {
                     LabeledContent("Version", value: "\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "–"))")
                 }
             }.navigationTitle("Einstellungen")
-                .toolbar { ToolbarItemGroup(placement: .keyboard) { if editingBoat { Spacer(); Button("Fertig") { editingBoat = false } } } }
                 .onAppear { state.observeSystemVolume() }
                 .onDisappear { state.stopObservingSystemVolume() }
                 .onChange(of: scenePhase) { _, phase in
@@ -107,4 +93,75 @@ private struct SystemVolumeSlider: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: MPVolumeView, context: Context) {}
+}
+
+/// Keep incomplete decimal input local; only finished, valid numbers reach AppState.
+struct BoatSettingsSection: View {
+    @Binding var draft: Double
+    @Binding var speed: Double
+    var profile = false
+    @State private var draftText = ""
+    @State private var speedText = ""
+    @FocusState private var field: Field?
+    private enum Field: Hashable { case draft, speed }
+
+    private var parsedDraft: Double? { MarineNavigation.settingInput(draftText, range: 0.1...20) }
+    private var parsedSpeed: Double? { MarineNavigation.settingInput(speedText, range: 0.5...50) }
+
+    var body: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Tiefgang (m)").font(.subheadline)
+                TextField("Meter", text: $draftText)
+                    .keyboardType(.decimalPad).textFieldStyle(.roundedBorder).frame(minHeight: 44)
+                    .focused($field, equals: .draft).accessibilityLabel("Tiefgang in Metern")
+                    .accessibilityIdentifier(profile ? "profileBoatDraft" : "boatDraft")
+            }
+            if parsedDraft == nil {
+                Text("Bitte einen Tiefgang von 0,1 bis 20 m eingeben.")
+                    .font(.footnote).foregroundStyle(.red).accessibilityIdentifier("boatDraftError")
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Durchschnittstempo (kn)").font(.subheadline)
+                TextField("Knoten", text: $speedText)
+                    .keyboardType(.decimalPad).textFieldStyle(.roundedBorder).frame(minHeight: 44)
+                    .focused($field, equals: .speed).accessibilityLabel("Durchschnittstempo in Knoten")
+                    .accessibilityIdentifier(profile ? "profileBoatSpeed" : "boatSpeedKnots")
+            }
+            if parsedSpeed == nil {
+                Text("Bitte ein Tempo von 0,5 bis 50 kn eingeben.")
+                    .font(.footnote).foregroundStyle(.red)
+            }
+            Button("Bootswerte speichern") { save(); field = nil }
+                .disabled(parsedDraft == nil || parsedSpeed == nil)
+                .accessibilityIdentifier("saveBoatSettings")
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        if field != nil {
+                            Spacer()
+                            Button("Fertig") { save(); field = nil }.accessibilityIdentifier("finishBoatEditing")
+                        }
+                    }
+                }
+        } header: { Text("Dein Boot") } footer: {
+            Text("Bleibt auf diesem iPhone gespeichert. Komma oder Punkt sind möglich. Der tatsächliche Tiefgang gilt für neue Seewegplanungen; das Tempo für Fahrzeit und ETA. EMODnet-Rasterdaten sind keine Navigationsfreigabe. Standard: 2 m und 4 kn.")
+        }
+        .onAppear {
+            draftText = formatted(draft)
+            speedText = formatted(speed)
+        }
+        .onChange(of: field) { old, _ in
+            if old == .draft, let value = parsedDraft { draft = value }
+            if old == .speed, let value = parsedSpeed { speed = value }
+        }
+        .onDisappear { save() }
+    }
+
+    private func save() {
+        if let value = parsedDraft { draft = value }
+        if let value = parsedSpeed { speed = value }
+    }
+    private func formatted(_ value: Double) -> String {
+        value.formatted(.number.grouping(.never).precision(.fractionLength(1...6)))
+    }
 }

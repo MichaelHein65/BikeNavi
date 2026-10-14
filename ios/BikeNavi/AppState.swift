@@ -59,15 +59,22 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
     private let manager = CLLocationManager()
     private var activeRide = false
     private var marineNavigation = false
+    private var carNavigation = false
+    func setCarNavigation(_ enabled: Bool) {
+        guard carNavigation != enabled else { return }
+        carNavigation = enabled
+        manager.activityType = enabled ? .automotiveNavigation : marineNavigation ? .otherNavigation : .fitness
+        manager.desiredAccuracy = enabled ? kCLLocationAccuracyBestForNavigation : kCLLocationAccuracyBest
+    }
     func setMarineNavigation(_ enabled: Bool) {
         marineNavigation = enabled
-        manager.activityType = enabled ? .otherNavigation : .fitness
+        manager.activityType = enabled ? .otherNavigation : carNavigation ? .automotiveNavigation : .fitness
         manager.distanceFilter = activeRide && !enabled ? 5 : kCLDistanceFilterNone
         updateHeadingMonitoring()
     }
     private var authorizationStatus: CLAuthorizationStatus {
         #if DEBUG
-        if ProcessInfo.processInfo.environment["BIKENAVI_MARINE_PREVIEW"] == "1" { return .authorizedWhenInUse }
+        if ProcessInfo.processInfo.environment["BIKENAVI_MARINE_PREVIEW"] == "1" || ProcessInfo.processInfo.environment["BIKENAVI_CAR_PREVIEW"] == "1" { return .authorizedWhenInUse }
         if let scenario = ProcessInfo.processInfo.environment["BIKENAVI_START_LOCATION_TEST"] {
             return scenario == "denied" ? .denied : .authorizedWhenInUse
         }
@@ -78,7 +85,7 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
     override init() {
         super.init()
         #if DEBUG
-        if ProcessInfo.processInfo.environment["BIKENAVI_MARINE_PREVIEW"] == "1" { return }
+        if ProcessInfo.processInfo.environment["BIKENAVI_MARINE_PREVIEW"] == "1" || ProcessInfo.processInfo.environment["BIKENAVI_CAR_PREVIEW"] == "1" { return }
         if ProcessInfo.processInfo.environment["BIKENAVI_START_LOCATION_TEST"] != nil {
             coordinate = Coordinate(latitude: 49.414601, longitude: 8.681496)
             accuracy = 5
@@ -99,7 +106,7 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
         failureMessage = nil
         denied = authorizationStatus == .denied || authorizationStatus == .restricted
         #if DEBUG
-        if ProcessInfo.processInfo.environment["BIKENAVI_START_LOCATION_TEST"] != nil || ProcessInfo.processInfo.environment["BIKENAVI_MARINE_PREVIEW"] == "1" { return }
+        if ProcessInfo.processInfo.environment["BIKENAVI_START_LOCATION_TEST"] != nil || ProcessInfo.processInfo.environment["BIKENAVI_MARINE_PREVIEW"] == "1" || ProcessInfo.processInfo.environment["BIKENAVI_CAR_PREVIEW"] == "1" { return }
         #endif
         if authorizationStatus == .notDetermined { manager.requestWhenInUseAuthorization() }
         if authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways {
@@ -198,6 +205,19 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
     }
 }
 
+final class NavigationSpeechDelegate: NSObject, AVSpeechSynthesizerDelegate {
+    var ownsAudioSession = false
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) { release(synthesizer) }
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) { release(synthesizer) }
+    private func release(_ synthesizer: AVSpeechSynthesizer) {
+        DispatchQueue.main.async { [weak self, weak synthesizer] in
+            guard let self, self.ownsAudioSession, synthesizer?.isSpeaking != true else { return }
+            self.ownsAudioSession = false
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
+    }
+}
+
 @MainActor
 final class AppState: ObservableObject {
     @Published var plan = TourDocument() {
@@ -218,6 +238,58 @@ final class AppState: ObservableObject {
         waitingForRideLocation = false
     }
     func becameActive() { location.request() }
+    @Published private(set) var applicationMode: TravelMode?
+    var hasConflictingApplicationRide: Bool {
+        guard let applicationMode, let activeRide else { return false }
+        return activeRide.profile.mode != applicationMode
+    }
+    var workspaceSupportsBike: Bool { (applicationMode ?? plan.profile.mode).supportsBike }
+    var activeRideSupportsBike: Bool { activeRide?.profile.mode.supportsBike == true }
+    var isWalkingSection: Bool {
+        guard let ride = activeRide else { return plan.profile.mode == .hiking }
+        if ride.profile.mode == .hiking { return true }
+        guard ride.profile.mode == .bikeAndHike, let route = ridingRoute, let index = route.walkingStartIndex,
+              route.coordinates.indices.contains(index), let progress else { return false }
+        return progress.traveled >= LocalRouteMetrics.distances(route)[index]
+    }
+    var applicationMapStyles: [MapStyle] {
+        let mode = applicationMode ?? plan.profile.mode
+        return MapStyle.allCases.filter { $0 != .seamap || mode == .sea }
+    }
+    private func workspacePlanKey(_ mode: TravelMode) -> String { "applicationPlan." + mode.rawValue }
+    private func defaultMapStyle(_ mode: TravelMode) -> MapStyle {
+        mode == .sea ? .seamap : mode == .hiking ? .topographic : .standard
+    }
+    func chooseApplication(_ mode: TravelMode) {
+        cancelRideStart()
+        if applicationMode != nil || currentRecord != nil || !plan.waypoints.isEmpty { guard savePlan() else { return } }
+        cancelElevation()
+        routeTask?.cancel(); routeCalculationID = nil; calculating = false
+        preparationTask?.cancel(); preparationID = nil; preparingLocalRouting = false
+        nameTask?.cancel(); requestedStartPlanID = nil; routeWhenReady = false
+        preparedGraph = nil; preparedRouteID = nil; planningError = nil; selectedPoint = nil; mapFocus = nil
+        let preferred = UserDefaults.standard.string(forKey: workspacePlanKey(mode)).flatMap(UUID.init(uuidString:))
+        plan = ApplicationWorkspace.plan(mode: mode, current: plan, records: records, preferredID: preferred)
+        applicationMode = mode
+        selectedMapStyle = defaultMapStyle(mode)
+        mapRevision = UUID()
+        tab = 0
+        savePlan()
+        if plan.isAwaitingStart { requestAutomaticStart() }
+        else { prepareLocalRouting() }
+    }
+    func returnToHome() {
+        cancelRideStart()
+        guard savePlan() else { return }
+        applicationMode = nil
+        stopObservingSystemVolume()
+    }
+    func resumeApplicationRide() {
+        guard let ride = activeRide else { return }
+        chooseApplication(ride.profile.mode)
+        guard applicationMode == ride.profile.mode else { return }
+        tab = 1
+    }
     @Published var records: [SavedRecord] = []
     @Published var savedPlaces: [SavedPlace] = []
     @Published var activeRide: TourDocument? {
@@ -249,6 +321,22 @@ final class AppState: ObservableObject {
     @Published var preparedRouteID: UUID?
     @Published var localRideStatus: String?
     @Published var navigationRoute: CalculatedRoute?
+    @Published var carLookAhead = 450.0
+    private var carZoom = CarAutoZoom()
+    private var carVoice = CarVoiceGuidance()
+    private var carRerouteAttempt = -Double.infinity
+    private var carArrivalAnnounced = false
+    var carGPSIsFresh: Bool {
+        guard !location.denied, let sample = location.latestSample else { return false }
+        return abs(sample.timestamp.timeIntervalSinceNow) < 5 && sample.horizontalAccuracy >= 0 && sample.horizontalAccuracy <= 25
+    }
+    var carHeading: Double? {
+        guard carGPSIsFresh, let sample = location.latestSample, sample.speed >= 1, sample.course >= 0 else { return nil }
+        return sample.course
+    }
+    func carMapStyleURL(dark: Bool) -> String {
+        (selectedMapStyle == .standard || selectedMapStyle == .seamap) && dark ? MapStyle.dark.url(customURL: customMapStyleURL) : selectedMapStyle == .seamap ? MapStyle.standard.url(customURL: customMapStyleURL) : mapStyleURL
+    }
     private var preparedGraph: OfflineGraph?
     private var rideGraph: OfflineGraph?
     private var neighborhoodTask: Task<Void, Never>?
@@ -292,22 +380,13 @@ final class AppState: ObservableObject {
             }
         }
     }
-    // The active style is deliberately session-only: every launch starts with Liberty DE.
-    @Published var selectedMapStyle: MapStyle = .standard {
-        didSet {
-            guard selectedMapStyle != oldValue else { return }
-            if selectedMapStyle == .seamap && plan.profile.mode != .sea {
-                plan.profile.mode = .sea
-                invalidateRoute(showErrorAlert: false)
-            }
-            updateMarineMode()
-        }
-    }
-    var isMarinePresentation: Bool {
-        selectedMapStyle == .seamap || (activeRide?.profile.mode ?? plan.profile.mode) == .sea
-    }
+    // A map style changes appearance; the home tile determines the application.
+    @Published var selectedMapStyle: MapStyle = .standard
+    var isMarinePresentation: Bool { (activeRide?.profile.mode ?? plan.profile.mode) == .sea }
     private var marineModeActive = false
     private func updateMarineMode() {
+        location.setCarNavigation((activeRide?.profile.mode ?? plan.profile.mode) == .car)
+        rideActivity.carPresentation = (activeRide?.profile.mode ?? plan.profile.mode) == .car
         guard marineModeActive != isMarinePresentation else { return }
         marineModeActive = isMarinePresentation
         location.setMarineNavigation(isMarinePresentation)
@@ -323,7 +402,7 @@ final class AppState: ObservableObject {
     var mapStyleURL: String { selectedMapStyle.url(customURL: customMapStyleURL) }
     var canDownloadMapStyle: Bool { offlineMapsAllowed && selectedMapStyle == .custom }
     @Published var offlineMapsAllowed = UserDefaults.standard.bool(forKey: "offlineMapsAllowed")
-    @Published var voice = true
+    @Published var voice = true { didSet { if !voice { speech.stopSpeaking(at: .immediate) } } }
     private let volumePreview = AVSpeechSynthesizer()
     private var volumePreviewTask: Task<Void, Never>?
     private var systemVolumeObservation: NSKeyValueObservation?
@@ -514,6 +593,7 @@ final class AppState: ObservableObject {
     private var lastAnnouncement: Int?
     private var segment = 0
     private let speech = AVSpeechSynthesizer()
+    private let navigationSpeechDelegate = NavigationSpeechDelegate()
     private let rideActivity = RideActivityController()
     #if DEBUG
     private var marinePreviewTask: Task<Void, Never>?
@@ -549,6 +629,7 @@ final class AppState: ObservableObject {
 
     init(store: LocalStore) {
         self.store = store
+        speech.delegate = navigationSpeechDelegate
         UserDefaults.standard.removeObject(forKey: "speechVolume")
         reload()
         if let idString = UserDefaults.standard.string(forKey: "currentPlan"),
@@ -616,6 +697,33 @@ final class AppState: ObservableObject {
             serverURL = ""
             return
         }
+        if ProcessInfo.processInfo.environment["BIKENAVI_CAR_PREVIEW"] == "1" {
+            guard let url = Bundle.main.url(forResource: "heidelberg-car-route", withExtension: "json"),
+                  let data = try? Data(contentsOf: url),
+                  let route = try? JSONDecoder().decode(CalculatedRoute.self, from: data),
+                  let origin = route.coordinates.first, let destination = route.coordinates.last else {
+                errorMessage = "Die öffentliche Auto-Beispielroute fehlt."; return
+            }
+            let heading = route.coordinates.dropFirst().first(where: { origin.distance(to: $0) > 1 })
+                .map { LocalGeometry.bearing(origin, $0) } ?? 0
+            plan = TourDocument()
+            plan.title = "Heidelberg · Auto-Beispiel"
+            plan.profile.mode = .car
+            plan.waypoints = [Waypoint(name: "Beispielstart Heidelberg", coordinate: origin), Waypoint(name: "Beispielziel Neuenheim", coordinate: destination)]
+            plan.route = route
+            activeRide = nil; serverURL = ""; token = ""; selectedMapStyle = .standard
+            notice = nil; voice = false
+            marinePreviewTask = Task { [weak self] in
+                for _ in 0..<300 {
+                    guard let self else { return }
+                    let sample = CLLocation(coordinate: origin.cl, altitude: 114, horizontalAccuracy: 5, verticalAccuracy: 5,
+                        course: heading, speed: 14, timestamp: Date())
+                    location.locationManager(CLLocationManager(), didUpdateLocations: [sample])
+                    do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                }
+            }
+            return
+        }
         if ProcessInfo.processInfo.environment["BIKENAVI_CONFIGURE"] == "1" {
             Task { await saveSettings() }
         }
@@ -628,7 +736,7 @@ final class AppState: ObservableObject {
         if plan.profile.mode == .sea && plan.route != nil && (plan.route?.marineDraft != boatDraft || !MarineNavigation.current(plan.route)) { invalidateRoute(showErrorAlert: false) }
         if activeRide?.profile.mode == .sea || (activeRide == nil && plan.profile.mode == .sea) { selectedMapStyle = .seamap }
         if let ride = activeRide, let route = ride.route {
-            navigationRoute = LocalRouteMetrics.combined(original: route, state: ride.localNavigation, profile: ride.profile)
+            navigationRoute = ride.profile.mode == .car ? (ride.localNavigation?.carRoute ?? route) : LocalRouteMetrics.combined(original: route, state: ride.localNavigation, profile: ride.profile)
             tracker = RouteTracker(lastProgress: ride.localNavigation?.routeProgress ?? 0, lastTimestamp: Date().timeIntervalSince1970)
             originalTracker = RouteTracker(lastProgress: ride.localNavigation?.originalProgress ?? 0, lastTimestamp: Date().timeIntervalSince1970)
             if ride.profile.mode == .cycling {
@@ -648,7 +756,7 @@ final class AppState: ObservableObject {
             }
             } else {
                 rideGraph = nil
-                localRideStatus = ride.profile.mode == .sea ? nil : "Gespeicherte Wanderroute · keine lokale Rückführung"
+                localRideStatus = ride.profile.mode == .sea ? nil : ride.profile.mode == .car ? CarNavigation.onlineNotice : "Gespeicherte Wanderroute · keine lokale Rückführung"
             }
         }
         prepareLocalRouting()
@@ -664,7 +772,7 @@ final class AppState: ObservableObject {
         guard plan.profile.mode == .cycling else {
             preparationTask?.cancel(); preparationID = nil; preparingLocalRouting = false
             preparedGraph = nil; preparedRouteID = nil
-            localRoutingStatus = plan.profile.mode == .sea ? "Wasserweg gespeichert · Seekarte benötigt Internet" : "Wanderroute offline gespeichert · keine lokale Rückführung"
+            localRoutingStatus = plan.profile.mode == .sea ? "Wasserweg gespeichert · Seekarte benötigt Internet" : plan.profile.mode == .car ? CarNavigation.onlineNotice : "Wanderroute offline gespeichert · keine lokale Rückführung"
             return
         }
         guard let route = plan.route, let center = location.freshCoordinate ?? route.coordinates.first else { return }
@@ -706,7 +814,7 @@ final class AppState: ObservableObject {
     }
 
     func loadPlanElevation() {
-        guard plan.profile.mode != .sea else { return }
+        guard plan.profile.mode != .sea && plan.profile.mode != .car else { return }
         guard let route = plan.route, !route.hasElevation, !loadingElevation else { return }
         guard let api else {
             elevationError = "Verbinde den Pi, um die Höhendaten zu laden."
@@ -797,15 +905,18 @@ final class AppState: ObservableObject {
         plan.updateAutomaticTitle(savedPlaces: savedPlaces)
         if plan.title != oldTitle { savePlan() }
     }
-    func savePlan() {
+    @discardableResult
+    func savePlan() -> Bool {
         do {
             plan.updateAutomaticTitle(savedPlaces: savedPlaces)
             var snapshot = plan
             if snapshot.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { snapshot.title = "Meine nächste Tour" }
             try store.save(snapshot)
             UserDefaults.standard.set(plan.id.uuidString, forKey: "currentPlan")
+            UserDefaults.standard.set(plan.id.uuidString, forKey: workspacePlanKey(plan.profile.mode))
             reload()
-        } catch { errorMessage = error.localizedDescription }
+            return true
+        } catch { errorMessage = error.localizedDescription; return false }
     }
     func renamePlan(to value: String) {
         plan.rename(to: value)
@@ -978,7 +1089,7 @@ final class AppState: ObservableObject {
         requestedStartPlanID = nil
         routeWhenReady = false
         calculating = false
-        plan = TourDocument()
+        plan = ApplicationWorkspace.newPlan(mode: applicationMode ?? plan.profile.mode, profile: plan.profile)
         savePlan()
     }
     func resetPlan() {
@@ -993,7 +1104,9 @@ final class AppState: ObservableObject {
         requestedStartPlanID = nil
         routeWhenReady = false
         calculating = false
-        plan = TourDocument(id: plan.id)
+        let previousID = plan.id
+        plan = ApplicationWorkspace.newPlan(mode: applicationMode ?? plan.profile.mode, profile: plan.profile)
+        plan.id = previousID
         selectedPoint = nil
         mapFocus = nil
         mapRevision = UUID()
@@ -1009,6 +1122,9 @@ final class AppState: ObservableObject {
         routeWhenReady = false
         planningError = nil
         plan = document.kind == .ride ? document.asNewPlan() : document
+        applicationMode = plan.profile.mode
+        selectedMapStyle = defaultMapStyle(plan.profile.mode)
+        savePlan()
         mapRevision = UUID()
         refreshPlanName()
         if plan.isAwaitingStart { requestAutomaticStart() }
@@ -1034,8 +1150,9 @@ final class AppState: ObservableObject {
                 routeTask?.cancel()
                 nameTask?.cancel()
                 calculating = false
-                plan = TourDocument()
+                plan = ApplicationWorkspace.newPlan(mode: applicationMode ?? plan.profile.mode, profile: plan.profile)
                 UserDefaults.standard.removeObject(forKey: "currentPlan")
+                UserDefaults.standard.removeObject(forKey: workspacePlanKey(plan.profile.mode))
             }
             reload()
             Task { await sync() }
@@ -1043,7 +1160,7 @@ final class AppState: ObservableObject {
     }
 
     func recordBikeMeasurement(_ measurement: BikeMeasurement) {
-        guard !isMarinePresentation, let ride = activeRide, ride.recordingState == .recording else { return }
+        guard !isMarinePresentation, let ride = activeRide, ride.profile.mode.supportsBike, !isWalkingSection, ride.recordingState == .recording else { return }
         do {
             try store.append(RecordedBikeSample(rideID: ride.id, sourcePlanID: ride.sourcePlanID ?? ride.id,
                 segment: segment, position: ride.track.last, measurement: measurement))
@@ -1307,9 +1424,10 @@ final class AppState: ObservableObject {
         ride.kind = .ride
         ride.sourcePlanID = followsRoute ? plan.id : nil
         ride.localNavigation = followsRoute ? LocalNavigationState() : nil
+        if followsRoute && ride.profile.mode == .car { ride.localNavigation?.carPendingWaypointOrdinals = Array(ride.waypoints.indices.dropFirst()) }
         if followsRoute && ride.profile.mode == .sea { ride.localNavigation?.marineNextWaypointIndex = 1 }
         if !followsRoute {
-            ride.title = isMarinePresentation ? "Fahrt auf See" : "Freie Fahrt"
+            ride.title = isMarinePresentation ? "Fahrt auf See" : plan.profile.mode == .car ? "Freie Autofahrt" : plan.profile.mode == .hiking ? "Freie Wanderung" : "Freie Fahrt"
             ride.profile = plan.profile
             if isMarinePresentation { ride.profile.mode = .sea }
         }
@@ -1335,7 +1453,7 @@ final class AppState: ObservableObject {
             rideGraph = followsRoute && localRoutingReady ? preparedGraph : nil
             localRideStatus = !followsRoute || ride.profile.mode == .sea ? nil : ride.profile.mode == .cycling
                 ? (rideGraph == nil ? "Lokale Rückführung noch nicht vorbereitet" : nil)
-                : "Gespeicherte Wanderroute · keine lokale Rückführung"
+                : ride.profile.mode == .car ? CarNavigation.onlineNotice : "Gespeicherte Wanderroute · keine lokale Rückführung"
             originalTracker = RouteTracker(lastProgress: 0, lastTimestamp: Date().timeIntervalSince1970)
             tracker = RouteTracker(lastProgress: 0, lastTimestamp: Date().timeIntervalSince1970)
             reroutePolicy = ReroutePolicy()
@@ -1345,6 +1463,8 @@ final class AppState: ObservableObject {
             #endif
             segment = 0
             lastAnnouncement = nil
+            carZoom = CarAutoZoom(); carLookAhead = 450; carVoice = CarVoiceGuidance()
+            carRerouteAttempt = -.infinity; carArrivalAnnounced = false
             location.setRiding(true)
 
             rideActivity.start(tourName: ride.title, route: ride.route)
@@ -1355,6 +1475,7 @@ final class AppState: ObservableObject {
     }
     /// Opening the driving tab follows the same checks as the start button.
     func openRide() {
+        if applicationMode != nil, activeRide != nil { return }
         // The planning tab is the source of truth when it has a ready route.
         // A paused ride from an earlier session must not unexpectedly replace it.
         if plan.canCalculateRoute, plan.route != nil,
@@ -1392,6 +1513,10 @@ final class AppState: ObservableObject {
         cancelRerouting()
         ride.recordingState = ride.recordingState == .recording ? .paused : .recording
         segment += 1
+        if ride.profile.mode == .car {
+            carRerouteAttempt = -.infinity
+            reroutePolicy = ReroutePolicy()
+        }
         do {
             try store.save(ride)
             activeRide = ride
@@ -1455,6 +1580,85 @@ final class AppState: ObservableObject {
             Task { await sync() }
         } catch { errorMessage = error.localizedDescription }
     }
+    private func speakCar(_ text: String) {
+        stopVolumePreview()
+        speech.stopSpeaking(at: .immediate)
+        // Spoken navigation ducks music and uses the current audio route, including Bluetooth.
+        let audio = AVAudioSession.sharedInstance()
+        do {
+            try audio.setCategory(.playback, mode: .voicePrompt, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
+            try audio.setActive(true)
+            navigationSpeechDelegate.ownsAudioSession = true
+        } catch { localRideStatus = "Sprachausgabe konnte nicht aktiviert werden · Hinweise auf der Karte beachten" }
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: "de-DE")
+        speech.speak(utterance)
+    }
+
+    private func rerouteCar(from position: Coordinate, ride: TourDocument) {
+        let now = Date().timeIntervalSince1970
+        guard rerouteTask == nil, now - carRerouteAttempt >= 30, let original = ride.route else { return }
+        carRerouteAttempt = now
+        guard let api else {
+            localRideStatus = "Neuberechnung nicht verfügbar · Internet und Pi verbinden"
+            return
+        }
+        let pending = CarNavigation.pending(ride: ride)
+        guard !pending.isEmpty else { return }
+        var request = TourDocument()
+        request.profile = ride.profile
+        request.waypoints = [Waypoint(name: "Aktueller Standort", coordinate: position)] + pending.map { ride.waypoints[$0] }
+        let id = UUID(), previousRouteID = ridingRoute?.id
+        let startBearing = carHeading
+        rerouteRequestID = id
+        rerouting = true
+        speech.stopSpeaking(at: .immediate)
+        localRideStatus = "Pkw-Route wird neu berechnet"
+        rerouteTask = Task {
+            defer {
+                if rerouteRequestID == id {
+                    rerouteTask = nil; rerouteRequestID = nil; rerouting = false
+                    rideActivity.update(progress: progress, route: ridingRoute,
+                        paused: activeRide?.recordingState == .paused, rerouting: false)
+                }
+            }
+            do {
+                let route = try await api.route(request, timeout: 40, includeContext: false, startBearing: startBearing)
+                try Task.checkCancellation()
+                guard rerouteRequestID == id, ridingRoute?.id == previousRouteID,
+                      var current = activeRide, current.id == ride.id, current.route?.id == original.id,
+                      current.recordingState == .recording, CarNavigation.pending(ride: current) == pending,
+                      let latest = location.latestSample,
+                      route.waypointIndices?.count == pending.count + 1 else { return }
+                let positionNow = Coordinate(latitude: latest.coordinate.latitude, longitude: latest.coordinate.longitude)
+                guard let match = CarNavigation.replacement(route, origin: position, requestedAt: now,
+                    current: positionNow, timestamp: latest.timestamp.timeIntervalSince1970,
+                    heading: latest.speed >= 1 && latest.course >= 0 ? latest.course : nil,
+                    accuracy: latest.horizontalAccuracy, now: Date().timeIntervalSince1970) else {
+                    localRideStatus = "Neue Route passt nicht mehr zum Standort · erneuter Versuch folgt"
+                    return
+                }
+                var nav = current.localNavigation ?? LocalNavigationState()
+                nav.carRoute = route
+                nav.carPendingWaypointOrdinals = pending
+                nav.routeProgress = match.traveled
+                current.localNavigation = nav
+                try store.save(current)
+                activeRide = current
+                navigationRoute = route
+                tracker = RouteTracker(lastProgress: match.traveled, lastTimestamp: latest.timestamp.timeIntervalSince1970)
+                progress = match
+                carVoice = CarVoiceGuidance(); carArrivalAnnounced = false
+                reroutePolicy = ReroutePolicy()
+                localRideStatus = "Pkw-Route angepasst · Zwischenziele bleiben erhalten"
+                reload()
+            } catch {
+                guard !Task.isCancelled, rerouteRequestID == id else { return }
+                localRideStatus = "Neuberechnung nicht verfügbar: " + error.localizedDescription + " · erneuter Versuch folgt"
+            }
+        }
+    }
+
     private func reroute(from position: Coordinate, heading: Double?, ride: TourDocument) {
         guard ride.profile.mode == .cycling else {
             localRideStatus = "Wanderroute verlassen · gespeicherte Strecke auf der Karte prüfen"
@@ -1609,14 +1813,15 @@ final class AppState: ObservableObject {
                                                      altitude: sample.verticalAccuracy >= 0 ? sample.altitude : nil),
                                timestamp: sample.timestamp.timeIntervalSince1970, accuracy: sample.horizontalAccuracy,
                                speed: max(0, sample.speed), segment: segment)
-        let accepted = TrackFilter.accepts(point, after: ride.track.last, now: Date().timeIntervalSince1970)
+        let accepted = TrackFilter.accepts(point, after: ride.track.last, now: Date().timeIntervalSince1970, mode: ride.profile.mode)
+        let previousPending = ride.localNavigation?.carPendingWaypointOrdinals
         if accepted {
             if let last = ride.track.last, last.segment == point.segment { ride.movingDuration += max(0, point.timestamp-last.timestamp) }
             ride.track.append(point)
         }
         let heading = sample.course >= 0 && sample.speed >= 1 ? sample.course : nil
         progress?.snappedPosition = nil
-        if !isMarinePresentation, let original = ride.route, let route = ridingRoute, abs(sample.timestamp.timeIntervalSinceNow) < 5,
+        if !isMarinePresentation, ride.profile.mode != .car, let original = ride.route, let route = ridingRoute, abs(sample.timestamp.timeIntervalSinceNow) < 5,
            sample.horizontalAccuracy >= 0, sample.horizontalAccuracy <= 25 {
             updateNeighborhood(ride: ride, position: point.coordinate)
             var nav = ride.localNavigation ?? LocalNavigationState()
@@ -1675,6 +1880,35 @@ final class AppState: ObservableObject {
             nav.routeProgress = progress?.traveled ?? nav.routeProgress
             ride.localNavigation = nav
         }
+        if ride.profile.mode == .car, carGPSIsFresh {
+            rideActivity.carGPSDate = sample.timestamp
+            if let route = ridingRoute {
+                progress = tracker.update(position: point.coordinate, timestamp: point.timestamp, route: route,
+                    heading: heading, accuracy: point.accuracy, carNavigation: true)
+                if let current = progress {
+                    progress = CarNavigation.requiringUnvisitedStop(ride: ride, route: route, progress: current, position: point.coordinate)
+                }
+                if let progress {
+                    var nav = ride.localNavigation ?? LocalNavigationState()
+                    nav.carPendingWaypointOrdinals = CarNavigation.remaining(ride: ride, route: route, progress: progress, position: point.coordinate)
+                    nav.routeProgress = progress.traveled
+                    ride.localNavigation = nav
+                    if progress.snappedPosition != nil && progress.distanceFromRoute <= 25 {
+                        if rerouting { cancelRerouting() }
+                        localRideStatus = CarNavigation.onlineNotice
+                    }
+                    if CarNavigation.arrived(route: route, progress: progress, pending: CarNavigation.pending(ride: ride), position: point.coordinate) {
+                        localRideStatus = route.destinationAccessDistance == nil ? "Ziel erreicht" : "Pkw-Zufahrt erreicht · Zugang zum Ziel prüfen"
+                        if !carArrivalAnnounced {
+                            carArrivalAnnounced = true
+                            if voice { speakCar(localRideStatus!) }
+                        }
+                    }
+                }
+            }
+            carLookAhead = carZoom.update(speed: point.speed, timestamp: point.timestamp, progress: progress,
+                followingGap: ridingRoute.flatMap { CarNavigation.following(route: $0, next: progress?.nextManeuver)?.gap }, rerouting: rerouting)
+        }
         if accepted, ride.profile.mode == .sea, ride.route != nil {
             var navigation = ride.localNavigation ?? LocalNavigationState()
             navigation.marineNextWaypointIndex = MarineNavigation.nextWaypoint(current: navigation.marineNextWaypointIndex ?? 1,
@@ -1682,7 +1916,7 @@ final class AppState: ObservableObject {
                 timestamp: point.timestamp, now: Date().timeIntervalSince1970)
             ride.localNavigation = navigation
         }
-        if accepted {
+        if accepted || previousPending != ride.localNavigation?.carPendingWaypointOrdinals {
             do { try store.save(ride) } catch {
                 cancelNeighborhood(); location.setRiding(false); ride.recordingState = .paused
                 cancelRerouting()
@@ -1695,6 +1929,7 @@ final class AppState: ObservableObject {
             proposeWaypointSkip(ride: ride, position: point.coordinate, heading: heading)
         }
         guard ride.recordingState == .recording else { return }
+        rideActivity.carLookAhead = carLookAhead
         rideActivity.update(progress: progress, route: ridingRoute, headingDegrees: heading, paused: false, rerouting: rerouting)
         if !isMarinePresentation, ride.profile.mode == .cycling, let progress, !rerouting,
            reroutePolicy.observe(distanceFromRoute: progress.distanceFromRoute, timestamp: point.timestamp,
@@ -1702,7 +1937,17 @@ final class AppState: ObservableObject {
             proposeWaypointSkip(ride: ride, position: point.coordinate, heading: heading)
             reroute(from: point.coordinate, heading: heading, ride: ride)
         }
-        if !isMarinePresentation, voice, let progress, progress.distanceFromRoute < 35,
+        if ride.profile.mode == .car, carGPSIsFresh, let progress, !rerouting, !carArrivalAnnounced {
+            if reroutePolicy.observe(distanceFromRoute: progress.distanceFromRoute, timestamp: point.timestamp,
+                accuracy: point.accuracy, now: Date().timeIntervalSince1970) {
+                rerouteCar(from: point.coordinate, ride: ride)
+            }
+            if voice, let text = carVoice.announcement(progress: progress, speed: point.speed,
+                following: ridingRoute.flatMap { CarNavigation.following(route: $0, next: progress.nextManeuver) }) {
+                speakCar(text)
+            }
+        }
+        if !isMarinePresentation, ride.profile.mode != .car, voice, let progress, progress.distanceFromRoute < 35,
            progress.distanceToManeuver < 120, let next = progress.nextManeuver,
            lastAnnouncement != next.coordinateIndex {
             lastAnnouncement = next.coordinateIndex

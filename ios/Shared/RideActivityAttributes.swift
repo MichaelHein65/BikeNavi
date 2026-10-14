@@ -38,6 +38,7 @@ struct RideActivityAttributes: ActivityAttributes {
         var currentPointIndex: Int? = nil
         var maneuverPointIndex: Int? = nil
         var sideRoads: [RideActivityRoad]? = nil
+        var carNavigation: Bool? = nil
     }
 
     var tourName: String

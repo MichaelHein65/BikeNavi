@@ -4,6 +4,24 @@ struct APIError: LocalizedError {
     var status: Int
     var message: String
     var errorDescription: String? { message }
+
+    static func message(status: Int, body: Data) -> String {
+        if let detail = try? JSONDecoder().decode(APIErrorBody.self, from: body).detail {
+            return detail
+        }
+        if let response = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+           let issues = response["detail"] as? [[String: Any]],
+           let issue = issues.first {
+            let location = issue["loc"] as? [String] ?? []
+            if location.contains("travelMode"), issue["input"] as? String == "car" {
+                return "Der Pi kennt den Auto-Modus noch nicht. Bitte das Backend aktualisieren."
+            }
+            if let description = issue["msg"] as? String, !description.isEmpty {
+                return "Der Server hat die Anfrage abgelehnt: \(description)"
+            }
+        }
+        return "Der Server konnte die Anfrage nicht verarbeiten (\(status))."
+    }
 }
 
 struct ServerStatus: Codable { var routingAvailable: Bool; var version: String }
@@ -32,8 +50,7 @@ struct APIClient {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIError(status: 0, message: "Keine Antwort vom Pi.") }
         guard (200..<300).contains(http.statusCode) else {
-            let detail = (try? JSONDecoder().decode(APIErrorBody.self, from: data).detail) ?? "Der Server konnte die Anfrage nicht verarbeiten (\(http.statusCode))."
-            throw APIError(status: http.statusCode, message: detail)
+            throw APIError(status: http.statusCode, message: APIError.message(status: http.statusCode, body: data))
         }
         return try JSONDecoder().decode(Response.self, from: data)
     }
@@ -43,9 +60,9 @@ struct APIClient {
             RouteElevation.Request(coordinates: coordinates)), timeout: 35)
     }
 
-    func route(_ document: TourDocument, timeout: TimeInterval = 90, includeContext: Bool = true) async throws -> CalculatedRoute {
+    func route(_ document: TourDocument, timeout: TimeInterval = 90, includeContext: Bool = true, startBearing: Double? = nil) async throws -> CalculatedRoute {
         var route: CalculatedRoute = try await request("/v1/route" + (includeContext ? "" : "?include_context=false"), method: "POST", body: JSONEncoder().encode(
-            RouteRequest(waypoints: document.waypoints, profile: document.profile)), timeout: timeout)
+            RouteRequest(waypoints: document.waypoints, profile: document.profile, startBearing: startBearing)), timeout: timeout)
         route.duration = RouteTravelTime(route: route, profile: document.profile).total
         return route
     }
