@@ -4,6 +4,7 @@ import Charts
 struct PlannerView: View {
     @EnvironmentObject var state: AppState
     @State private var showSearch = false
+    @State private var showPOIs = false
     @State private var showProfile = false
     @State private var showDetails = false
     @State private var showRouteDescription = false
@@ -58,6 +59,10 @@ struct PlannerView: View {
                             Image(systemName: "bookmark.fill").frame(width: 48, height: 48)
                         }.background(Theme.paper, in: RoundedRectangle(cornerRadius: 18)).accessibilityLabel("Meine gespeicherten Orte")
                     }
+                    Button("Orte entdecken", systemImage: "square.grid.2x2.fill") { showPOIs = true }
+                        .font(.subheadline.bold()).padding(12)
+                        .background(Theme.paper, in: RoundedRectangle(cornerRadius: 16))
+                        .accessibilityIdentifier("planningPOIs")
                     if state.plan.profile.mode == .sea, state.plan.route != nil, !MarineNavigation.current(state.plan.route) {
                         Label(MarineNavigation.outdatedRouteWarning, systemImage: "exclamationmark.triangle")
                             .font(.caption).padding(12).background(Theme.paper, in: RoundedRectangle(cornerRadius: 12))
@@ -91,6 +96,7 @@ struct PlannerView: View {
             }
             .onChange(of: state.mapStyleURL) { _, _ in mapError = nil }
             .sheet(isPresented: $showSearch) { SearchView() }
+            .sheet(isPresented: $showPOIs) { POIView() }
             .sheet(isPresented: $showProfile) { ProfileView() }
             .sheet(isPresented: $showDetails) {
                 if state.plan.profile.mode == .sea { MarinePlanDetailsView(points: state.plan.waypoints, route: state.plan.route) }

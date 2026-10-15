@@ -171,6 +171,7 @@ class LocalNavigationState(Model):
     skippedWaypointOrdinals: list[int] | None = Field(default=None, max_length=48)
     carRoute: Route | None = None
     carPendingWaypointOrdinals: list[int] | None = Field(default=None, max_length=49)
+    carPOIStopID: UUID | None = None
 
 
 class Document(Model):

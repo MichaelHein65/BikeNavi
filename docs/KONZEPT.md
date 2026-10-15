@@ -206,8 +206,8 @@ Diese Funktionen bleiben ausdrücklich Teil des gewünschten Zielbilds und solle
 
 - **Spurführung:** empfohlene Fahrspuren vor Abbiegungen und Ausfahrten; verfügbare Daten und Abdeckung vor Zusagen prüfen.
 - **Tempolimits:** zulässige Geschwindigkeit anzeigen, soweit verlässliche Daten vorliegen; unbekannte, bedingte oder zeitabhängige Angaben als solche behandeln.
-- **Parkplatz- und Tankstellensuche:** geeignete Ziele entlang der Route oder nahe dem Ziel finden und als Zwischenziel übernehmen.
-- **CarPlay:** Planung und Führung über eine für das Fahrzeugdisplay geeignete Bedienung.
+- **POI-Suche:** Clay-Kacheln für Tankstelle, Supermarkt, Flughafen, Bahnhof, Strand und Parkplatz aus Planung und Fahrt. Erste Umsetzung einschließlich Dieselvergleich für Deutschland, Österreich, Slowenien und Kroatien sowie routengeprüfter Zwischenstopps: [Bedienung, Quellen und verbleibende Grenzen](POI.md). Spezifische Terminal-/Strandzugänge und Live-Parkplatzbelegung bleiben weiterer Ausbau.
+- **CarPlay entfällt** auf ausdrücklichen Nutzerwunsch vom 15. Oktober 2026.
 - **Live-Verkehr:** Staus und aktuelle Sperrungen bei Routenwahl, Alternativen und Ankunftszeit berücksichtigen; dafür ist eine zusätzliche aktuelle Datenquelle erforderlich.
 
 Als ergänzende Idee bleibt die Auto-Anfahrt zum Start einer Fahrradtour mit Parkplatz und anschließendem Wechsel zum Rad-Profil vorgemerkt; der genaue Ablauf ist noch offen. Vollständige Offline-Neuberechnung für Pkw ist ebenfalls eine eigene spätere Entscheidung und setzt ein geeignetes Straßennetz mit Pkw-Regeln voraus.

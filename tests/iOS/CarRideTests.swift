@@ -5,11 +5,13 @@ import UIKit
 
 private final class CarRouteProtocol: URLProtocol {
     static var handler: ((URLRequest) throws -> Data)?
+    static var responseDelay: TimeInterval = 0
     override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "car-test.invalid" }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         do {
             let data = try Self.handler!(request)
+            if Self.responseDelay > 0 { Thread.sleep(forTimeInterval: Self.responseDelay) }
             client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: data)
             client?.urlProtocolDidFinishLoading(self)
@@ -19,6 +21,32 @@ private final class CarRouteProtocol: URLProtocol {
 }
 
 final class CarRideTests: XCTestCase {
+    @MainActor
+    func testPOISearchInEveryModePreservesProfileAndActiveRide() throws {
+        for mode in TravelMode.allCases {
+            let (state, directory) = try state()
+            defer { cleanup(directory); UIApplication.shared.isIdleTimerDisabled = false }
+            state.plan.profile.mode = mode
+            state.plan.route = nil
+            let plan = state.plan
+            let search = try state.poiSearch(category: .supermarket, duringRide: false, origin: "destination")
+            XCTAssertEqual(search.profile, plan.profile)
+            XCTAssertEqual(search.center, plan.destinationPoint?.coordinate)
+            XCTAssertNil(search.context)
+            fix(state, position: plan.waypoints[0].coordinate, timestamp: Date(), speed: 0)
+            state.startRide()
+            let ride = try XCTUnwrap(state.activeRide)
+            let live = try state.poiSearch(category: .beach, duringRide: true)
+            XCTAssertEqual(live.profile, ride.profile)
+            XCTAssertEqual(live.center.distance(to: plan.waypoints[0].coordinate), 0, accuracy: 0.01)
+            XCTAssertNil(live.context)
+            state.savePlace(Waypoint(name: "Öffentliches POI-Beispiel", coordinate: search.center))
+            XCTAssertEqual(state.activeRide, ride)
+            XCTAssertEqual(state.plan, plan)
+            XCTAssertTrue(state.savedPlaces.contains { $0.coordinate == search.center })
+            state.discardRide()
+        }
+    }
     @MainActor
     private func state() throws -> (AppState, URL) {
         setenv("BIKENAVI_START_LOCATION_TEST", "ready", 1)
@@ -38,7 +66,7 @@ final class CarRideTests: XCTestCase {
     private func cleanup(_ directory: URL) {
         unsetenv("BIKENAVI_START_LOCATION_TEST"); unsetenv("BIKENAVI_SERVER")
         try? FileManager.default.removeItem(at: directory)
-        CarRouteProtocol.handler = nil; URLProtocol.unregisterClass(CarRouteProtocol.self)
+        CarRouteProtocol.handler = nil; CarRouteProtocol.responseDelay = 0; URLProtocol.unregisterClass(CarRouteProtocol.self)
     }
     @MainActor
     private func fix(_ state: AppState, position: Coordinate, timestamp: Date, speed: Double = 40) {
@@ -122,5 +150,99 @@ final class CarRideTests: XCTestCase {
         let restored = AppState(store: state.store); restored.restoreLocalRouting()
         XCTAssertEqual(restored.ridingRoute?.id, replacement.id)
         XCTAssertEqual(restored.activeRide?.route?.id, plan.route?.id)
+    }
+
+    @MainActor
+    func testPOIInsertionPreservesPlanTrackPendingStopsAndRestart() async throws {
+        let (state, directory) = try state()
+        defer { cleanup(directory); UIApplication.shared.isIdleTimerDisabled = false }
+        let plan = state.plan
+        fix(state, position: plan.route!.coordinates[0], timestamp: Date())
+        state.startRide()
+        fix(state, position: plan.route!.coordinates[0], timestamp: Date().addingTimeInterval(0.01), speed: 0)
+        let track = state.activeRide!.track
+        let stop = Waypoint(name: "Synthetischer Tankstopp", coordinate: plan.route!.coordinates[1])
+        state.serverURL = "https://car-test.invalid"; state.token = "synthetic-test"
+        CarRouteProtocol.handler = { call in
+            XCTAssertEqual(call.url?.path, "/v1/pois/route")
+            let points = [plan.route!.coordinates[0], stop.coordinate] + plan.waypoints.dropFirst().map(\.coordinate)
+            let route = CalculatedRoute(id: UUID(), coordinates: points, distance: 445, duration: 120, ascent: 0, descent: 0,
+                maneuvers: [], surfaces: [], warnings: [], provider: "Synthetische POI-Prüfung", calculatedAt: 0,
+                waypointIndices: [0, 1, 2, 3], carTimeSections: [.init(startIndex: 0, endIndex: 3, seconds: 120)])
+            let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(route))
+            return try JSONSerialization.data(withJSONObject: ["route": encoded, "drivingDistance": 111, "drivingSeconds": 30, "detourSeconds": 30])
+        }
+        XCTAssertTrue(URLProtocol.registerClass(CarRouteProtocol.self))
+        try await state.addPOIToRide(stop)
+        XCTAssertEqual(state.plan, plan)
+        XCTAssertEqual(state.activeRide?.track, track)
+        XCTAssertEqual(state.activeRide?.waypoints.map(\.name), [plan.waypoints[0].name, stop.name, plan.waypoints[1].name, plan.waypoints[2].name])
+        XCTAssertEqual(state.activeRide?.localNavigation?.carPendingWaypointOrdinals, [1, 2, 3])
+        XCTAssertEqual(state.activeRide?.localNavigation?.carPOIStopID, stop.id)
+        XCTAssertNil(state.activeRide?.asNewPlan().route)
+        state.togglePause()
+        unsetenv("BIKENAVI_START_LOCATION_TEST")
+        let restored = AppState(store: state.store); restored.restoreLocalRouting()
+        XCTAssertEqual(restored.activeRide?.localNavigation?.carPOIStopID, stop.id)
+        XCTAssertEqual(restored.ridingRoute?.id, state.ridingRoute?.id)
+        XCTAssertEqual(restored.activeRide?.localNavigation?.carPendingWaypointOrdinals, [1, 2, 3])
+        state.togglePause()
+        fix(state, position: plan.route!.coordinates[0], timestamp: Date(), speed: 0)
+        CarRouteProtocol.handler = { call in
+            guard call.url?.path == "/v1/route" else { throw URLError(.unsupportedURL) }
+            return try JSONEncoder().encode(plan.route!)
+        }
+        try await state.removePOIStop()
+        XCTAssertEqual(state.activeRide?.waypoints, plan.waypoints)
+        XCTAssertEqual(state.activeRide?.localNavigation?.carPendingWaypointOrdinals, [1, 2])
+        XCTAssertNil(state.pendingPOIStop)
+        XCTAssertEqual(state.plan, plan)
+    }
+
+    @MainActor
+    func testFailedPOIInsertionAndStaleGPSLeaveRideUnchanged() async throws {
+        let (state, directory) = try state()
+        defer { cleanup(directory); UIApplication.shared.isIdleTimerDisabled = false }
+        fix(state, position: state.plan.route!.coordinates[0], timestamp: Date())
+        state.startRide()
+        fix(state, position: state.plan.route!.coordinates[0], timestamp: Date().addingTimeInterval(0.01))
+        let before = state.activeRide
+        state.serverURL = "https://car-test.invalid"; state.token = "synthetic-test"
+        CarRouteProtocol.handler = { _ in throw URLError(.notConnectedToInternet) }
+        XCTAssertTrue(URLProtocol.registerClass(CarRouteProtocol.self))
+        do {
+            try await state.addPOIToRide(Waypoint(name: "Beispiel", coordinate: state.plan.route!.coordinates[1]))
+            XCTFail("Anfahrt darf bei Netzfehler nicht übernommen werden")
+        } catch { }
+        XCTAssertEqual(state.activeRide, before)
+        state.location.denied = true
+        XCTAssertThrowsError(try state.poiSearch(category: .fuel, duringRide: true))
+    }
+
+    @MainActor
+    func testPOIResponseCannotReplaceRideAfterPause() async throws {
+        let (state, directory) = try state()
+        defer { cleanup(directory); UIApplication.shared.isIdleTimerDisabled = false }
+        let plan = state.plan
+        fix(state, position: plan.route!.coordinates[0], timestamp: Date())
+        state.startRide()
+        fix(state, position: plan.route!.coordinates[0], timestamp: Date().addingTimeInterval(0.01), speed: 0)
+        let called = expectation(description: "POI request started")
+        state.serverURL = "https://car-test.invalid"; state.token = "synthetic-test"
+        CarRouteProtocol.responseDelay = 0.3
+        CarRouteProtocol.handler = { call in
+            guard call.url?.path == "/v1/pois/route" else { throw URLError(.unsupportedURL) }
+            called.fulfill()
+            let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(plan.route!))
+            return try JSONSerialization.data(withJSONObject: ["route": encoded, "drivingDistance": 111, "drivingSeconds": 30])
+        }
+        XCTAssertTrue(URLProtocol.registerClass(CarRouteProtocol.self))
+        let request = Task { try await state.addPOIToRide(Waypoint(name: "Beispiel", coordinate: plan.route!.coordinates[1])) }
+        await fulfillment(of: [called], timeout: 5)
+        state.togglePause()
+        let paused = state.activeRide
+        do { try await request.value; XCTFail("Verspätete Antwort darf die pausierte Fahrt nicht ersetzen") } catch { }
+        XCTAssertEqual(state.activeRide, paused)
+        XCTAssertEqual(state.plan, plan)
     }
 }

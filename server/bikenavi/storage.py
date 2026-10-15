@@ -2,7 +2,7 @@ import hashlib
 import json
 
 from fastapi import HTTPException
-from sqlalchemy import JSON, Boolean, Integer, String, create_engine, delete, select, update
+from sqlalchemy import JSON, Boolean, Float, Integer, String, create_engine, delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
@@ -17,6 +17,12 @@ class OfflineTile(Base):
     __tablename__ = "offline_tiles"
     id: Mapped[str] = mapped_column(String(80), primary_key=True)
     payload: Mapped[dict] = mapped_column(JSON)
+
+
+class ProviderBudget(Base):
+    __tablename__ = "provider_budgets"
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    next_allowed: Mapped[float] = mapped_column(Float)
 
 
 class Record(Base):
@@ -64,6 +70,24 @@ class Storage:
         with self.sessions.begin() as session:
             if session.get(SyncLock, 1) is None:
                 session.add(SyncLock(id=1, generation=0))
+
+    def reserve_provider_request(self, provider: str, now: float, interval: float) -> float | None:
+        try:
+            with self.sessions.begin() as session:
+                reserved = session.execute(update(ProviderBudget).where(
+                    ProviderBudget.id == provider, ProviderBudget.next_allowed <= now
+                ).values(next_allowed=now + interval))
+                if reserved.rowcount:
+                    return None
+                current = session.get(ProviderBudget, provider)
+                if current is not None:
+                    return current.next_allowed
+                session.add(ProviderBudget(id=provider, next_allowed=now + interval))
+        except IntegrityError:
+            with self.sessions() as session:
+                current = session.get(ProviderBudget, provider)
+                return current.next_allowed if current else now + interval
+        return None
 
     def apply(self, mutation: Mutation) -> dict:
         payload = mutation.model_dump(mode="json")

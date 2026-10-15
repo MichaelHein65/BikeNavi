@@ -358,6 +358,7 @@ struct TourDocument: Codable, Identifiable, Equatable {
         result.id = UUID()
         result.kind = .plan
         result.sourcePlanID = nil
+        if localNavigation?.carPOIStopID != nil || localNavigation?.carRoute != nil { result.route = nil }
         result.localNavigation = nil
         result.title += " · Kopie"
         result.usesAutomaticTitle = false

@@ -4,6 +4,10 @@ struct CarRideView: View {
     @EnvironmentObject var state: AppState
     @Environment(\.colorScheme) private var colorScheme
     @State private var confirmFinish = false
+    @State private var showPOIs = false
+    @State private var confirmRemovePOI = false
+    @State private var removingPOI = false
+    @State private var poiError: String?
     @State private var showBlogPoint = false
     @State private var mapError: String?
     @State private var cameraSuspended = false
@@ -43,6 +47,11 @@ struct CarRideView: View {
                         .overlay(alignment: .topLeading) {
                             MapStyleMenu().background(Theme.paper, in: Circle()).padding(8)
                         }
+                        .overlay(alignment: .topTrailing) {
+                            Button("Orte", systemImage: "square.grid.2x2.fill") { showPOIs = true }
+                                .font(.headline).padding(12).background(Theme.paper, in: Capsule()).padding(8)
+                                .accessibilityLabel("Orte entdecken").accessibilityIdentifier("ridePOIs")
+                        }
                         .overlay(alignment: .bottomLeading) {
                             Text("Auto-Zoom · \(Int(state.carLookAhead.rounded())) m voraus")
                                 .font(.caption2).padding(6).background(Theme.paper, in: RoundedRectangle(cornerRadius: 6)).padding(.leading, 8).padding(.bottom, 30)
@@ -62,6 +71,15 @@ struct CarRideView: View {
                         }
                         .onChange(of: state.mapStyleURL) { _, _ in mapError = nil }
                     VStack(spacing: 10) {
+                        if let stop = state.pendingPOIStop {
+                            HStack {
+                                Text("Stopp: " + stop.name).font(.caption).lineLimit(1)
+                                Spacer()
+                                Button(removingPOI ? "Berechnen …" : "Entfernen") { confirmRemovePOI = true }
+                                    .font(.caption.bold()).frame(minHeight: 44).disabled(removingPOI)
+                                    .accessibilityIdentifier("removePOIStop")
+                            }
+                        }
                         if ride.route != nil {
                             HStack {
                                 metric("Ankunft", arrival(ride: ride, now: context.date))
@@ -106,6 +124,19 @@ struct CarRideView: View {
                 Button("Weiterfahren", role: .cancel) { }
             }
             .sheet(isPresented: $showBlogPoint) { BlogPointEditor(rideID: ride.id) }
+            .sheet(isPresented: $showPOIs) { POIView(duringRide: true) }
+            .confirmationDialog("Letzten hinzugefügten Stopp entfernen?", isPresented: $confirmRemovePOI, titleVisibility: .visible) {
+                Button("Stopp entfernen") {
+                    removingPOI = true
+                    Task { @MainActor in
+                        defer { removingPOI = false }
+                        do { try await state.removePOIStop() } catch { poiError = error.localizedDescription }
+                    }
+                }
+            }
+            .alert("Stopp bleibt erhalten", isPresented: Binding(get: { poiError != nil }, set: { if !$0 { poiError = nil } })) {
+                Button("Verstanden") { poiError = nil }
+            } message: { Text(poiError ?? "") }
         }
     }
 

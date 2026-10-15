@@ -16,6 +16,7 @@ from .blog_store import BlogPoint, BlogRepository
 from .blog import BlogGenerator
 from .blog_jobs import BlogJobs
 from .route_description import DescriptionGenerator, DescriptionJobs, DescriptionRequest
+from .pois import POIService, POISearch, POIStopRequest
 
 
 def create_app(database_url: str | None = None, token: str | None = None,
@@ -33,6 +34,9 @@ def create_app(database_url: str | None = None, token: str | None = None,
         app.state.storage = Storage(db_url)
         async with httpx.AsyncClient(timeout=35, transport=transport) as client:
             app.state.ors = ORS(key, client, context_url)
+            app.state.pois = POIService(client, app.state.ors, os.getenv("POI_OVERPASS_URL") or context_url,
+                                       os.getenv("TANKERKOENIG_API_KEY", ""), app.state.storage,
+                                       os.getenv("GEOAPIFY_API_KEY", ""))
             app.state.offline = OfflineTiles(client, app.state.storage, context_url)
             app.state.blogs = BlogRepository(app.state.storage)
             app.state.blog_generator = BlogGenerator(client, app.state.blogs)
@@ -74,6 +78,14 @@ def create_app(database_url: str | None = None, token: str | None = None,
     @app.get("/v1/status", dependencies=[Depends(authenticate)])
     def status():
         return {"routingAvailable": bool(key), "version": __version__}
+
+    @app.post("/v1/pois/search", dependencies=[Depends(authenticate)])
+    async def poi_search(body: POISearch):
+        return await app.state.pois.search(body)
+
+    @app.post("/v1/pois/route", dependencies=[Depends(authenticate)])
+    async def poi_route(body: POIStopRequest):
+        return await app.state.pois.route_to_stop(body.search, body.stop)
 
     @app.get("/v1/changes", dependencies=[Depends(authenticate)])
     def changes(after: int = Query(default=0, ge=0)):

@@ -4,6 +4,29 @@ import MapLibre
 
 final class RouteMapTests: XCTestCase {
     @MainActor
+    func testPOIOverviewSurvivesInitialStyleFitAndPreservesManualZoom() throws {
+        let (map, coordinator) = try fixture()
+        let place = Waypoint(name: "Öffentliches POI-Beispiel", coordinate: .init(latitude: 49.41, longitude: 8.68))
+        coordinator.parent.route = nil
+        coordinator.parent.navigationPosition = nil
+        coordinator.parent.waypoints = [place]
+        coordinator.parent.focus = place.coordinate
+        coordinator.parent.pointOverviewZoom = 14
+        coordinator.hasLoadedStyle = false
+        map.setCenter(place.coordinate.cl, zoomLevel: 19, animated: false)
+        coordinator.mapView(map, didFinishLoading: try XCTUnwrap(map.style))
+        XCTAssertEqual(map.zoomLevel, 14, accuracy: 0.01)
+        XCTAssertEqual(map.centerCoordinate.latitude, place.coordinate.latitude, accuracy: 0.00001)
+        XCTAssertEqual(map.centerCoordinate.longitude, place.coordinate.longitude, accuracy: 0.00001)
+        map.setZoomLevel(15, animated: false)
+        coordinator.redraw()
+        coordinator.mapView(map, didFinishLoading: try XCTUnwrap(map.style))
+        XCTAssertEqual(map.zoomLevel, 15, accuracy: 0.01)
+        coordinator.fit()
+        XCTAssertEqual(map.zoomLevel, 14, accuracy: 0.01)
+        map.delegate = nil
+    }
+    @MainActor
     func testCarCameraChangesScaleAndManualExplorationOffersExplicitResume() throws {
         let (map, coordinator) = try fixture()
         coordinator.parent.carNavigation = true

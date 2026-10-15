@@ -1,5 +1,37 @@
 # BikeNavi – Bildschirmgalerie
 
+## POIs in allen Anwendungen (15. Oktober 2026)
+
+**82 und 85 nach Zoomkorrektur erneuert:** Der Marker bleibt im Mittelpunkt, umliegende Straßen und Stadtteile sind bei Zoomstufe 14 sichtbar. Die zuvor übervergrößerte Rasterkarte war eine Folge der automatischen Anpassung auf nur einen Marker, nicht allein fehlender Kartendaten. Native Kameraprüfung und beide Detail-UI-Abläufe erfolgreich; neue Aufnahmen visuell geprüft.
+
+**83–86** zeigen die neuen Einstiege außerhalb des Autos, die Luftlinien-Suche und den sicheren Landgang-Hinweis. Öffentliche Heidelberger Koordinaten, ausdrücklich synthetische Orte/Entfernungen und GPS im Stand; keine privaten Fahrten oder realen Anbieterangebote. Automatischer UI-Lauf öffnet die sechs Kategorien in Fahrrad, Wandern, Fahrrad & Wandern und Segeln und prüft Suche, Speichern und unveränderte laufende Aufzeichnung. **82** wurde wegen der zusätzlichen Speicheraktion ebenfalls erneuert. Die Bilder wurden visuell geprüft; keine Feldprüfung.
+
+| Fahrrad: Planung | Wandern: Umkreissuche |
+| --- | --- |
+| <img src="images/83-fahrrad-poi-einstieg.png" width="300" alt="Fahrradplanung mit neuem Orte-entdecken-Button und öffentlichem UI-Beispiel"> | <img src="images/84-wandern-poi-umkreis.png" width="300" alt="Synthetische Supermarkt-Treffer mit 750 Metern Luftlinie statt Pkw-Anfahrtszeit"> |
+
+| Segeln: Landgang-Ort | Wandern: unterwegs |
+| --- | --- |
+| <img src="images/85-segeln-poi-landgang.png" width="300" alt="Landort zum Speichern mit ausdrücklichem Hinweis auf fehlende Anlegestellenbestätigung"> | <img src="images/86-wandern-poi-unterwegs.png" width="300" alt="Freie Wanderung im simulierten Stand mit Orte-Button und weiter laufender Aufzeichnung"> |
+
+Die Raster-Hintergrundkarten hängen weiterhin vom externen Kartendienst ab; die korrigierte **85** zeigt nun die Umgebung statt einzelner vergrößerter Pixel. Die POI-Aktionen benötigen keine fertig geladene Hintergrundkarte. Wiederholbar über `POIUITests` und den lokalen HTTPS-Beispielserver. [Prüfstand und Installation](UMSETZUNG.md#profilübergreifende-pois-15-oktober-2026).
+
+## Auto-POIs im Clay-Stil (15. Oktober 2026)
+
+**82** ergänzt den Anbieterwechsel zu Geoapify: Die bestehende Detailansicht zeigt den gerouteten Pkw-Zielpunkt und ausdrücklich **125 m Luftlinie**, nicht berechneten Fußweg/Restzeit und Quellenangabe. Öffentlicher Heidelberger Straßenpunkt, frei erfundener Bahnhof und Abstand; **synthetisches UI-Beispiel, keine reale Geoapify-Antwort oder Zufahrtsbestätigung**. Der UI-Test öffnet alle fünf Nicht-Kraftstoffkategorien, prüft die Warnung und fügt das Bahnhofbeispiel in die Planung ein. Bild visuell geprüft; keine privaten Daten. Live-Anbieterprüfung getrennt im [Prüfstand](UMSETZUNG.md).
+
+<img src="images/82-auto-poi-zielpunkt.png" width="300" alt="Synthetisches Bahnhofsbeispiel mit Pkw-Zielpunkt und Warnung zum nicht berechneten Restweg">
+
+**79–81** zeigen die tatsächlich laufende POI-Seite. Sechs plastische Motive folgen der vom Nutzer gelieferten Home-Referenz; [Bildherkunft und Prompts](POI_BILDER.md). Angebote, Preise und Anfahrtswerte sind ausdrücklich **synthetische öffentliche Beispieldaten**, keine echten Tankstellenangebote oder bestätigten Zufahrten. **68/70** wurden mit den neuen POI-Einstiegen aktualisiert. Die ursprüngliche öffentliche Heidelberger Straßenroute bleibt echt; GPS und Tempo sind simuliert. Kein Feldtest.
+
+| Kategorien | Diesel in der Planung | Diesel entlang der Route |
+| --- | --- | --- |
+| <img src="images/79-auto-poi-kacheln.png" width="250" alt="Sechs pastellfarbene Kacheln mit modellierten Clay-Motiven für Tankstelle, Supermarkt, Flughafen, Bahnhof, Strand und Parkplatz"> | <img src="images/80-auto-diesel-angebote.png" width="250" alt="Gekennzeichnete synthetische Dieselangebote mit Suchort, Radius, Preis und Anfahrtszeit"> | <img src="images/81-auto-diesel-route.png" width="250" alt="Synthetische Dieselangebote während der Fahrt mit zusätzlicher Fahrzeit"> |
+
+Reproduzierbar mit dem lokalen HTTPS-Beispielserver `tests/fixtures/poi_server.py` und `POIUITests`. [Bedienung und Quellenprüfung](POI.md). Die Portale in Slowenien/Kroatien sind experimentell; Deutschlands Schlüssel ist inzwischen privat eingerichtet und live geprüft. Die neuen Bilder verwenden keine privaten Fahrten, Zugangsdaten oder das private Referenzfoto. Die nachfolgende Serverkorrektur verändert die gezeigten Kacheln/Angebote nicht; Ausfall-/Wartehinweise erscheinen in der vorhandenen Hinweisfläche. Die Galerie belegt nicht die aktuelle Verfügbarkeit des gestörten OSM-Diensts.
+
+Auf dem iPhone-SE-Simulator (3. Generation) wurde zusätzlich geprüft, dass alle sechs Kacheln durch Scrollen erreichbar sind, die Parkplatzsuche geöffnet und die Planung wieder erreicht werden kann. Anders als der Home-Bildschirm ist diese POI-Seite bewusst scrollbar.
+
 Version **0.4.0 (4)** · iPhone-Simulator, helle Darstellung. Planung und Routendetails am 24. September 2026 mit Höhenprofil und getrenntem lokalem Umfeld aktualisiert; Planungs-/Fahrtkarten und Einstellungen am 5. Oktober 2026 mit Kartenansichten aktualisiert; Ortssuche am 1. Oktober 2026 mit lokaler Koordinatenerkennung aktualisiert; Fahrprofile und maritime Ansichten am 14. Oktober 2026 mit Seeweg ergänzt; übrige Bilder vom 23. September 2026.
 
 Die Bilder zeigen die tatsächlich laufende App. Die Straßenroute stammt aus dem öffentlichen Heidelberg-Beispiel von openrouteservice. Die Seekartenbilder verwenden öffentliche Tribunj-Beispielpunkte; die Seewegplanung Tribunj–Šibenik wird aus OSM-Küsten automatisch berechnet. Die gespeicherte **Beispielaufzeichnung**, ihre Zeit-/GPS-Samples und ihre Bike-Messwerte sind synthetische Demonstrationsdaten. In der Live-Fahrt ist kein echtes Bike verbunden: fehlende Messwerte bleiben leer. Persönliche Touren und Zugangsdaten sind nicht enthalten. Die Serveradresse `beispiel.invalid` ist ein nicht erreichbarer Platzhalter; ein vorbereitetes lokales Wegenetz ist für dieses alte ORS-Beispiel nicht vorhanden.

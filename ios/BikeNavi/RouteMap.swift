@@ -38,6 +38,7 @@ struct RouteMap: UIViewRepresentable {
     var track: [TrackPoint] = []
     var modeSections: [RideModeSection]?
     var focus: Coordinate?
+    var pointOverviewZoom: Double?
     var fitRevision: UUID?
     var follow = false
     var followHeading = false
@@ -110,7 +111,7 @@ struct RouteMap: UIViewRepresentable {
         c.updateNavigationPosition()
         if c.focus != focus, let focus {
             c.focus = focus
-            map.setCenter(focus.cl, zoomLevel: 13, animated: true)
+            map.setCenter(focus.cl, zoomLevel: pointOverviewZoom ?? 13, animated: true)
         }
         if c.fitRevision != fitRevision, let fitRevision {
             c.fitRevision = fitRevision
@@ -247,7 +248,12 @@ struct RouteMap: UIViewRepresentable {
             old = new
         }
         func fit() {
-            guard let map, let annotations = map.annotations, !annotations.isEmpty else { return }
+            guard let map else { return }
+            if let zoom = parent.pointOverviewZoom, parent.route == nil, parent.waypoints.count == 1, parent.track.isEmpty {
+                map.setCenter(parent.waypoints[0].coordinate.cl, zoomLevel: zoom, animated: false)
+                return
+            }
+            guard let annotations = map.annotations, !annotations.isEmpty else { return }
             let routeAnnotations = annotations.filter { !($0 is SavedPlaceAnnotation) }
             let target = routeAnnotations.isEmpty ? annotations : routeAnnotations
             map.showAnnotations(target, edgePadding: UIEdgeInsets(top: parent.topOverlayInset, left: 40, bottom: 45, right: 40), animated: true, completionHandler: nil)

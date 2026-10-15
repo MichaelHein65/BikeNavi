@@ -5,6 +5,7 @@ struct MarineRideView: View {
     @State private var finish = false
     @State private var journal = false
     @State private var details = false
+    @State private var showPOIs = false
     @State private var mapError: String?
     private let navy = Color(red: 0.04, green: 0.18, blue: 0.27)
 
@@ -74,8 +75,13 @@ struct MarineRideView: View {
                     .accessibilityIdentifier("rideMap")
                     .overlay(alignment: .topLeading) { MapStyleMenu().background(.regularMaterial, in: Circle()).padding(8) }
                     .overlay(alignment: .topTrailing) {
-                        Label("Norden oben", systemImage: "location.north.fill").font(.caption.bold())
-                            .padding(8).background(.regularMaterial, in: Capsule()).padding(8)
+                        VStack(alignment: .trailing, spacing: 8) {
+                            Button("Orte", systemImage: "square.grid.2x2.fill") { showPOIs = true }
+                                .font(.subheadline.bold()).padding(12).background(.regularMaterial, in: Capsule())
+                                .accessibilityIdentifier("ridePOIs")
+                            Label("Norden oben", systemImage: "location.north.fill").font(.caption.bold())
+                                .padding(8).background(.regularMaterial, in: Capsule())
+                        }.padding(8)
                     }
                     .overlay(alignment: .bottom) {
                         if let mapError { Text(mapError).font(.caption).padding(8).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10)).padding(8) }
@@ -141,6 +147,7 @@ struct MarineRideView: View {
         }
         .sheet(isPresented: $journal) { if let ride = state.activeRide { BlogPointEditor(rideID: ride.id) } }
         .sheet(isPresented: $details) { MarinePlanDetailsView(points: state.activeRide?.waypoints ?? [], route: state.activeRide?.route) }
+        .sheet(isPresented: $showPOIs) { POIView(duringRide: state.activeRide != nil) }
     }
     private func compass(_ course: Double?) -> some View {
         ZStack {

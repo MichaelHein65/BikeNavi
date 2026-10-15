@@ -712,12 +712,22 @@ final class AppState: ObservableObject {
             plan.waypoints = [Waypoint(name: "Beispielstart Heidelberg", coordinate: origin), Waypoint(name: "Beispielziel Neuenheim", coordinate: destination)]
             plan.route = route
             activeRide = nil; serverURL = ""; token = ""; selectedMapStyle = .standard
+            if ProcessInfo.processInfo.environment["BIKENAVI_POI_PREVIEW"] == "1" {
+                serverURL = "https://127.0.0.1:18446"
+                token = "public-poi-example-token"
+                if let rawMode = ProcessInfo.processInfo.environment["BIKENAVI_POI_MODE"], let mode = TravelMode(rawValue: rawMode), mode != .car {
+                    plan.profile.mode = mode
+                    plan.title = "POI · öffentliches UI-Beispiel"
+                    plan.route = nil
+                    selectedMapStyle = defaultMapStyle(mode)
+                }
+            }
             notice = nil; voice = false
             marinePreviewTask = Task { [weak self] in
                 for _ in 0..<300 {
                     guard let self else { return }
                     let sample = CLLocation(coordinate: origin.cl, altitude: 114, horizontalAccuracy: 5, verticalAccuracy: 5,
-                        course: heading, speed: 14, timestamp: Date())
+                        course: heading, speed: plan.profile.mode == .car ? 14 : 0, timestamp: Date())
                     location.locationManager(CLLocationManager(), didUpdateLocations: [sample])
                     do { try await Task.sleep(for: .seconds(1)) } catch { return }
                 }
@@ -1593,6 +1603,147 @@ final class AppState: ObservableObject {
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = AVSpeechSynthesisVoice(language: "de-DE")
         speech.speak(utterance)
+    }
+
+    func poiSearch(category: POICategory, duringRide: Bool, origin: String = "location", radius: Int = 10) throws -> POISearchRequest {
+        if duringRide {
+            if let ride = activeRide, ride.profile.mode != .car {
+                guard let coordinate = location.freshCoordinate else {
+                    location.request()
+                    throw APIError(status: 0, message: "Bitte auf einen aktuellen GPS-Standort warten.")
+                }
+                return POISearchRequest(category: category, center: coordinate, radius: radius, profile: ride.profile)
+            }
+            guard let ride = activeRide, ride.profile.mode == .car, carGPSIsFresh,
+                  let coordinate = location.freshCoordinate, !rerouting else {
+                throw APIError(status: 0, message: "Bitte auf einen aktuellen GPS-Standort und das Ende der Neuberechnung warten.")
+            }
+            var context: POIRouteContext?
+            if let route = ridingRoute {
+                guard let progress, progress.distanceFromRoute <= 35 else {
+                    throw APIError(status: 0, message: "Bitte auf eine bestätigte Position auf der Route warten.")
+                }
+                let pending = CarNavigation.pending(ride: ride)
+                guard !pending.isEmpty, pending.count <= 47, pending.allSatisfy({ ride.waypoints.indices.contains($0) }) else {
+                    throw APIError(status: 0, message: "Zu viele oder keine offenen Ziele für einen weiteren Stopp.")
+                }
+                context = POIRouteContext(coordinates: route.coordinates, progress: progress.traveled,
+                    pending: pending.map { ride.waypoints[$0] }, bearing: carHeading)
+            }
+            return POISearchRequest(category: category, center: coordinate, radius: radius, profile: ride.profile, context: context)
+        }
+        let center = origin == "start" ? plan.startPoint?.coordinate : origin == "destination" ? plan.destinationPoint?.coordinate : location.freshCoordinate
+        guard let center else {
+            location.request()
+            throw APIError(status: 0, message: "Standort wird gesucht. Bitte erneut versuchen oder Start/Ziel als Suchort wählen.")
+        }
+        return POISearchRequest(category: category, center: center, radius: radius, profile: plan.profile)
+    }
+
+    func addPOIToRide(_ point: Waypoint) async throws {
+        let request = try poiSearch(category: .fuel, duringRide: true)
+        guard let api, let ride = activeRide, ride.profile.mode == .car, ride.waypoints.count < 50 else {
+            throw APIError(status: 0, message: "Pi verbinden und höchstens 49 vorhandene Wegpunkte verwenden.")
+        }
+        let previousRouteID = ridingRoute?.id
+        let pending = ride.route == nil ? [] : CarNavigation.pending(ride: ride)
+        let requestedAt = Date().timeIntervalSince1970
+        let response = try await api.routeToPOI(point, search: request)
+        try Task.checkCancellation()
+        guard var current = activeRide, current.id == ride.id, current.recordingState == ride.recordingState,
+              current.waypoints == ride.waypoints, current.profile == ride.profile,
+              ridingRoute?.id == previousRouteID, !rerouting,
+              (current.route == nil ? [] : CarNavigation.pending(ride: current)) == pending,
+              let latest = location.latestSample, carGPSIsFresh,
+              let matched = CarNavigation.replacement(response.route, origin: request.center, requestedAt: requestedAt,
+                current: Coordinate(latitude: latest.coordinate.latitude, longitude: latest.coordinate.longitude),
+                timestamp: latest.timestamp.timeIntervalSince1970, heading: carHeading, accuracy: latest.horizontalAccuracy,
+                now: Date().timeIntervalSince1970),
+              let stopIndex = response.route.waypointIndices?.dropFirst().first,
+              response.route.coordinates.indices.contains(stopIndex),
+              matched.traveled < LocalRouteMetrics.distances(response.route)[stopIndex] - 10 else {
+            throw APIError(status: 409, message: "Fahrt oder Standort hat sich geändert. Bitte den Stopp erneut auswählen.")
+        }
+        var navigation = current.localNavigation ?? LocalNavigationState()
+        if current.route == nil {
+            current.waypoints = [Waypoint(name: "Start der Zielführung", coordinate: request.center), point]
+            current.route = response.route
+            navigation.carPendingWaypointOrdinals = [1]
+        } else {
+            let insertion = pending[0]
+            current.waypoints.insert(point, at: insertion)
+            navigation.carPendingWaypointOrdinals = [insertion] + pending.map { $0 >= insertion ? $0 + 1 : $0 }
+        }
+        navigation.carRoute = response.route
+        navigation.routeProgress = matched.traveled
+        navigation.carPOIStopID = point.id
+        current.localNavigation = navigation
+        try store.save(current)
+        activeRide = current
+        navigationRoute = response.route
+        tracker = RouteTracker(lastProgress: matched.traveled, lastTimestamp: latest.timestamp.timeIntervalSince1970)
+        progress = matched
+        carVoice = CarVoiceGuidance(); carArrivalAnnounced = false
+        reroutePolicy = ReroutePolicy()
+        localRideStatus = "Stopp eingefügt · " + CarNavigation.trafficNotice
+        reload()
+        rideActivity.update(progress: progress, route: ridingRoute, paused: current.recordingState == .paused, rerouting: false)
+    }
+
+    var pendingPOIStop: Waypoint? {
+        guard let ride = activeRide, let identifier = ride.localNavigation?.carPOIStopID,
+              let index = ride.waypoints.firstIndex(where: { $0.id == identifier }),
+              CarNavigation.pending(ride: ride).contains(index) else { return nil }
+        return ride.waypoints[index]
+    }
+
+    func removePOIStop() async throws {
+        guard let ride = activeRide, let stop = pendingPOIStop,
+              let index = ride.waypoints.firstIndex(where: { $0.id == stop.id }), !rerouting else { return }
+        let pending = CarNavigation.pending(ride: ride)
+        let remaining = pending.filter { $0 != index }
+        let previousRouteID = ridingRoute?.id
+        if remaining.isEmpty {
+            var current = ride
+            current.route = nil; current.localNavigation = nil; current.waypoints = []
+            try store.save(current)
+            activeRide = current; navigationRoute = nil; progress = nil; tracker = RouteTracker()
+            carVoice = CarVoiceGuidance(); carArrivalAnnounced = false
+            localRideStatus = "Freie Autofahrt · Ziel entfernt"
+            rideActivity.update(progress: nil, route: nil, paused: current.recordingState == .paused, rerouting: false)
+            reload()
+            return
+        }
+        guard let api, carGPSIsFresh, let coordinate = location.freshCoordinate else {
+            throw APIError(status: 0, message: "Zum Entfernen des Stopps werden Pi-Verbindung und ein aktueller Standort benötigt.")
+        }
+        var request = TourDocument(); request.profile = ride.profile
+        request.waypoints = [Waypoint(name: "Aktueller Standort", coordinate: coordinate)] + remaining.map { ride.waypoints[$0] }
+        let requestedAt = Date().timeIntervalSince1970
+        let route = try await api.route(request, timeout: 40, includeContext: false, startBearing: carHeading)
+        try Task.checkCancellation()
+        guard var current = activeRide, current.id == ride.id, current.waypoints == ride.waypoints,
+              current.recordingState == ride.recordingState, current.profile == ride.profile,
+              ridingRoute?.id == previousRouteID, !rerouting, CarNavigation.pending(ride: current) == pending,
+              let latest = location.latestSample, carGPSIsFresh,
+              let matched = CarNavigation.replacement(route, origin: coordinate, requestedAt: requestedAt,
+                current: Coordinate(latitude: latest.coordinate.latitude, longitude: latest.coordinate.longitude),
+                timestamp: latest.timestamp.timeIntervalSince1970, heading: carHeading, accuracy: latest.horizontalAccuracy,
+                now: Date().timeIntervalSince1970) else {
+            throw APIError(status: 409, message: "Fahrt oder Standort hat sich geändert. Bitte erneut versuchen.")
+        }
+        current.waypoints.remove(at: index)
+        current.localNavigation?.carPendingWaypointOrdinals = remaining.map { $0 > index ? $0 - 1 : $0 }
+        current.localNavigation?.carRoute = route
+        current.localNavigation?.routeProgress = matched.traveled
+        current.localNavigation?.carPOIStopID = nil
+        try store.save(current)
+        activeRide = current; navigationRoute = route; progress = matched
+        tracker = RouteTracker(lastProgress: matched.traveled, lastTimestamp: latest.timestamp.timeIntervalSince1970)
+        carVoice = CarVoiceGuidance(); carArrivalAnnounced = false; reroutePolicy = ReroutePolicy()
+        localRideStatus = "Stopp entfernt · ursprüngliche Ziele bleiben erhalten"
+        rideActivity.update(progress: progress, route: ridingRoute, paused: current.recordingState == .paused, rerouting: false)
+        reload()
     }
 
     private func rerouteCar(from position: Coordinate, ride: TourDocument) {

@@ -5,6 +5,7 @@ struct RideView: View {
     @State private var confirmFinish = false
     @State private var showBlogPoint = false
     @State private var showElevation = false
+    @State private var showPOIs = false
     @State private var mapError: String?
     @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
@@ -59,16 +60,17 @@ struct RideView: View {
                              navigationPosition: state.progress?.snappedPosition ?? state.location.coordinate,
                              navigationHeading: state.location.navigationHeading,
                              colorBySurface: true, topOverlayInset: 40, onError: { mapError = $0 })
+                        .accessibilityIdentifier("rideMap")
                         .overlay(alignment: .topLeading) {
                             MapStyleMenu().background(Theme.paper, in: Circle()).padding(8)
                         }
+                        .overlay(alignment: .topTrailing) { poiButton.padding(8) }
                         .overlay(alignment: .bottom) {
                             if let mapError {
                                 Text(mapError).font(.caption).padding(8)
                                     .background(Theme.paper, in: RoundedRectangle(cornerRadius: 8)).padding(8)
                             }
                         }
-                        .accessibilityIdentifier("rideMap")
                         .onChange(of: state.mapStyleURL) { _, _ in mapError = nil }
                     VStack(spacing: 8) {
                         if let status = state.localRideStatus, state.progress?.distanceFromRoute ?? 0 <= 35 {
@@ -153,6 +155,7 @@ struct RideView: View {
                         .overlay(alignment: .topLeading) {
                             MapStyleMenu().background(Theme.paper, in: Circle()).padding(8)
                         }
+                        .overlay(alignment: .topTrailing) { poiButton.padding(8) }
                         .overlay(alignment: .bottom) {
                             if let mapError {
                                 Text(mapError).font(.caption).padding(8)
@@ -186,12 +189,19 @@ struct RideView: View {
                         Button("Standortsuche abbrechen") { state.cancelRideStart() }
                     }
                     Button("Zur Routenplanung") { state.tab = 0 }.buttonStyle(.borderedProminent).tint(Theme.forest).foregroundStyle(.white).controlSize(.large)
+                    poiButton
                     if state.plan.profile.mode.supportsBike { BikeTelemetryView().padding(.top, 12) }
                   }.padding(26).frame(maxWidth: .infinity)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Theme.paper)
                     .navigationTitle("Fahren")
             }
-        }
+        }.sheet(isPresented: $showPOIs) { POIView(duringRide: state.activeRide != nil) }
+    }
+
+    private var poiButton: some View {
+        Button("Orte", systemImage: "square.grid.2x2.fill") { showPOIs = true }
+            .font(.subheadline.bold()).padding(12)
+            .background(Theme.paper, in: Capsule()).accessibilityIdentifier("ridePOIs")
     }
 
     private func arrivalTime(ride: TourDocument, now: Date) -> String {

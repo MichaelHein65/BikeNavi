@@ -10,6 +10,7 @@ struct LocalNavigationState: Codable, Equatable {
     var skippedWaypointOrdinals: [Int]?
     var carRoute: CalculatedRoute?
     var carPendingWaypointOrdinals: [Int]?
+    var carPOIStopID: UUID?
 }
 
 struct LocalConnection {

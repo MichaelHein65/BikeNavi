@@ -137,7 +137,7 @@ struct HomeView: View {
     }
 }
 
-private struct ClayTileButtonStyle: ButtonStyle {
+struct ClayTileButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.scaleEffect(configuration.isPressed ? 0.97 : 1)
