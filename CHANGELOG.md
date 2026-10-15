@@ -8,6 +8,7 @@ Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release
 
 - POI-Detailkarten öffnen mit Zoomstufe 14 und sichtbarer Umgebung. Die automatische Einpunkt-Anpassung nach dem Laden des Kartenstils darf nicht mehr bis zum einzelnen Marker hineinzoomen. Manueller Zoom bleibt möglich und bei späteren Stilaktualisierungen erhalten; Routenplanung und Navigationskameras bleiben unverändert.
 - Reine iPhone-Korrektur, kein erneutes Pi-Deployment erforderlich. Version/Build weiterhin 0.4.0 (4). Native Kartenprüfung und erneuerte öffentliche Beispielbilder dokumentieren die Darstellung; Geräteinstallation und Git-/GitHub-Abgleich unter [UMSETZUNG](docs/UMSETZUNG.md).
+- Signierte Release-App mit Zoomkorrektur am 15. Oktober auf Michaels iPhone 15 Pro per Datenkabel installiert und erfolgreich gestartet, nachdem die drahtlose Verbindung nicht erreichbar war. Gesamter POI-Stand als `5ca066b` auf GitHub gesichert; dieser Dokumentationsnachtrag bestätigt die Installation. Kein neuer Release und kein Feldtest.
 
 ### POIs in allen Anwendungen (15. Oktober 2026)
 
