@@ -42,7 +42,7 @@ previous=file.read_text() if file.exists() else ""
 def parse(text):
     return {k.strip():v.strip() for line in text.splitlines() if "=" in line and not line.lstrip().startswith("#") for k,v in [line.split("=",1)]}
 new,old=parse(local),parse(previous)
-for name in ("BLOG_OPENAI_API_KEY","BLOG_OPENAI_MODEL","BLOG_WEB_SEARCH","TANKERKOENIG_API_KEY","GEOAPIFY_API_KEY"):
+for name in ("BLOG_OPENAI_API_KEY","BLOG_OPENAI_MODEL","BLOG_WEB_SEARCH","CAR_OPENAI_API_KEY","CAR_OPENAI_MODEL","TANKERKOENIG_API_KEY","GEOAPIFY_API_KEY","TOMTOM_API_KEY"):
     if not new.get(name, "").strip("\"' ") and old.get(name):
         local="\n".join(line for line in local.splitlines() if line.split("=",1)[0].strip()!=name)+"\n"+name+"="+old[name]+"\n"
 temporary=root/".env.deploy-tmp"

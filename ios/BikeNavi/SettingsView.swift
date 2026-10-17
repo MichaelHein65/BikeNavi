@@ -1,9 +1,11 @@
 import SwiftUI
 import MediaPlayer
+import AVFoundation
 
 struct SettingsView: View {
     @EnvironmentObject var state: AppState
     @Environment(\.scenePhase) private var scenePhase
+    @State private var installedVoices = NavigationVoice.available
     var body: some View {
         NavigationStack {
             Form {
@@ -21,6 +23,45 @@ struct SettingsView: View {
                         .accessibilityIdentifier("volumePreview")
                 } header: { Text("Lautstärke") } footer: {
                     Text("Dieser Regler und die Lautstärketasten am iPhone steuern dieselbe Medienlautstärke. Beim Verstellen hörst du einen kurzen Kinderreim. Die Lautstärke gilt auch für Navigationsansagen.")
+                }
+                if state.applicationMode == .car {
+                    Section {
+                        Toggle("Überraschungscharakter", isOn: $state.carCharacterEnabled)
+                            .accessibilityIdentifier("carCharacterEnabled")
+                        Button("Charakter wechseln") { state.prepareCarCharacter() }
+                            .disabled(!state.carCharacterEnabled || state.carCharacterLoading)
+                            .accessibilityIdentifier("carCharacterChange")
+                        if state.carCharacterLoading { ProgressView() }
+                        Text(state.carCharacterStatus).font(.footnote).foregroundStyle(.secondary)
+                    } header: { Text("Dein Auto-Beifahrer") } footer: {
+                        Text("Bei der Routenplanung wählt der Pi heimlich einen Charakter. Kurze Kommentare begleiten Navigation, Tempo und Umwege. Ausschalten behält sachliche Ansagen und Tempohinweise bei. Die gewählte Navigationsstimme bleibt erhalten.")
+                    }
+                }
+                Section {
+                    Picker("Stimme", selection: $state.navigationVoiceID) {
+                        Text("Automatisch · Anna bevorzugt").tag("")
+                            .accessibilityIdentifier("navigationVoiceAutomatic")
+                        ForEach(installedVoices, id: \.identifier) { voice in
+                            Text(NavigationVoice.label(voice)).tag(voice.identifier)
+                                .accessibilityIdentifier("navigationVoiceChoice_" + voice.identifier)
+                        }
+                        if !state.navigationVoiceID.isEmpty, !installedVoices.contains(where: { $0.identifier == state.navigationVoiceID }) {
+                            Text("Nicht verfügbar · automatische Auswahl").tag(state.navigationVoiceID)
+                        }
+                    }.pickerStyle(.navigationLink)
+                        .accessibilityIdentifier("navigationVoicePicker")
+                    if let voice = NavigationVoice.selected(state.navigationVoiceID) {
+                        Text("Aktuell: " + NavigationVoice.label(voice)).font(.footnote)
+                    }
+                    Button("Navigationsstimme anhören") { state.previewSystemVolume(navigation: true) }
+                        .disabled(installedVoices.isEmpty)
+                        .accessibilityIdentifier("navigationVoicePreview")
+                    if installedVoices.isEmpty {
+                        Text("Noch keine Premium- oder Siri-Stimme für BikeNavi verfügbar. Bitte Anna oder Petra in Premium laden und hierher zurückkehren.").font(.footnote)
+                    }
+                    Link("Hochwertige Stimmen auf dem iPhone laden", destination: URL(string: "https://support.apple.com/de-de/guide/iphone/iph96b214f0/ios")!)
+                } header: { Text("Navigationsstimme") } footer: {
+                    Text("Nur Premium- und verfügbare Siri-Stimmen. Automatisch bevorzugt Anna Premium; Petra lässt sich direkt wählen. Laden: iPhone-Einstellungen → Bedienungshilfen → Lesen & Sprechen → Stimmen → Deutsch. Danach hier auswählen. Siri erscheint nur, wenn iOS die Stimme für Apps bereitstellt.")
                 }
                 Section {
                     TextField("https://pi5…ts.net:10443", text: $state.serverURL).textContentType(.URL).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -69,16 +110,27 @@ struct SettingsView: View {
                     Link("Tiefen: EMODnet · CC BY 4.0", destination: URL(string: "https://emodnet.ec.europa.eu/en/bathymetry")!)
                     Link("Seekarte: OpenSeaMap", destination: URL(string: "https://www.openseamap.org")!)
                     Link("Deutsche Kartenbeschriftungen", destination: URL(string: "https://github.com/kalwinskidawid/openfreemap-translations")!)
+                    Link("Auto-Routing und Verkehr: TomTom", destination: URL(string: "https://www.tomtom.com/")!)
                     Link("Routing: openrouteservice / HeiGIT", destination: URL(string: "https://openrouteservice.org")!)
                     LabeledContent("Version", value: "\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "–"))")
                 }
             }.navigationTitle("Einstellungen")
-                .onAppear { state.observeSystemVolume() }
+                .onAppear { refreshVoices(); state.observeSystemVolume() }
                 .onDisappear { state.stopObservingSystemVolume() }
+                .onReceive(NotificationCenter.default.publisher(for: AVSpeechSynthesizer.availableVoicesDidChangeNotification)) { _ in
+                    refreshVoices()
+                }
                 .onChange(of: scenePhase) { _, phase in
-                    if phase == .active { state.observeSystemVolume() }
+                    if phase == .active { refreshVoices(); state.observeSystemVolume() }
                     else { state.stopObservingSystemVolume() }
                 }
+        }
+    }
+
+    private func refreshVoices() {
+        installedVoices = NavigationVoice.available
+        if !state.navigationVoiceID.isEmpty, !installedVoices.contains(where: { $0.identifier == state.navigationVoiceID }) {
+            state.navigationVoiceID = ""
         }
     }
 }

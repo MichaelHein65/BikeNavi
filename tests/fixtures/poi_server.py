@@ -61,3 +61,16 @@ async def route(request: Request):
     return {**ROUTE, "id": str(uuid4()), "coordinates": points, "waypointIndices": list(range(len(points))),
             "maneuvers": [], "surfaceSections": [], "carTimeSections": [{"startIndex": 0, "endIndex": len(points) - 1, "seconds": 180}],
             "provider": "Synthetisches POI-Beispiel", "warnings": ["Keine echte Straßenroute"], "elevationProfile": None}
+
+
+@app.post("/v1/pois/route")
+async def route_to_stop(request: Request):
+    body = await request.json()
+    search = body["search"]
+    points = [search["center"], body["stop"]["coordinate"]] + [p["coordinate"] for p in search.get("context", {}).get("pending", [])]
+    example = {**ROUTE, "id": str(uuid4()), "coordinates": points, "waypointIndices": list(range(len(points))),
+               "maneuvers": [], "surfaceSections": [],
+               "carTimeSections": [{"startIndex": i, "endIndex": i + 1, "seconds": 90} for i in range(len(points) - 1)],
+               "duration": 90 * (len(points) - 1), "provider": "Synthetisches POI-Beispiel",
+               "warnings": ["Keine echte Straßenroute"], "elevationProfile": None}
+    return {"route": example, "drivingDistance": 1200, "drivingSeconds": 90, "detourSeconds": 60}

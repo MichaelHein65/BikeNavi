@@ -53,3 +53,12 @@ Die Startbildschirm-Galerie verwendet dieselbe ausdrücklich öffentliche Auto-V
 
 `MarineRoutingUITests/testBoatSettingsAllowClearingDecimalInputAndValidateOnCompletion` benötigt keinen Server: leere Eingabe, Zwischenzustand `0,`, Komma/Punkt, Bereichsfehler, gültiger gespeicherter Wert nach Neustart und dieselbe Bearbeitung im Segelprofil. Die Galeriebilder 56/57/62 verwenden ausschließlich diese Beispielwerte und eine leere Segelplanung auf dem Dokumentationssimulator.
 Die POI-Fixture ergänzt fünf Nicht-Kraftstoffkategorien mit ausdrücklich synthetischer Geoapify-/OSM-Quellenanzeige, geroutetem Beispiel-Straßenpunkt, getrenntem Datenquellenpunkt und 125 m beispielhafter Luftlinienlücke. `POIUITests/testOtherCategoriesShowArrivalWarningAndAllowPlanning` prüft alle fünf Detailansichten und eine Planungseinfügung. Bild 82 zeigt keinen echten Bahnhof oder Anbieterabruf. Der Server verwendet keine API-Schlüssel und kontaktiert keine POI-Anbieter.
+
+
+`BIKENAVI_CAR_ASSISTANCE_PREVIEW=1` ergänzt ausschließlich im Debug-Auto-Beispiel zwei synthetische Spuren, 50 km/h und drei Minuten Stau. Der Titel kennzeichnet die synthetischen UI-Daten. `CarModeUITests/testCarAssistanceAndVoiceSettings` erstellt Bilder 87/88 und prüft das Ausblenden der Spurhilfe bei Pause. Keine echte TomTom-Antwort oder tatsächliche Verkehrslage; kein externer Abruf.
+
+`BIKENAVI_CAR_STATIONARY_PREVIEW=1` setzt in der Auto-Vorschau die Geschwindigkeit auf null; sekündliche echte Delegate-Aufrufe mit synthetischen Messungen an unveränderter öffentlicher Position prüfen GPS-Frische und Supermarkt-Auswahl im Stand. `POIUITests/testStationaryCarKeepsGPSAndCanSelectSupermarket` wartet länger als die Fünf-Sekunden-Frist und übernimmt einen Beispielstopp. Dies simuliert keine Funkempfangsqualität und ersetzt keinen Feldtest.
+
+`BIKENAVI_CAR_QUIET_TRAFFIC_PREVIEW=1` ersetzt zusammen mit der Auto-Assistenz-Vorschau den erfundenen Stau durch eine synthetische Baustelle mit null Sekunden Verzögerung. `testQuietTrafficHidesZeroDelayAndLaneGuidanceOverlaysMap` prüft das Ausblenden beider Verkehrstexte, die Lage der Spurhilfe innerhalb der Kartenfläche und deren Verschwinden bei Pause; Bild 91 zeigt dieses öffentliche Beispiel.
+
+Die Auto-Charakterprüfung verwendet dieselbe öffentliche synthetische Auto-Vorschau ohne Serverzugang. Bilder 11/93 zeigen den ehrlichen Pi-offline-Zustand, Bild 88 die Systemstimmenauswahl. Backend-/native Charaktertests verwenden ausschließlich simulierte Schlüssel und HTTP-Antworten; keine echte Fahrt wird an OpenAI übertragen.

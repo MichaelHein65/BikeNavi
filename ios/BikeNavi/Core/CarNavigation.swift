@@ -122,19 +122,140 @@ struct CarAutoZoom {
 
 struct CarVoiceGuidance {
     private var stages: [Int: Int] = [:]
-    mutating func announcement(progress: RouteProgress, speed: Double, following: (maneuver: Maneuver, gap: Double)?) -> String? {
-        guard progress.distanceFromRoute <= 35, let next = progress.nextManeuver, next.type != 11 else { return nil }
+    private var lastAnnouncement = -Double.infinity
+
+    /// Traffic refreshes change point indices, not necessarily the next turn.
+    mutating func rebase(from old: CalculatedRoute, to new: CalculatedRoute) {
+        var remapped: [Int: Int] = [:]
+        for maneuver in old.maneuvers {
+            guard let stage = stages[maneuver.coordinateIndex], old.coordinates.indices.contains(maneuver.coordinateIndex) else { continue }
+            let position = old.coordinates[maneuver.coordinateIndex]
+            if let match = new.maneuvers.filter({ candidate in
+                candidate.type == maneuver.type && candidate.carInstruction == maneuver.carInstruction
+                    && new.coordinates.indices.contains(candidate.coordinateIndex)
+                    && position.distance(to: new.coordinates[candidate.coordinateIndex]) <= 30
+            }).min(by: { position.distance(to: new.coordinates[$0.coordinateIndex]) < position.distance(to: new.coordinates[$1.coordinateIndex]) }) {
+                remapped[match.coordinateIndex] = max(remapped[match.coordinateIndex] ?? 0, stage)
+            }
+        }
+        stages = remapped
+    }
+
+    mutating func announcement(progress: RouteProgress, speed: Double, following: (maneuver: Maneuver, gap: Double)?,
+                               now: Double = Date().timeIntervalSince1970) -> String? {
+        guard progress.distanceFromRoute <= 35, let next = progress.nextManeuver, next.type != 11, next.type != 10 else { return nil }
         let speed = min(70, max(0, speed))
         let distance = progress.distanceToManeuver
-        let stage = distance <= max(25, speed * 3) ? 3 : distance <= max(80, speed * 12) ? 2 : distance <= max(250, speed * 35) ? 1 : 0
-        guard stage > 0, stage > (stages[next.coordinateIndex] ?? 0) else { return nil }
-        stages[next.coordinateIndex] = stage
+        // One advance notice and one immediate instruction, with breathing room
+        // between utterances. Arrival is announced separately by AppState.
+        let stage = distance <= min(90, max(25, speed * 3)) ? 2 : distance <= min(800, max(150, speed * 20)) ? 1 : 0
+        guard stage > 0, stage > (stages[next.coordinateIndex] ?? 0),
+              now - lastAnnouncement >= (stage == 2 ? 5 : 15) else { return nil }
+        stages[next.coordinateIndex] = stage; lastAnnouncement = now
         let rounded = max(10, Int((distance / 10).rounded()) * 10)
-        let prefix = stage == 3 ? "Jetzt: " : "In \(rounded) Metern: "
+        let prefix = stage == 2 ? "Jetzt: " : "In \(rounded) Metern: "
         var text = prefix + next.carInstruction
-        if let following, following.gap <= max(100, speed * 8) {
+        if stage == 2, let following, following.gap <= max(100, speed * 8), following.maneuver.type != 10 {
             text += " Danach in \(max(10, Int((following.gap / 10).rounded()) * 10)) Metern: " + following.maneuver.carInstruction
         }
         return text
+    }
+}
+
+struct CarSpeedLimit: Codable, Equatable {
+    var startIndex: Int
+    var endIndex: Int
+    var kilometersPerHour: Double
+}
+struct CarLane: Codable, Equatable {
+    var directions: [String]
+    var follow: String?
+    static func arrow(_ direction: String) -> String {
+        switch direction {
+        case "SLIGHT_LEFT": return "↖"
+        case "LEFT", "SHARP_LEFT": return "←"
+        case "LEFT_U_TURN": return "↶"
+        case "SLIGHT_RIGHT": return "↗"
+        case "RIGHT", "SHARP_RIGHT": return "→"
+        case "RIGHT_U_TURN": return "↷"
+        case "STRAIGHT": return "↑"
+        default: return "?"
+        }
+    }
+}
+struct CarLaneSection: Codable, Equatable {
+    var startIndex: Int
+    var endIndex: Int
+    var lanes: [CarLane]
+}
+struct CarTrafficSection: Codable, Equatable {
+    var startIndex: Int
+    var endIndex: Int
+    var delaySeconds: Double
+    var category: String
+    var isRelevant: Bool { category == "ROAD_CLOSURE" || (delaySeconds.isFinite && delaySeconds > 0) }
+    var title: String {
+        switch category {
+        case "JAM": return "Stau"
+        case "ROAD_WORK": return "Baustelle"
+        case "ROAD_CLOSURE": return "Sperrung"
+        default: return "Verkehrsbehinderung"
+        }
+    }
+}
+struct CarTraffic: Codable, Equatable {
+    var fetchedAt: Double
+    var delaySeconds: Double
+    var sections: [CarTrafficSection]
+    func isFresh(now: Double) -> Bool { fetchedAt.isFinite && now >= fetchedAt && now - fetchedAt <= 300 }
+}
+
+extension CarNavigation {
+    static let trafficRefreshInterval: TimeInterval = 300
+
+    static func trafficRefreshDue(fetchedAt: Double, lastAttempt: Double, now: Double) -> Bool {
+        now - fetchedAt >= trafficRefreshInterval && now - lastAttempt >= trafficRefreshInterval
+    }
+
+    /// Keep a quiet driving screen when fresh traffic has no impact; retain data-loss warnings.
+    static func rideTrafficNotice(route: CalculatedRoute?, now: Double) -> String? {
+        if let traffic = route?.carTraffic, traffic.isFresh(now: now), traffic.delaySeconds <= 0 { return nil }
+        return trafficNotice(route: route, now: now)
+    }
+
+    static func trafficNotice(route: CalculatedRoute?, now: Double = Date().timeIntervalSince1970) -> String {
+        guard let traffic = route?.carTraffic else { return trafficNotice }
+        guard traffic.isFresh(now: now) else { return "Verkehrsdaten veraltet · Fahrzeit nur geschätzt" }
+        let minutes = Int(ceil(max(0, traffic.delaySeconds) / 60))
+        return "TomTom Live-Verkehr · +\(minutes) min · Stand vor \(Int(max(0, now - traffic.fetchedAt) / 60)) min"
+    }
+
+    /// A legal limit applies only to the matched current segment, never to an upcoming one.
+    static func speedLimit(route: CalculatedRoute, progress: RouteProgress?, active: Bool) -> Double? {
+        guard active, let progress, progress.snappedPosition != nil, progress.distanceFromRoute <= 25 else { return nil }
+        let distances = LocalRouteMetrics.distances(route)
+        return route.carSpeedLimits?.first { section in
+            valid(start: section.startIndex, end: section.endIndex, distances: distances)
+                && progress.traveled >= distances[section.startIndex] && progress.traveled < distances[section.endIndex]
+                && section.kilometersPerHour.isFinite && section.kilometersPerHour > 0 && section.kilometersPerHour <= 300
+        }?.kilometersPerHour
+    }
+    static func lanes(route: CalculatedRoute, progress: RouteProgress?, active: Bool) -> CarLaneSection? {
+        guard active, let progress, progress.snappedPosition != nil, progress.distanceFromRoute <= 25 else { return nil }
+        let distances = LocalRouteMetrics.distances(route)
+        return route.carLaneSections?.first { section in
+            valid(start: section.startIndex, end: section.endIndex, distances: distances)
+                && progress.traveled >= distances[section.startIndex] && progress.traveled < distances[section.endIndex]
+                && section.lanes.contains { $0.follow != nil }
+        }
+    }
+    static func nextTraffic(route: CalculatedRoute, progress: RouteProgress?, now: Double) -> CarTrafficSection? {
+        guard let traffic = route.carTraffic, traffic.isFresh(now: now), let progress,
+              progress.snappedPosition != nil, progress.distanceFromRoute <= 25 else { return nil }
+        let distances = LocalRouteMetrics.distances(route)
+        return traffic.sections.first { $0.isRelevant && valid(start: $0.startIndex, end: $0.endIndex, distances: distances) && distances[$0.endIndex] > progress.traveled }
+    }
+    private static func valid(start: Int, end: Int, distances: [Double]) -> Bool {
+        start >= 0 && end > start && end < distances.count
     }
 }

@@ -1,13 +1,14 @@
 import XCTest
 
 final class POIUITests: XCTestCase {
-    private func launch(prices: Bool, mode: String = "car") -> XCUIApplication {
+    private func launch(prices: Bool, mode: String = "car", stationary: Bool = false) -> XCUIApplication {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
         app.launchEnvironment["BIKENAVI_CAR_PREVIEW"] = "1"
         if prices { app.launchEnvironment["BIKENAVI_POI_PREVIEW"] = "1" }
         app.launchEnvironment["BIKENAVI_POI_MODE"] = mode
+        if stationary { app.launchEnvironment["BIKENAVI_CAR_STATIONARY_PREVIEW"] = "1" }
         app.launch()
         XCTAssertTrue(app.buttons["homeMode_car"].waitForExistence(timeout: 20))
         let tile = app.buttons["homeMode_" + mode]
@@ -132,6 +133,30 @@ final class POIUITests: XCTestCase {
         XCTAssertTrue(app.buttons["poiCategory_parking"].waitForExistence(timeout: 5))
         app.buttons["poiCategory_parking"].tap()
         XCTAssertTrue(app.buttons["poiResult_example-0"].waitForExistence(timeout: 10))
+    }
+
+    func testStationaryCarKeepsGPSAndCanSelectSupermarket() {
+        let app = launch(prices: true, stationary: true)
+        app.tabBars.buttons["Fahren"].tap()
+        XCTAssertTrue(app.buttons["ridePOIs"].waitForExistence(timeout: 15))
+        Thread.sleep(forTimeInterval: 7)
+        XCTAssertFalse(app.staticTexts["GPS-Signal fehlt"].exists)
+        capture(app, "89-auto-stillstand")
+        app.buttons["ridePOIs"].tap()
+        app.buttons["poiCategory_supermarket"].tap()
+        XCTAssertTrue(app.buttons["poiResult_example-0"].waitForExistence(timeout: 10))
+        capture(app, "90-auto-poi-stillstand")
+        app.buttons["poiResult_example-0"].tap()
+        XCTAssertTrue(app.buttons["poiAddToRide"].waitForExistence(timeout: 10))
+        for _ in 0..<4 where !app.buttons["poiAddToRide"].isHittable { app.swipeUp() }
+        app.buttons["poiAddToRide"].tap()
+        XCTAssertTrue(app.buttons["removePOIStop"].waitForExistence(timeout: 10))
+        let returnedToRide = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: app.buttons["removePOIStop"])
+        XCTAssertEqual(XCTWaiter.wait(for: [returnedToRide], timeout: 5), .completed)
+        XCTAssertFalse(app.buttons["poiAddToRide"].exists)
+        XCTAssertTrue(app.buttons["carPause"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons["carPause"].label, "Pause")
+        XCTAssertFalse(app.staticTexts["GPS-Signal fehlt"].exists)
     }
 
     func testDieselSearchAlongRouteKeepsRecording() {

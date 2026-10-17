@@ -3,6 +3,7 @@ import SwiftUI
 struct CarRideView: View {
     @EnvironmentObject var state: AppState
     @Environment(\.colorScheme) private var colorScheme
+    @ScaledMetric(relativeTo: .headline) private var metricValueSize = 26
     @State private var confirmFinish = false
     @State private var showPOIs = false
     @State private var confirmRemovePOI = false
@@ -45,17 +46,32 @@ struct CarRideView: View {
                         onNavigationSuspended: { cameraSuspended = $0 }, onError: { mapError = $0 })
                         .accessibilityIdentifier("carRideMap")
                         .overlay(alignment: .topLeading) {
-                            MapStyleMenu().background(Theme.paper, in: Circle()).padding(8)
+                            VStack(spacing: 8) {
+                                MapStyleMenu().background(Theme.paper, in: Circle())
+                                let limit = state.ridingRoute.flatMap { CarNavigation.speedLimit(route: $0, progress: state.progress, active: driving && fresh && !state.rerouting) }
+                                VStack(spacing: 2) {
+                                    Text(limit.map { String(Int($0.rounded())) } ?? "—")
+                                        .font(.title2.bold()).foregroundStyle(.black)
+                                        .frame(width: 54, height: 54).background(.white, in: Circle())
+                                        .overlay(Circle().stroke(limit == nil ? Color.gray : Color.red, lineWidth: 4))
+                                    Text("km/h").font(.caption2)
+                                }.padding(8).background(Theme.paper, in: RoundedRectangle(cornerRadius: 12))
+                                    .accessibilityLabel(limit.map { "Tempolimit \(Int($0)) Kilometer pro Stunde" } ?? "Tempolimit unbekannt")
+                                    .accessibilityIdentifier("carSpeedLimit")
+                            }.padding(8)
                         }
                         .overlay(alignment: .topTrailing) {
                             Button("Orte", systemImage: "square.grid.2x2.fill") { showPOIs = true }
                                 .font(.headline).padding(12).background(Theme.paper, in: Capsule()).padding(8)
                                 .accessibilityLabel("Orte entdecken").accessibilityIdentifier("ridePOIs")
                         }
-                        .overlay(alignment: .bottomLeading) {
-                            Text("Auto-Zoom · \(Int(state.carLookAhead.rounded())) m voraus")
-                                .font(.caption2).padding(6).background(Theme.paper, in: RoundedRectangle(cornerRadius: 6)).padding(.leading, 8).padding(.bottom, 30)
-                                .accessibilityIdentifier("carAutoZoom")
+                        .overlay(alignment: .topTrailing) {
+                            if let route = state.ridingRoute,
+                               let lanes = CarNavigation.lanes(route: route, progress: state.progress, active: driving && fresh && !state.rerouting) {
+                                laneOverlay(lanes)
+                                    .padding(.leading, 88).padding(.trailing, 8).padding(.top, 64)
+                                    .allowsHitTesting(false)
+                            }
                         }
                         .overlay(alignment: .bottomTrailing) {
                             if cameraSuspended {
@@ -70,7 +86,7 @@ struct CarRideView: View {
                             if let mapError { Text(mapError).font(.caption).padding(8).background(Theme.paper, in: RoundedRectangle(cornerRadius: 8)).padding(.top, 50) }
                         }
                         .onChange(of: state.mapStyleURL) { _, _ in mapError = nil }
-                    VStack(spacing: 10) {
+                    VStack(spacing: 4) {
                         if let stop = state.pendingPOIStop {
                             HStack {
                                 Text("Stopp: " + stop.name).font(.caption).lineLimit(1)
@@ -86,7 +102,15 @@ struct CarRideView: View {
                                 metric("Restzeit", remaining(ride: ride).map { Format.duration($0) } ?? "—")
                                 metric("Reststrecke", Format.distance(state.progress?.remaining ?? state.ridingRoute?.distance ?? 0))
                             }
-                            Text(CarNavigation.trafficNotice).font(.caption2).foregroundStyle(.secondary)
+                            if let notice = CarNavigation.rideTrafficNotice(route: state.ridingRoute, now: context.date.timeIntervalSince1970) {
+                                Text(notice).font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("carTrafficStatus")
+                            }
+                            if driving, fresh, !state.rerouting, let route = state.ridingRoute,
+                               let incident = CarNavigation.nextTraffic(route: route, progress: state.progress, now: context.date.timeIntervalSince1970) {
+                                Text("Voraus: " + incident.title + (incident.delaySeconds > 0 ? " · +\(Int(ceil(incident.delaySeconds / 60))) min" : ""))
+                                    .font(.caption).foregroundStyle(.orange).accessibilityIdentifier("carTrafficIncident")
+                            }
+                            if let error = state.carTrafficError { Text(error).font(.caption2).foregroundStyle(.secondary).lineLimit(2) }
                         }
                         HStack {
                             metric("Tempo", fresh ? "\(Int(max(0, state.location.latestSample?.speed ?? 0) * 3.6)) km/h" : "—")
@@ -140,6 +164,37 @@ struct CarRideView: View {
         }
     }
 
+    private func laneOverlay(_ section: CarLaneSection) -> some View {
+        VStack(spacing: 6) {
+            Text("SPUR WÄHLEN").font(.caption.bold()).foregroundStyle(.white)
+            HStack(spacing: 6) {
+                ForEach(Array(section.lanes.enumerated()), id: \.offset) { index, lane in
+                    laneTile(lane, index: index)
+                }
+            }
+        }
+        .padding(10).frame(maxWidth: 400)
+        .background(Color(white: 0.08), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.yellow, lineWidth: 2))
+        .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+        .accessibilityIdentifier("carLaneGuidance")
+    }
+
+    private func laneTile(_ lane: CarLane, index: Int) -> some View {
+        let recommended = lane.follow != nil
+        let arrows = lane.follow.map(CarLane.arrow) ?? lane.directions.map(CarLane.arrow).joined()
+        let label = "Spur \(index + 1), " + (recommended ? "empfohlen: " : "") + arrows
+        return VStack(spacing: 2) {
+            Text(arrows).font(.system(size: 42, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.4)
+            Image(systemName: recommended ? "checkmark.circle.fill" : "minus").font(.caption.bold())
+        }
+        .frame(maxWidth: .infinity, minHeight: 68)
+        .foregroundStyle(recommended ? Color.black : Color.white)
+        .background(recommended ? Color.yellow : Color.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+    }
+
     private func header(ride: TourDocument, fresh: Bool) -> String {
         if ride.recordingState == .paused { return "Autofahrt pausiert" }
         if !fresh { return "GPS-Signal fehlt" }
@@ -171,9 +226,17 @@ struct CarRideView: View {
         let date = now.addingTimeInterval(seconds)
         return Calendar.current.isDate(date, inSameDayAs: now) ? date.formatted(.dateTime.hour().minute()) : date.formatted(.dateTime.day().month().hour().minute())
     }
+    private func metricText(_ value: String) -> Text {
+        value.split(separator: " ").enumerated().reduce(Text("")) { text, part in
+            let unit = ["km/h", "km", "m", "min", "h"].contains(String(part.element))
+            return text + Text((part.offset == 0 ? "" : " ") + part.element)
+                .font(.system(size: unit ? metricValueSize * 0.54 : metricValueSize, weight: .bold, design: .rounded))
+        }
+    }
     private func metric(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(value).font(.headline).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+        VStack(alignment: .leading, spacing: 0) {
+            metricText(value).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+                .accessibilityIdentifier("carMetric_" + title)
             Text(title).font(.caption).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity, alignment: .leading).accessibilityElement(children: .combine)
     }

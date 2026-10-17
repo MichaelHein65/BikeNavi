@@ -4,6 +4,66 @@ Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release
 
 ## Unveröffentlicht
 
+### Dokumentation und Git-Abgleich (17. Oktober 2026)
+
+- Gesamten Auto-Stand einschließlich TomTom-Assistenz, Stimmen/Freisprechkanal, GPS-/POI-Korrekturen und KI-Beifahrer mit Quellen, Tests und öffentlichen Bildern gemeinsam für Git/GitHub zusammenführen. Bedienung, Konzept, Architektur, Installation und Prüfgrenzen aktualisieren.
+- Mac-Hörsimulation mit `scripts/play_car_simulation.py` reproduzierbar machen: vorhandenes Pi-Repertoire, Swift-Kernsimulation, wählbare installierte Stimme, MP3-Ausgabe und optional direkte Wiedergabe. Kein neuer KI-Aufruf beim Abspielen.
+- Weiterhin **0.4.0 (4), Unveröffentlicht**. [Prüf- und Sicherungsstand](docs/UMSETZUNG.md#dokumentation-und-git-abgleich-17-oktober-2026).
+
+### Auto: geheimer Beifahrer, Tempobegleitung und Umwegreaktionen (17. Oktober 2026)
+
+- Ausschließlich im Auto-Modus: zufälliger geheimer Charakter bei der Planung, standardmäßig aktiv, in Einstellungen abschaltbar oder wechselbar. Kurze Pi-/OpenAI-Kommentare werden für die Fahrt gespeichert; bestehende Systemstimme und unmittelbare Abbiegehinweise bleiben erhalten. Offline-/Fehler-Rückfall und sichtbarer Vorbereitungsstatus ohne Rollenname.
+- Vorwarnung vor niedrigeren Limits, zeitbasierte Beobachtung der Verzögerung, deutliche Warnung bei anhaltender Überschreitung, Bestätigung nach Anpassung und Hinweis ab höherem Limit. Nur bekannte, passende Abschnitte mit frischem GPS; Abbiegen hat Vorrang.
+- Reaktionen auf bestätigte Routenabweichung, Rückkehr, neue Route und fehlgeschlagene Neuberechnung mit Wiederholungspausen.
+- Neuer authentifizierter Endpunkt `/v1/car/character`; optional eigene Auto-OpenAI-Konfiguration, sonst vorhandene Blog-Konfiguration. Keine Fahrtdaten an OpenAI; Vorabruf statt KI-Anfrage während einer Ansage. Lokale Einstellungen/Repertoire ohne Tourformatmigration. Pi-Deployment erhält vorhandene Auto-Schlüssel.
+- Live-Prüfung zeigte ungeeignete Metaphern in einzelnen KI-Texten: Satzform/Länge bereits im Ausgabeschema begrenzen und höchstens einen Korrekturversuch innerhalb derselben 30 Sekunden erlauben. Reproduzierbarer HTTPS-KI-Test und kurze Mac-Kernsimulation mit gesprochenen Ansagen ergänzt.
+- **0.4.0 (4), Unveröffentlicht**. Auf Pi und Michaels iPhone 15 Pro installiert und gestartet; echte KI-Generierung über den App-Zugang bestätigt. Kein Release. [Bedienung](docs/AUTO.md#überraschungscharakter-und-tempobegleitung--17-oktober-2026), [Prüfstand](docs/UMSETZUNG.md#auto-charakter-installation-und-mac-hörsimulation-17-oktober-2026).
+
+### Auto: Spur-Overlay und sparsame Verkehrsanzeige (17. Oktober 2026)
+
+- Spurführung als größeres Karten-Overlay mit gelben Empfehlungen, schwarzen Richtungspfeilen und Häkchen; bisherige separate Spurzeile entfällt. Autozoom-Text entfernt, automatische Kamera bleibt aktiv.
+- TomTom-Status bei frischen Daten ohne Verzögerung ausblenden. Wirkungslose Baustellen-/Stauabschnitte überspringen; Sperrungen auch ohne Zusatzminuten erhalten. Hinweise auf fehlende/veraltete Daten und Abruffehler bleiben sichtbar.
+- Regelmäßige Verkehrsaktualisierung von zwei auf mindestens fünf Minuten begrenzen, einschließlich Fehlversuchen: höchstens zwölf regelmäßige Abrufe pro Stunde. Planung, Umleitung und POI-Anfahrtsprüfungen bleiben zusätzliche ereignisbezogene Abrufe; kein kontinuierlicher TomTom-Datenstrom.
+- Prüfungen und verbleibende Grenzen: [Prüfstand](docs/UMSETZUNG.md#auto-anzeige-und-abfrageintervall-17-oktober-2026). Weiterhin **0.4.0 (4), Unveröffentlicht**.
+- Anschließend auf Nutzerwunsch signierten Release-Gerätebuild samt Signaturprüfung erfolgreich erstellt und auf Michaels iPhone 15 Pro installiert. Automatischer Start wegen erneuter Gerätesperre abgelehnt; nach Entsperren manuell öffnen. Kein Pi-Deployment oder Release.
+
+### Auto: Freisprechkanal und größere Fahrdaten (16. Oktober 2026)
+
+- Auto-Ansagen wählen bei gekoppelter Bluetooth-Freisprecheinrichtung den HFP-Telefonkanal statt reiner Medienwiedergabe. CarPlay behält seinen Navigationskanal; ohne HFP bleibt normale Lautsprecher-/Kopfhörerwiedergabe möglich. Kanal nach Ansage/Abbruch freigeben, kurze Anlaufpause für die erste Silbe, Aktivierungsfehler nicht still übergehen. Auto-Hörprobe nutzt denselben Weg; Lautstärkeänderungen durch Kanalwechsel erzeugen keine weiteren Hörproben. Keine Mikrofonaufnahme und kein simulierter Telefonanruf.
+- Werte für Ankunft, Restzeit, Reststrecke, Tempo, gefahrene Strecke und Fahrzeit größer und kräftiger setzen. Einheiten bleiben kleiner; engere Zwischenräume gleichen den Platzbedarf aus. Die untere Informationsfläche wird nicht vergrößert.
+- 18 native Tests, ein UI-Ablauf und signierter Gerätebuild erfolgreich; App auf Michaels iPhone installiert. Prüf- und Installationsstand unter [Auto-Audio und Fahrdaten](docs/UMSETZUNG.md#auto-audio-und-fahrdaten-16-oktober-2026). Weiterhin **0.4.0 (4), Unveröffentlicht**. Freisprech-Aktivierung bei ausgeschaltetem Radio muss mit der tatsächlichen Autoanlage geprüft werden.
+
+### Auto: GPS im Stand, POI-Auswahl, Ansagen und Bosnien-Route (16. Oktober 2026)
+
+- Nach erster realer Autofahrt gemeldeten Widerspruch zwischen Fünf-Meter-Bewegungsfilter und Fünf-Sekunden-GPS-Frist korrigieren: Pkw-Standortmeldungen ohne Bewegungsfilter anfordern, Trackausdünnung getrennt erhalten. Suche und POI-Übernahme warten auf eine echte aktuelle Position statt sofortiger Fehlermeldung; alte/ungenaue Positionen bleiben ausgeschlossen.
+- Ansagen auf Vorankündigung plus unmittelbaren Hinweis reduzieren, zeitlich entzerren und nach Verkehrsaktualisierung für dieselbe Abzweigung nicht wiederholen. Enge Folgeabbiegung erst beim unmittelbaren Hinweis; Zielankunft nicht doppelt nennen.
+- Tribunj–Međugorje scheiterte auch mit markiertem Start an `roundaboutExitNumber=0` in TomToms erfolgreicher Antwort. Nur gültige Kreisverkehrsnummern übernehmen; reguläre Autobahnausfahrt ohne dieses optionale Feld akzeptieren. Öffentliche Antwort mit 209,458 km erfolgreich erneut eingelesen.
+- Auf iPhone und Pi installiert; signierter App-Start und echte öffentliche Tribunj–Međugorje-Planung über den Pi mit HTTP 200 bestätigt. Pi zuvor gesichert und 278 Archivdatensätze testweise wiederhergestellt. Tests und Bereitstellung siehe [Prüfstand](docs/UMSETZUNG.md#auto-korrekturen-nach-erster-fahrt-16-oktober-2026). Weiterhin **0.4.0 (4), Unveröffentlicht**; die Simulatorprüfung ersetzt keine erneute Probefahrt.
+
+### Anna/Petra Premium und verfügbare Siri-Stimmen (15. Oktober 2026)
+
+- Die bisherige automatische Reihenfolge konnte bei gleicher Qualitätsstufe die klassische Computerstimme Eddy vor eine normale deutsche Stimme stellen. Eddy, Eloquence- und von Apple gekennzeichnete Effektstimmen werden jetzt aus Auswahl und Rückfall ausgeschlossen, auch bei zuvor gespeicherter Auswahl. Auf ausdrücklichen Nutzerwunsch nur deutsche Premium-Stimmen und von iOS für Apps angebotene Siri-Stimmen führen. Automatisch Anna Premium bevorzugen, Petra direkt wählbar; keine bisherigen Standard-/Enhanced-Stimmen und ohne geeignete Stimme keinen ungeprüften Systemrückfall auslösen.
+- Direkte Stimmenliste statt Auswahlmenü; tatsächliche Stimme und Hörprobe bleiben sichtbar. Stimmenwechsel beendet alte Ansagen/Hörproben. Liste nach Systemdownload aktualisieren, ausgeschlossene/entfernte Auswahl auf Automatisch setzen. Downloadpfad für aktuelles iOS „Bedienungshilfen → Lesen & Sprechen → Stimmen → Deutsch“ erläutern; nur von iOS für Apps bereitgestellte Stimmen anbieten.
+- **Zwölf native iOS-Tests und zwei UI-Abläufe erfolgreich**; signierte Release-App auf Michaels iPhone 15 Pro installiert und gestartet. Reine iPhone-Korrektur, kein weiteres Pi-Deployment. Version/Build unverändert **0.4.0 (4), Unveröffentlicht**. [Bedienung](docs/AUTO.md#hochwertige-ansagen); Test-/Installationsstand im [Umsetzungsstand](docs/UMSETZUNG.md).
+
+### TomTom-Sperre nach Tankstellen-/Parkplatzsuche korrigiert (15. Oktober 2026)
+
+- Schnelle POI-Anfahrtsprüfungen konnten TomToms Sekundenlimit auslösen; der neue Adapter blockierte danach fünf Minuten lang auch normale Planungen. Gemeinsamen datenbankgestützten Mindestabstand von 0,3 Sekunden ergänzen, HTTP-429-Wartezeit aus `Retry-After` übernehmen (sonst zwei Sekunden) und konkreten Grund erhalten. Ungeeignete Einzelrouten sperren weitere Kandidaten nicht mehr.
+- **375 Backendtests erfolgreich**, einschließlich 13 neuer Regressionsfälle. Korrektur auf dem Pi installiert; bereits installierte iPhone-App bleibt kompatibel. Direkter HTTPS-Folgetest liefert drei Parkplätze, zwei Tankstellen mit Preis und drei ohne Preis; anschließende ursprüngliche Planung erfolgreich, keine weitere Sperre. [Ursache und Prüfstand](docs/UMSETZUNG.md#tomtom-abfragerate-bei-ortesuche-korrigiert-15-oktober-2026). Weiterhin **0.4.0 (4), Unveröffentlicht**.
+
+### Auto-Assistenz auf beiden Geräten installiert (15. Oktober 2026)
+
+- Pi-Backend nach geprüfter Wiederherstellung von **274 Archivdatensätzen** aktualisiert; 17 laufende Servermodule abgeglichen, Backend/Datenbank gesund. Signierte Release-App **0.4.0 (4)** auf Michaels iPhone 15 Pro installiert und erfolgreich gestartet.
+- Öffentliche Berliner Live-Route über den Pi bestätigt Zwischenziel, fünf Spurabschnitte, drei Tempolimitabschnitte und aktuelle Verkehrsdaten. Allgemeiner Fahrrad-Prüflauf wegen fehlender OSM-Kreuzungszusatzdaten nicht vollständig erfolgreich; Bereitstellung und Grenzen im [Prüfstand](docs/UMSETZUNG.md#auto-assistenz-auf-pi-und-iphone-15-oktober-2026). Kein neuer Release oder Fahrtest. Frühere Nicht-Installationsangaben beschreiben den vorausgehenden Funktionslauf.
+
+### Auto-Assistenz und hochwertige Stimmen (15. Oktober 2026)
+
+- Optionale TomTom-Maps-v1-Anbindung für Pkw-Routen mit Spurempfehlungen, abschnittsgenauen Tempolimits und Verkehr in Fahrzeit/Routenwahl. Quelle/Abrufalter sichtbar, Verkehr nach fünf Minuten als veraltet kennzeichnen; Aktualisierung frühestens alle zwei Minuten bei laufender Fahrt mit gültigem GPS. Geometrie und Zusatzdaten gemeinsam übernehmen, offene Zwischenziele und ursprüngliche Planung erhalten. Fehlende Limits/Spuren nicht schätzen, keine flächige Verkehrskarte oder Live-Parkplatzbelegung.
+- Kostenloses Routing-Kontingent gewählt; eigene feste Grenze von 19.000 Abrufen pro UTC-Monat in neuer Tabelle `provider_months`, atomar und neustartfest. Privater `TOMTOM_API_KEY`, kein kostenpflichtiger Ersatzabruf. Bestehende Parkplatz-/Tankstellensuche verwendet denselben Pkw-Router. Ohne Schlüssel weiterhin ORS. Deployment-Helfer erhält Pi-lokalen Schlüssel; Backend vor App aktualisieren.
+- Automatische Stimmenwahl bevorzugt installierte deutsche Premium-/Enhanced-Stimmen. Gespeicherte manuelle Auswahl, Navigationshörprobe, Downloadanleitung und ausdrücklicher Hinweis bei ausschließlich installierten Standardstimmen. Ansagen und Lautstärkeprobe verwenden dieselbe Auswahl; kein automatischer Systemdownload.
+- Echte öffentliche Prüfungen: Heidelberg 891 m mit Tempolimit; Heidelberg–Mannheim 19,33 km mit elf Spur- und 17 Tempolimitabschnitten; Berlin mit Zwischenziel 5,83 km, fünf Spurabschnitte, drei Tempolimitabschnitte sowie drei Verkehrsabschnitte/195 s Verzögerung. Doppelte TomTom-Etappenendpunkte zunächst fälschlich entfernt, anhand der echten Antwort korrigiert und durch synthetischen Mehr-Etappen-Test abgesichert. Vier Anbieteranfragen, keine privaten Fahrt-/Planungsdaten oder Schlüssel versioniert.
+- **362 Backendtests und 177 Swift-Kerntests erfolgreich**; **neun native iOS-Tests, drei Auto-UI-Szenarien, Simulator-Testbuild und unsignierter Release-Gerätebuild erfolgreich**. Nach der Live-Indexkorrektur 97 gezielte Backend-Regressionsprüfungen erneut erfolgreich. Öffentliche Bilder 11/70/87/88 aktualisiert und visuell geprüft. Einzelheiten im [Prüfstand](docs/UMSETZUNG.md#auto-assistenz-und-stimmen-15-oktober-2026). Version/Build unverändert **0.4.0 (4)**. Kein Pi-/iPhone-Deployment, Commit/Push, Tag oder Release und kein Fahrtest. [Bedienung, Kostenbegrenzung und Grenzen](docs/AUTO.md).
+
 ### POI-Kartenübersicht statt Nahaufnahme (15. Oktober 2026)
 
 - POI-Detailkarten öffnen mit Zoomstufe 14 und sichtbarer Umgebung. Die automatische Einpunkt-Anpassung nach dem Laden des Kartenstils darf nicht mehr bis zum einzelnen Marker hineinzoomen. Manueller Zoom bleibt möglich und bei späteren Stilaktualisierungen erhalten; Routenplanung und Navigationskameras bleiben unverändert.

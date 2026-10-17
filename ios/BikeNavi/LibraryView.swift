@@ -98,7 +98,7 @@ struct TourDetailView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if document.profile.mode == .sea { Text(MarineNavigation.current(document.route) ? MarineNavigation.warning : MarineNavigation.outdatedRouteWarning).font(.caption) }
-                else if document.profile.mode == .car { Text(CarNavigation.trafficNotice).font(.caption).foregroundStyle(.secondary) }
+                else if document.profile.mode == .car { Text(CarNavigation.trafficNotice(route: document.route)).font(.caption).foregroundStyle(.secondary) }
                 else if document.kind == .ride {
                     RecordedElevationChart(points: elevationPoints)
                     if document.profile.mode.supportsBike { RidePowerChart(points: powerPoints, distanceKM: document.recordedDistance / 1000) }

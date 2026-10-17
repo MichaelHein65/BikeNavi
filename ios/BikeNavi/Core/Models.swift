@@ -210,6 +210,9 @@ struct CalculatedRoute: Codable, Identifiable, Equatable {
     var walkingDistance: Double?
     var cyclingDistance: Double?
     var carTimeSections: [CarTimeSection]?
+    var carSpeedLimits: [CarSpeedLimit]?
+    var carLaneSections: [CarLaneSection]?
+    var carTraffic: CarTraffic?
     var destinationAccessDistance: Double?
     var bicycleParking: Coordinate? {
         guard let index = walkingStartIndex, index > 0, index < coordinates.count,

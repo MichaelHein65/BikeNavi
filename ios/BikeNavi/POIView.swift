@@ -208,7 +208,7 @@ struct POIView: View {
         searchTask = Task { @MainActor in
             defer { if searchID == identifier { loading = false } }
             do {
-                let request = try state.poiSearch(category: selected, duringRide: duringRide, origin: origin, radius: radius)
+                let request = try await state.preparedPOISearch(category: selected, duringRide: duringRide, origin: origin, radius: radius)
                 guard let api = state.api else { throw APIError(status: 0, message: "Für die Ortesuche bitte den Pi in den Einstellungen verbinden.") }
                 let response = try await api.searchPOIs(request)
                 try Task.checkCancellation()

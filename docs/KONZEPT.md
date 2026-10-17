@@ -202,7 +202,7 @@ Zur Abnahme gehören Stadtverkehr, Stop-and-go, hohe Geschwindigkeit vor einer A
 
 ### Späterer Ausbau zum professionellen Auto-Navi
 
-Diese Funktionen bleiben ausdrücklich Teil des gewünschten Zielbilds und sollen nach der ersten Ausbaustufe weiterverfolgt werden:
+Das folgende Zielbild wurde am 15.–17. Oktober 2026 teilweise umgesetzt: TomTom liefert Spurhinweise, bekannte Tempolimits und Verkehr für die aktuelle Route; die App zeigt ein Spur-Overlay und aktualisiert Verkehr frühestens alle fünf Minuten. Der geheime Pi-/OpenAI-Beifahrer ergänzt kurze Auto-Kommentare, Tempowarnungen und Abweichungsreaktionen, abschaltbar oder wechselbar. Bedienung, tatsächlicher Datenumfang und Grenzen stehen in [AUTO.md](AUTO.md). Weiterführende Anforderungen bleiben:
 
 - **Spurführung:** empfohlene Fahrspuren vor Abbiegungen und Ausfahrten; verfügbare Daten und Abdeckung vor Zusagen prüfen.
 - **Tempolimits:** zulässige Geschwindigkeit anzeigen, soweit verlässliche Daten vorliegen; unbekannte, bedingte oder zeitabhängige Angaben als solche behandeln.

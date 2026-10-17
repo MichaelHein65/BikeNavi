@@ -168,6 +168,7 @@ class ORS:
         self.client = client
         self.overpass_url = overpass_url
         self.route_cache = {}
+        self.car_provider = None
 
     async def request(self, method: str, path: str, **kwargs) -> dict:
         if not self.key:
@@ -299,6 +300,8 @@ class ORS:
         return route
 
     async def car_route(self, request: RouteRequest) -> dict:
+        if self.car_provider is not None:
+            return await self.car_provider.route(request)
         from pydantic import ValidationError
         from .models import Route
         options = request.profile.carOptions

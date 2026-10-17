@@ -2,6 +2,8 @@
 
 Entwicklungsstand vom **15. Oktober 2026**, **0.4.0 (4), Unveröffentlicht**. Kein CarPlay. Die POI-Fassung ist auf Michaels iPhone und dem Pi installiert; die anschließende Tankerkönig-Strategie und ihre Bereitstellung sind im [Prüfstand](UMSETZUNG.md) dokumentiert. Ein Deployment ist kein neuer Release.
 
+TomTom-Anfahrtsprüfungen werden mit mindestens 0,3 Sekunden Abstand abgefragt, damit eine Suche mit mehreren Kandidaten nicht die kurzfristige Anbietergrenze überschreitet. Bei einer tatsächlichen Begrenzung bleibt der konkrete Hinweis mit Wartezeit erhalten. Die am 15. Oktober nach dem Auto-Update beobachtete fünfminütige Sperre wurde auf dem Pi korrigiert; [Nachstellung und Live-Prüfung](UMSETZUNG.md#tomtom-abfragerate-bei-ortesuche-korrigiert-15-oktober-2026).
+
 ## Bedienung
 
 Die Detailkarte unter **Karte & Details** startet als Umgebungsübersicht (Zoomstufe 14), nicht als extreme Nahaufnahme des Markers. Du kannst anschließend nach Bedarf zoomen und verschieben. Der weiter gefasste Ausschnitt gilt in allen Anwendungen und für alle Kategorien.
@@ -103,3 +105,7 @@ Historischer Fehler: Der frühere Overpass-Dienst lieferte HTTP 406/Zeitübersch
 Der Pi stellt die authentifizierten Endpunkte `POST /v1/pois/search` und `POST /v1/pois/route` bereit. App und Backend müssen gemeinsam aktualisiert werden. Eingaben sind begrenzt, Suche hat ein Zeitbudget von 85 Sekunden und maximal zwei gleichzeitig arbeitende Suchen. Preis-/POI-Daten liegen nur in einem begrenzten RAM-Cache; keine neue Preisdatenbank. Die vorhandene ORS-Anbindung benötigt weiterhin ihren eigenen Schlüssel und ihr Routingkontingent. Suchkoordinaten gehen an die jeweiligen öffentlichen Anbieter; vollständige private Aufzeichnungen werden nicht an Preisportale übertragen. ORS erhält die für die Anfahrt benötigten Wegpunkte.
 
 Spurführung, Tempolimits, Live-Verkehr und vollständiges Offline-Pkw-Routing sind weitere Ausbaustufen. **CarPlay entfällt auf Nutzerwunsch.** Noch keine praktische Fahrprüfung der POI-Funktion. Simulatorbilder verwenden ausdrücklich synthetische öffentliche Angebote; Installation und Live-Serverprüfungen sind separat dokumentiert.
+
+## GPS im Stand (16. Oktober 2026)
+
+Die Pkw-Standortabfrage verlangt keine Bewegung mehr. Vor einer Suche am aktuellen Standort und vor einer Übernahme in die laufende Fahrt wartet die App bis zu zwölf Sekunden auf eine echte aktuelle GPS-Messung. Im Auto gelten weiterhin weniger als fünf Sekunden Alter und höchstens 25 m Ungenauigkeit; für andere Modi 15 Sekunden/100 m. Abbruch und zwischenzeitlicher Fahrtwechsel verhindern die Übernahme. Neuberechnung und bestätigte Routenposition bleiben geprüft. Die Auswahl eines vorhandenen Planungsstarts/-ziels als Suchzentrum benötigt kein GPS.

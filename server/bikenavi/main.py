@@ -16,6 +16,7 @@ from .blog_store import BlogPoint, BlogRepository
 from .blog import BlogGenerator
 from .blog_jobs import BlogJobs
 from .route_description import DescriptionGenerator, DescriptionJobs, DescriptionRequest
+from .car_character import CarCharacters, CharacterRequest, CharacterPack
 from .pois import POIService, POISearch, POIStopRequest
 
 
@@ -25,6 +26,7 @@ def create_app(database_url: str | None = None, token: str | None = None,
     db_url = database_url or os.getenv("DATABASE_URL", "sqlite:///./bikenavi.sqlite")
     access_token = token if token is not None else os.getenv("BIKENAVI_TOKEN", "")
     key = ors_key if ors_key is not None else os.getenv("ORS_API_KEY", "")
+    tomtom_key = os.getenv("TOMTOM_API_KEY", "")
     context_url = overpass_url if overpass_url is not None else os.getenv("OVERPASS_URL", "")
 
     @asynccontextmanager
@@ -34,6 +36,10 @@ def create_app(database_url: str | None = None, token: str | None = None,
         app.state.storage = Storage(db_url)
         async with httpx.AsyncClient(timeout=35, transport=transport) as client:
             app.state.ors = ORS(key, client, context_url)
+            if tomtom_key:
+                from .car import TomTomCar
+                app.state.ors.car_provider = TomTomCar(tomtom_key, client, app.state.storage)
+            app.state.car_characters = CarCharacters(client)
             app.state.pois = POIService(client, app.state.ors, os.getenv("POI_OVERPASS_URL") or context_url,
                                        os.getenv("TANKERKOENIG_API_KEY", ""), app.state.storage,
                                        os.getenv("GEOAPIFY_API_KEY", ""))
@@ -71,13 +77,17 @@ def create_app(database_url: str | None = None, token: str | None = None,
         if not secrets.compare_digest(authorization, f"Bearer {access_token}"):
             raise HTTPException(401, "Bitte Serveradresse und Zugangsschlüssel prüfen.")
 
+    @app.post("/v1/car/character", response_model=CharacterPack, dependencies=[Depends(authenticate)])
+    async def car_character(body: CharacterRequest):
+        return await app.state.car_characters.prepare(body)
+
     @app.get("/health")
     def health():
         return {"status": "ok", "version": __version__}
 
     @app.get("/v1/status", dependencies=[Depends(authenticate)])
     def status():
-        return {"routingAvailable": bool(key), "version": __version__}
+        return {"routingAvailable": bool(key or tomtom_key), "version": __version__}
 
     @app.post("/v1/pois/search", dependencies=[Depends(authenticate)])
     async def poi_search(body: POISearch):

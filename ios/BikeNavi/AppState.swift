@@ -56,7 +56,7 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
               PlanningLocation.isUsable(timestamp: timestamp, accuracy: accuracy, now: Date().timeIntervalSince1970) else { return nil }
         return coordinate
     }
-    private let manager = CLLocationManager()
+    private let manager: CLLocationManager
     private var activeRide = false
     private var marineNavigation = false
     private var carNavigation = false
@@ -65,11 +65,12 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
         carNavigation = enabled
         manager.activityType = enabled ? .automotiveNavigation : marineNavigation ? .otherNavigation : .fitness
         manager.desiredAccuracy = enabled ? kCLLocationAccuracyBestForNavigation : kCLLocationAccuracyBest
+        updateDistanceFilter()
     }
     func setMarineNavigation(_ enabled: Bool) {
         marineNavigation = enabled
         manager.activityType = enabled ? .otherNavigation : carNavigation ? .automotiveNavigation : .fitness
-        manager.distanceFilter = activeRide && !enabled ? 5 : kCLDistanceFilterNone
+        updateDistanceFilter()
         updateHeadingMonitoring()
     }
     private var authorizationStatus: CLAuthorizationStatus {
@@ -82,7 +83,8 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
         return manager.authorizationStatus
     }
 
-    override init() {
+    init(manager: CLLocationManager = CLLocationManager()) {
+        self.manager = manager
         super.init()
         #if DEBUG
         if ProcessInfo.processInfo.environment["BIKENAVI_MARINE_PREVIEW"] == "1" || ProcessInfo.processInfo.environment["BIKENAVI_CAR_PREVIEW"] == "1" { return }
@@ -112,8 +114,9 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
         if authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways {
             // Planning often happens while standing still. A movement filter can
             // otherwise leave the last fix older than our 15-second freshness limit.
-            manager.distanceFilter = activeRide && !marineNavigation ? 5 : kCLDistanceFilterNone
-            if !activeRide && freshCoordinate == nil { manager.stopUpdatingLocation() }
+            updateDistanceFilter()
+            let carFixExpired = carNavigation && (latestSample.map { abs($0.timestamp.timeIntervalSinceNow) >= 5 } ?? true)
+            if (!activeRide && freshCoordinate == nil) || carFixExpired { manager.stopUpdatingLocation() }
             manager.startUpdatingLocation()
             updateHeadingMonitoring()
         }
@@ -144,7 +147,7 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
             manager.distanceFilter = kCLDistanceFilterNone
             manager.startUpdatingLocation()
         }
-        defer { if !simulated { manager.distanceFilter = activeRide && !marineNavigation ? 5 : kCLDistanceFilterNone } }
+        defer { if !simulated { updateDistanceFilter() } }
         let deadline = ContinuousClock.now.advanced(by: .milliseconds(Int(timeout * 1000)))
         while ContinuousClock.now < deadline {
             try Task.checkCancellation()
@@ -157,12 +160,35 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
 
     func setRiding(_ active: Bool) {
         activeRide = active
-        manager.distanceFilter = active && !marineNavigation ? 5 : kCLDistanceFilterNone
+        updateDistanceFilter()
         manager.allowsBackgroundLocationUpdates = active
         manager.showsBackgroundLocationIndicator = active
         updateHeadingMonitoring()
         if active { request() }
     }
+    private func updateDistanceFilter() {
+        // GPS freshness and track thinning are separate: do not require the car
+        // to travel five metres before accepting its next real location fix.
+        manager.distanceFilter = activeRide && !marineNavigation && !carNavigation ? 5 : kCLDistanceFilterNone
+    }
+
+    func currentCoordinate(maxAge: TimeInterval, maxAccuracy: Double, timeout: TimeInterval = 12) async throws -> Coordinate {
+        request()
+        let deadline = ContinuousClock.now.advanced(by: .milliseconds(Int(timeout * 1000)))
+        while true {
+            try Task.checkCancellation()
+            guard !denied else { throw APIError(status: 0, message: "Bitte den Standortzugriff in den iPhone-Einstellungen erlauben.") }
+            if let sample = latestSample, sample.horizontalAccuracy >= 0, sample.horizontalAccuracy <= maxAccuracy,
+               abs(sample.timestamp.timeIntervalSinceNow) < maxAge {
+                return Coordinate(latitude: sample.coordinate.latitude, longitude: sample.coordinate.longitude)
+            }
+            guard ContinuousClock.now < deadline else {
+                throw APIError(status: 0, message: "Noch kein aktueller GPS-Standort. Bitte unter freiem Himmel erneut versuchen.")
+            }
+            try await Task.sleep(for: .milliseconds(200))
+        }
+    }
+
     private func updateHeadingMonitoring() {
         let authorized = authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways
         if activeRide && !marineNavigation && authorized && CLLocationManager.headingAvailable() {
@@ -206,14 +232,14 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
 }
 
 final class NavigationSpeechDelegate: NSObject, AVSpeechSynthesizerDelegate {
-    var ownsAudioSession = false
+    let audio = NavigationAudio()
+    var synthesizers: [AVSpeechSynthesizer] = []
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) { release(synthesizer) }
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) { release(synthesizer) }
     private func release(_ synthesizer: AVSpeechSynthesizer) {
         DispatchQueue.main.async { [weak self, weak synthesizer] in
-            guard let self, self.ownsAudioSession, synthesizer?.isSpeaking != true else { return }
-            self.ownsAudioSession = false
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            guard let self, synthesizer?.isSpeaking != true, !self.synthesizers.contains(where: { $0.isSpeaking }) else { return }
+            self.audio.release()
         }
     }
 }
@@ -324,8 +350,59 @@ final class AppState: ObservableObject {
     @Published var carLookAhead = 450.0
     private var carZoom = CarAutoZoom()
     private var carVoice = CarVoiceGuidance()
+    private var carSpeedGuidance = CarSpeedGuidance()
+    private var carDeviationGuidance = CarDeviationGuidance()
+    private var carLastSpeech = -Double.infinity
+    private var carCharacterVariant = 0
+    private var carCharacterTask: Task<Void, Never>?
+    private var carCharacterRequestID: UUID?
+    private var carCharacterPack: CarCharacterPack? = UserDefaults.standard.data(forKey: "carCharacterPack")
+        .flatMap { try? JSONDecoder().decode(CarCharacterPack.self, from: $0) }
+    @Published var carCharacterLoading = false
+    @Published var carCharacterStatus = "Der Charakter bleibt eine Überraschung."
+    @Published var carCharacterEnabled = UserDefaults.standard.object(forKey: "carCharacterEnabled") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(carCharacterEnabled, forKey: "carCharacterEnabled")
+            if !carCharacterEnabled {
+                carCharacterTask?.cancel(); carCharacterTask = nil; carCharacterRequestID = nil
+                carCharacterLoading = false
+                if activeRide?.profile.mode == .car { speech.stopSpeaking(at: .immediate) }
+            } else if carCharacterPack == nil { prepareCarCharacter() }
+        }
+    }
+
+    func prepareCarCharacter() {
+        guard carCharacterEnabled, (activeRide?.profile.mode ?? plan.profile.mode) == .car else { return }
+        carCharacterTask?.cancel(); carCharacterRequestID = nil
+        guard let api else {
+            carCharacterLoading = false
+            carCharacterStatus = "Pi nicht verbunden · vorhandener Charakter oder sachliche Ansagen."
+            return
+        }
+        let id = UUID()
+        carCharacterRequestID = id; carCharacterLoading = true
+        carCharacterStatus = "Deine Überraschung wird vorbereitet …"
+        let previous = carCharacterPack?.characterID
+        carCharacterTask = Task {
+            defer { if carCharacterRequestID == id { carCharacterLoading = false; carCharacterTask = nil } }
+            do {
+                let pack = try await api.carCharacter(previousID: previous)
+                guard !Task.isCancelled, carCharacterRequestID == id, carCharacterEnabled else { return }
+                carCharacterPack = pack
+                UserDefaults.standard.set(try JSONEncoder().encode(pack), forKey: "carCharacterPack")
+                carCharacterStatus = pack.source == "openai" ? "Überraschung bereit · KI-Texte für die Fahrt gespeichert." : "Überraschung bereit · Ersatztexte, KI derzeit nicht verfügbar."
+            } catch {
+                guard !Task.isCancelled, carCharacterRequestID == id else { return }
+                carCharacterStatus = "Charakterwechsel nicht verfügbar · vorhandener Charakter oder sachliche Ansagen."
+            }
+        }
+    }
     private var carRerouteAttempt = -Double.infinity
     private var carArrivalAnnounced = false
+    @Published var carTrafficError: String?
+    private var carTrafficTask: Task<Void, Never>?
+    private var carTrafficRequestID: UUID?
+    private var carTrafficAttempt = -Double.infinity
     var carGPSIsFresh: Bool {
         guard !location.denied, let sample = location.latestSample else { return false }
         return abs(sample.timestamp.timeIntervalSinceNow) < 5 && sample.horizontalAccuracy >= 0 && sample.horizontalAccuracy <= 25
@@ -403,6 +480,15 @@ final class AppState: ObservableObject {
     var canDownloadMapStyle: Bool { offlineMapsAllowed && selectedMapStyle == .custom }
     @Published var offlineMapsAllowed = UserDefaults.standard.bool(forKey: "offlineMapsAllowed")
     @Published var voice = true { didSet { if !voice { speech.stopSpeaking(at: .immediate) } } }
+    @Published var navigationVoiceID = UserDefaults.standard.string(forKey: "navigationVoiceID") ?? "" {
+        didSet {
+            UserDefaults.standard.set(navigationVoiceID, forKey: "navigationVoiceID")
+            if oldValue != navigationVoiceID {
+                stopVolumePreview()
+                speech.stopSpeaking(at: .immediate)
+            }
+        }
+    }
     private let volumePreview = AVSpeechSynthesizer()
     private var volumePreviewTask: Task<Void, Never>?
     private var systemVolumeObservation: NSKeyValueObservation?
@@ -412,7 +498,9 @@ final class AppState: ObservableObject {
         systemVolumeObservation = AVAudioSession.sharedInstance().observe(\.outputVolume, options: [.old, .new]) { [weak self] _, change in
             guard change.oldValue != change.newValue else { return }
             Task { @MainActor [weak self] in
-                guard let self, self.tab == 3, self.systemVolumeObservation != nil else { return }
+                guard let self, self.tab == 3, self.systemVolumeObservation != nil,
+                      !self.navigationSpeechDelegate.audio.active,
+                      Date() > self.navigationSpeechDelegate.audio.suppressVolumePreviewUntil else { return }
                 self.previewSystemVolume()
             }
         }
@@ -424,16 +512,28 @@ final class AppState: ObservableObject {
         stopVolumePreview()
     }
 
-    func previewSystemVolume() {
+    func previewSystemVolume(navigation: Bool = false) {
         stopVolumePreview()
         // System volume changes replace the previous preview instead of queuing speech.
         volumePreviewTask = Task { @MainActor [weak self] in
             do { try await Task.sleep(for: .milliseconds(180)) } catch { return }
             guard let self, !Task.isCancelled else { return }
             self.speech.stopSpeaking(at: .immediate)
-            let utterance = AVSpeechUtterance(string: "Eine kleine Schnecke sitzt an einer Hecke. Krabbelt hin und her, freut sich dabei sehr.")
-            utterance.voice = AVSpeechSynthesisVoice(language: "de-DE")
+            let utterance = AVSpeechUtterance(string: navigation ? "In 300 Metern rechts abbiegen. Danach der Hauptstraße folgen." : "Eine kleine Schnecke sitzt an einer Hecke. Krabbelt hin und her, freut sich dabei sehr.")
+            guard let selectedVoice = NavigationVoice.selected(navigationVoiceID) else {
+                notice = "Keine geeignete deutsche Stimme verfügbar. Bitte unter Einstellungen eine Stimme laden."
+                return
+            }
+            utterance.voice = selectedVoice
             utterance.volume = 1
+            do {
+                let car = (activeRide?.profile.mode ?? plan.profile.mode) == .car
+                let handsFree = try navigationSpeechDelegate.audio.activate(handsFreePreferred: car)
+                utterance.preUtteranceDelay = handsFree ? 0.5 : 0
+            } catch {
+                notice = "Sprachausgabe konnte nicht aktiviert werden. Bitte die Audioverbindung prüfen."
+                return
+            }
             self.volumePreview.speak(utterance)
         }
     }
@@ -630,6 +730,8 @@ final class AppState: ObservableObject {
     init(store: LocalStore) {
         self.store = store
         speech.delegate = navigationSpeechDelegate
+        volumePreview.delegate = navigationSpeechDelegate
+        navigationSpeechDelegate.synthesizers = [speech, volumePreview]
         UserDefaults.standard.removeObject(forKey: "speechVolume")
         reload()
         if let idString = UserDefaults.standard.string(forKey: "currentPlan"),
@@ -711,6 +813,22 @@ final class AppState: ObservableObject {
             plan.profile.mode = .car
             plan.waypoints = [Waypoint(name: "Beispielstart Heidelberg", coordinate: origin), Waypoint(name: "Beispielziel Neuenheim", coordinate: destination)]
             plan.route = route
+            if ProcessInfo.processInfo.environment["BIKENAVI_CAR_ASSISTANCE_PREVIEW"] == "1" {
+                plan.title = "Auto · synthetisches UI-Beispiel"
+                plan.route?.carSpeedLimits = [.init(startIndex: 0, endIndex: 2, kilometersPerHour: 50)]
+                plan.route?.carLaneSections = [.init(startIndex: 0, endIndex: 2, lanes: [
+                    .init(directions: ["LEFT"], follow: nil), .init(directions: ["STRAIGHT", "RIGHT"], follow: "RIGHT")])]
+                plan.route?.duration += 180
+                if plan.route?.carTimeSections?.isEmpty == false { plan.route?.carTimeSections?[0].seconds += 180 }
+                plan.route?.carTraffic = .init(fetchedAt: Date().timeIntervalSince1970, delaySeconds: 180,
+                    sections: [.init(startIndex: 2, endIndex: 4, delaySeconds: 180, category: "JAM")])
+                if ProcessInfo.processInfo.environment["BIKENAVI_CAR_QUIET_TRAFFIC_PREVIEW"] == "1" {
+                    plan.route?.duration -= 180
+                    if plan.route?.carTimeSections?.isEmpty == false { plan.route?.carTimeSections?[0].seconds -= 180 }
+                    plan.route?.carTraffic = .init(fetchedAt: Date().timeIntervalSince1970, delaySeconds: 0,
+                        sections: [.init(startIndex: 2, endIndex: 4, delaySeconds: 0, category: "ROAD_WORK")])
+                }
+            }
             activeRide = nil; serverURL = ""; token = ""; selectedMapStyle = .standard
             if ProcessInfo.processInfo.environment["BIKENAVI_POI_PREVIEW"] == "1" {
                 serverURL = "https://127.0.0.1:18446"
@@ -727,7 +845,7 @@ final class AppState: ObservableObject {
                 for _ in 0..<300 {
                     guard let self else { return }
                     let sample = CLLocation(coordinate: origin.cl, altitude: 114, horizontalAccuracy: 5, verticalAccuracy: 5,
-                        course: heading, speed: plan.profile.mode == .car ? 14 : 0, timestamp: Date())
+                        course: heading, speed: plan.profile.mode == .car && ProcessInfo.processInfo.environment["BIKENAVI_CAR_STATIONARY_PREVIEW"] != "1" ? 14 : 0, timestamp: Date())
                     location.locationManager(CLLocationManager(), didUpdateLocations: [sample])
                     do { try await Task.sleep(for: .seconds(1)) } catch { return }
                 }
@@ -1065,6 +1183,7 @@ final class AppState: ObservableObject {
                   snapshot.waypoints.map(\.coordinate) == plan.waypoints.map(\.coordinate),
                   snapshot.profile == plan.profile else { return }
             plan.route = route
+            if snapshot.profile.mode == .car, activeRide == nil { prepareCarCharacter() }
             preparedGraph = nil
             preparedRouteID = nil
             localRoutingStatus = snapshot.profile.mode == .sea ? "Kurse und Wegpunkte bereit" : "Route bereit · lokales Umfeld wird geladen"
@@ -1475,6 +1594,8 @@ final class AppState: ObservableObject {
             lastAnnouncement = nil
             carZoom = CarAutoZoom(); carLookAhead = 450; carVoice = CarVoiceGuidance()
             carRerouteAttempt = -.infinity; carArrivalAnnounced = false
+            carSpeedGuidance = CarSpeedGuidance(); carDeviationGuidance = CarDeviationGuidance(); carLastSpeech = -.infinity
+            if ride.profile.mode == .car && carCharacterPack == nil { prepareCarCharacter() }
             location.setRiding(true)
 
             rideActivity.start(tourName: ride.title, route: ride.route)
@@ -1525,6 +1646,7 @@ final class AppState: ObservableObject {
         segment += 1
         if ride.profile.mode == .car {
             carRerouteAttempt = -.infinity
+            carSpeedGuidance = CarSpeedGuidance(); carDeviationGuidance = CarDeviationGuidance()
             reroutePolicy = ReroutePolicy()
         }
         do {
@@ -1543,6 +1665,8 @@ final class AppState: ObservableObject {
     }
 
     private func cancelRerouting() {
+        carTrafficTask?.cancel(); carTrafficTask = nil; carTrafficRequestID = nil
+        carTrafficError = nil
         waypointSkipProposal = []
         speech.stopSpeaking(at: .immediate)
         rerouteTask?.cancel()
@@ -1590,19 +1714,44 @@ final class AppState: ObservableObject {
             Task { await sync() }
         } catch { errorMessage = error.localizedDescription }
     }
-    private func speakCar(_ text: String) {
+    private func speakCar(_ instruction: String, event: CarSpeechEvent = .navigation, character: Bool = true) {
+        guard voice, activeRide?.profile.mode == .car, activeRide?.recordingState == .recording else { return }
+        let text = carCharacterEnabled && character
+            ? carCharacterPack?.decorate(instruction, event: event, variant: carCharacterVariant) ?? instruction : instruction
+        carCharacterVariant += 1
+        carLastSpeech = Date().timeIntervalSince1970
         stopVolumePreview()
         speech.stopSpeaking(at: .immediate)
-        // Spoken navigation ducks music and uses the current audio route, including Bluetooth.
-        let audio = AVAudioSession.sharedInstance()
-        do {
-            try audio.setCategory(.playback, mode: .voicePrompt, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
-            try audio.setActive(true)
-            navigationSpeechDelegate.ownsAudioSession = true
-        } catch { localRideStatus = "Sprachausgabe konnte nicht aktiviert werden · Hinweise auf der Karte beachten" }
+        guard let selectedVoice = NavigationVoice.selected(navigationVoiceID) else {
+            localRideStatus = "Keine geeignete deutsche Stimme verfügbar · unter Einstellungen eine Stimme laden"
+            return
+        }
+        let handsFree: Bool
+        do { handsFree = try navigationSpeechDelegate.audio.activate(handsFreePreferred: true) }
+        catch {
+            localRideStatus = "Sprachausgabe konnte nicht aktiviert werden · Hinweise auf der Karte beachten"
+            return
+        }
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "de-DE")
+        // Give the car time to open its phone audio path before the first word.
+        utterance.preUtteranceDelay = handsFree ? 0.5 : 0
+        utterance.voice = selectedVoice
         speech.speak(utterance)
+    }
+
+    func preparedPOISearch(category: POICategory, duringRide: Bool, origin: String = "location", radius: Int = 10,
+                           timeout: TimeInterval = 12) async throws -> POISearchRequest {
+        let rideID = activeRide?.id
+        let mode = duringRide ? activeRide?.profile.mode : plan.profile.mode
+        if duringRide || origin == "location" {
+            _ = try await location.currentCoordinate(maxAge: mode == .car ? 5 : 15,
+                                                     maxAccuracy: mode == .car ? 25 : 100, timeout: timeout)
+        }
+        try Task.checkCancellation()
+        if duringRide && (rideID == nil || activeRide?.id != rideID) {
+            throw APIError(status: 0, message: "Die Fahrt wurde inzwischen geändert. Bitte die Ortesuche erneut öffnen.")
+        }
+        return try poiSearch(category: category, duringRide: duringRide, origin: origin, radius: radius)
     }
 
     func poiSearch(category: POICategory, duringRide: Bool, origin: String = "location", radius: Int = 10) throws -> POISearchRequest {
@@ -1641,7 +1790,7 @@ final class AppState: ObservableObject {
     }
 
     func addPOIToRide(_ point: Waypoint) async throws {
-        let request = try poiSearch(category: .fuel, duringRide: true)
+        let request = try await preparedPOISearch(category: .fuel, duringRide: true)
         guard let api, let ride = activeRide, ride.profile.mode == .car, ride.waypoints.count < 50 else {
             throw APIError(status: 0, message: "Pi verbinden und höchstens 49 vorhandene Wegpunkte verwenden.")
         }
@@ -1685,7 +1834,7 @@ final class AppState: ObservableObject {
         progress = matched
         carVoice = CarVoiceGuidance(); carArrivalAnnounced = false
         reroutePolicy = ReroutePolicy()
-        localRideStatus = "Stopp eingefügt · " + CarNavigation.trafficNotice
+        localRideStatus = "Stopp eingefügt · " + CarNavigation.trafficNotice(route: ridingRoute)
         reload()
         rideActivity.update(progress: progress, route: ridingRoute, paused: current.recordingState == .paused, rerouting: false)
     }
@@ -1746,6 +1895,54 @@ final class AppState: ObservableObject {
         reload()
     }
 
+    /// Refresh only during active matched navigation, at most once every five minutes.
+    /// The response is a complete route so traffic, instructions and indices stay consistent.
+    func refreshCarTraffic() {
+        let now = Date().timeIntervalSince1970
+        guard carTrafficTask == nil, !rerouting, !carArrivalAnnounced,
+              let ride = activeRide, ride.profile.mode == .car, ride.recordingState == .recording,
+              let previous = ridingRoute, let traffic = previous.carTraffic,
+              CarNavigation.trafficRefreshDue(fetchedAt: traffic.fetchedAt, lastAttempt: carTrafficAttempt, now: now),
+              carGPSIsFresh, let sample = location.latestSample,
+              let progress, progress.snappedPosition != nil, progress.distanceFromRoute <= 25,
+              let api else { return }
+        let pending = CarNavigation.pending(ride: ride)
+        guard !pending.isEmpty else { return }
+        let origin = Coordinate(latitude: sample.coordinate.latitude, longitude: sample.coordinate.longitude)
+        var request = TourDocument(); request.profile = ride.profile
+        request.waypoints = [Waypoint(name: "Aktueller Standort", coordinate: origin)] + pending.map { ride.waypoints[$0] }
+        let id = UUID(), heading = carHeading
+        carTrafficAttempt = now; carTrafficRequestID = id
+        carTrafficTask = Task {
+            defer { if carTrafficRequestID == id { carTrafficTask = nil; carTrafficRequestID = nil } }
+            do {
+                let route = try await api.route(request, timeout: 40, includeContext: false, startBearing: heading)
+                try Task.checkCancellation()
+                guard carTrafficRequestID == id, !rerouting, ridingRoute?.id == previous.id,
+                      var current = activeRide, current.id == ride.id, current.recordingState == .recording,
+                      CarNavigation.pending(ride: current) == pending, let latest = location.latestSample,
+                      let updatedTraffic = route.carTraffic, updatedTraffic.isFresh(now: Date().timeIntervalSince1970),
+                      route.waypointIndices?.count == pending.count + 1 else { return }
+                let currentPosition = Coordinate(latitude: latest.coordinate.latitude, longitude: latest.coordinate.longitude)
+                guard let match = CarNavigation.replacement(route, origin: origin, requestedAt: now, current: currentPosition,
+                    timestamp: latest.timestamp.timeIntervalSince1970, heading: carHeading, accuracy: latest.horizontalAccuracy,
+                    now: Date().timeIntervalSince1970) else { return }
+                var nav = current.localNavigation ?? LocalNavigationState()
+                nav.carRoute = route; nav.carPendingWaypointOrdinals = pending; nav.routeProgress = match.traveled
+                current.localNavigation = nav
+                try store.save(current)
+                activeRide = current; navigationRoute = route; self.progress = match
+                tracker = RouteTracker(lastProgress: match.traveled, lastTimestamp: latest.timestamp.timeIntervalSince1970)
+                carVoice.rebase(from: previous, to: route); carTrafficError = nil
+                rideActivity.update(progress: match, route: route, headingDegrees: carHeading, paused: false, rerouting: false)
+                reload()
+            } catch {
+                guard !Task.isCancelled, carTrafficRequestID == id else { return }
+                carTrafficError = "Verkehrsupdate fehlgeschlagen · gespeicherte Route bleibt erhalten"
+            }
+        }
+    }
+
     private func rerouteCar(from position: Coordinate, ride: TourDocument) {
         let now = Date().timeIntervalSince1970
         guard rerouteTask == nil, now - carRerouteAttempt >= 30, let original = ride.route else { return }
@@ -1763,7 +1960,6 @@ final class AppState: ObservableObject {
         let startBearing = carHeading
         rerouteRequestID = id
         rerouting = true
-        speech.stopSpeaking(at: .immediate)
         localRideStatus = "Pkw-Route wird neu berechnet"
         rerouteTask = Task {
             defer {
@@ -1802,10 +1998,17 @@ final class AppState: ObservableObject {
                 carVoice = CarVoiceGuidance(); carArrivalAnnounced = false
                 reroutePolicy = ReroutePolicy()
                 localRideStatus = "Pkw-Route angepasst · Zwischenziele bleiben erhalten"
+                carSpeedGuidance = CarSpeedGuidance(); carDeviationGuidance = CarDeviationGuidance()
+                if !speech.isSpeaking && Date().timeIntervalSince1970 - carLastSpeech >= 8 {
+                    speakCar("Die neue Route ist bereit.", event: .rerouted)
+                }
                 reload()
             } catch {
                 guard !Task.isCancelled, rerouteRequestID == id else { return }
                 localRideStatus = "Neuberechnung nicht verfügbar: " + error.localizedDescription + " · erneuter Versuch folgt"
+                if !speech.isSpeaking && Date().timeIntervalSince1970 - carLastSpeech >= 8 {
+                    speakCar("Die Neuberechnung ist gerade nicht verfügbar, bitte die Karte beachten.", event: .rerouteFailed)
+                }
             }
         }
     }
@@ -2052,7 +2255,7 @@ final class AppState: ObservableObject {
                         localRideStatus = route.destinationAccessDistance == nil ? "Ziel erreicht" : "Pkw-Zufahrt erreicht · Zugang zum Ziel prüfen"
                         if !carArrivalAnnounced {
                             carArrivalAnnounced = true
-                            if voice { speakCar(localRideStatus!) }
+                            if voice { speakCar(localRideStatus!, event: .arrived) }
                         }
                     }
                 }
@@ -2088,14 +2291,27 @@ final class AppState: ObservableObject {
             proposeWaypointSkip(ride: ride, position: point.coordinate, heading: heading)
             reroute(from: point.coordinate, heading: heading, ride: ride)
         }
+        if ride.profile.mode == .car { refreshCarTraffic() }
         if ride.profile.mode == .car, carGPSIsFresh, let progress, !rerouting, !carArrivalAnnounced {
-            if reroutePolicy.observe(distanceFromRoute: progress.distanceFromRoute, timestamp: point.timestamp,
-                accuracy: point.accuracy, now: Date().timeIntervalSince1970) {
-                rerouteCar(from: point.coordinate, ride: ride)
+            let now = Date().timeIntervalSince1970
+            let deviated = reroutePolicy.observe(distanceFromRoute: progress.distanceFromRoute, timestamp: point.timestamp,
+                accuracy: point.accuracy, now: now)
+            if let reaction = carDeviationGuidance.observe(confirmed: deviated,
+                onRoute: progress.snappedPosition != nil && progress.distanceFromRoute <= 25, now: now),
+               voice {
+                speakCar(reaction.text, event: reaction.event)
             }
-            if voice, let text = carVoice.announcement(progress: progress, speed: point.speed,
+            if deviated { rerouteCar(from: point.coordinate, ride: ride) }
+            let turnSoon = progress.nextManeuver.map { $0.type != 10 && $0.type != 11 } == true
+                && progress.distanceToManeuver <= max(70, point.speed * 5)
+            if !rerouting, voice, let text = carVoice.announcement(progress: progress, speed: point.speed,
                 following: ridingRoute.flatMap { CarNavigation.following(route: $0, next: progress.nextManeuver) }) {
-                speakCar(text)
+                speakCar(text, character: !turnSoon)
+            }
+            if let route = ridingRoute, let warning = carSpeedGuidance.update(route: route, progress: progress,
+                speed: point.speed, timestamp: point.timestamp, now: now, active: !rerouting,
+                canSpeak: voice && !turnSoon && !speech.isSpeaking && now - carLastSpeech >= 8) {
+                speakCar(warning.text, event: warning.event)
             }
         }
         if !isMarinePresentation, ride.profile.mode != .car, voice, let progress, progress.distanceFromRoute < 35,
@@ -2103,7 +2319,11 @@ final class AppState: ObservableObject {
            lastAnnouncement != next.coordinateIndex {
             lastAnnouncement = next.coordinateIndex
             let utterance = AVSpeechUtterance(string: "In \(Int(progress.distanceToManeuver / 10) * 10) Metern. \(next.instruction)")
-            utterance.voice = AVSpeechSynthesisVoice(language: "de-DE")
+            guard let selectedVoice = NavigationVoice.selected(navigationVoiceID) else {
+                notice = "Keine geeignete deutsche Stimme verfügbar. Bitte unter Einstellungen eine Stimme laden."
+                return
+            }
+            utterance.voice = selectedVoice
             utterance.volume = 1
             stopVolumePreview()
             speech.speak(utterance)

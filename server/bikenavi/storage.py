@@ -25,6 +25,12 @@ class ProviderBudget(Base):
     next_allowed: Mapped[float] = mapped_column(Float)
 
 
+class ProviderMonth(Base):
+    __tablename__ = "provider_months"
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    requests: Mapped[int] = mapped_column(Integer)
+
+
 class Record(Base):
     __tablename__ = "records"
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -89,6 +95,24 @@ class Storage:
                 return current.next_allowed if current else now + interval
         return None
 
+    def reserve_provider_month(self, provider: str, month: str, limit: int) -> bool:
+        key = provider + ":" + month
+        for _ in range(2):
+            try:
+                with self.sessions.begin() as session:
+                    result = session.execute(update(ProviderMonth).where(
+                        ProviderMonth.id == key, ProviderMonth.requests < limit
+                    ).values(requests=ProviderMonth.requests + 1))
+                    if result.rowcount:
+                        return True
+                    if session.get(ProviderMonth, key) is not None:
+                        return False
+                    session.add(ProviderMonth(id=key, requests=1))
+                return True
+            except IntegrityError:
+                continue
+        return False
+
     def apply(self, mutation: Mutation) -> dict:
         payload = mutation.model_dump(mode="json")
         # Preserve pre-feature receipt hashes when an older client retries.
@@ -119,6 +143,12 @@ class Storage:
             route.pop("waypointIndices", None)
         if route and route.get("surfaceSections") is None:
             route.pop("surfaceSections", None)
+        # New optional fields must not change receipt hashes of existing route payloads.
+        for candidate in (route, (nav or {}).get("carRoute"), (nav or {}).get("connector")):
+            if candidate:
+                for field in ("carSpeedLimits", "carLaneSections", "carTraffic"):
+                    if candidate.get(field) is None:
+                        candidate.pop(field, None)
         digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
         try:
             with self.sessions.begin() as session:

@@ -52,6 +52,42 @@ class CarTimeSection(Model):
     seconds: float = Field(ge=0)
 
 
+class CarSpeedLimit(Model):
+    startIndex: int = Field(ge=0)
+    endIndex: int = Field(gt=0)
+    kilometersPerHour: float = Field(gt=0, le=300)
+
+
+class CarLane(Model):
+    directions: list[Literal["STRAIGHT", "SLIGHT_RIGHT", "RIGHT", "SHARP_RIGHT", "RIGHT_U_TURN", "SLIGHT_LEFT", "LEFT", "SHARP_LEFT", "LEFT_U_TURN"]] = Field(min_length=1, max_length=9)
+    follow: str | None = Field(default=None, max_length=30)
+
+    @model_validator(mode="after")
+    def check_follow(self):
+        if self.follow is not None and self.follow not in self.directions:
+            raise ValueError("Spurempfehlung fehlt in den erlaubten Richtungen")
+        return self
+
+
+class CarLaneSection(Model):
+    startIndex: int = Field(ge=0)
+    endIndex: int = Field(gt=0)
+    lanes: list[CarLane] = Field(min_length=1, max_length=12)
+
+
+class CarTrafficSection(Model):
+    startIndex: int = Field(ge=0)
+    endIndex: int = Field(gt=0)
+    delaySeconds: float = Field(ge=0)
+    category: Literal["JAM", "ROAD_WORK", "ROAD_CLOSURE", "OTHER"]
+
+
+class CarTraffic(Model):
+    fetchedAt: float = Field(ge=0)
+    delaySeconds: float = Field(ge=0)
+    sections: list[CarTrafficSection] = Field(default_factory=list, max_length=10000)
+
+
 class Surface(Model):
     name: str
     distance: float = Field(ge=0)
@@ -105,10 +141,20 @@ class Route(Model):
     walkingDistance: float | None = Field(default=None, ge=0)
     cyclingDistance: float | None = Field(default=None, ge=0)
     carTimeSections: list[CarTimeSection] | None = Field(default=None, max_length=100_000)
+    carSpeedLimits: list[CarSpeedLimit] | None = Field(default=None, max_length=100000)
+    carLaneSections: list[CarLaneSection] | None = Field(default=None, max_length=10000)
+    carTraffic: CarTraffic | None = None
     destinationAccessDistance: float | None = Field(default=None, gt=20, le=500)
 
     @model_validator(mode="after")
     def check_indices(self):
+        for sections in (self.carSpeedLimits or [], self.carLaneSections or [], self.carTraffic.sections if self.carTraffic else []):
+            for section in sections:
+                if not 0 <= section.startIndex < section.endIndex < len(self.coordinates):
+                    raise ValueError("Pkw-Zusatzdaten liegen außerhalb der Route")
+        for sections in (self.carSpeedLimits or [], self.carLaneSections or []):
+            if any(a.endIndex > b.startIndex for a, b in zip(sections, sections[1:])):
+                raise ValueError("Überlappende Pkw-Zusatzdaten")
         if self.carTimeSections is not None:
             cursor = 0
             for section in self.carTimeSections:

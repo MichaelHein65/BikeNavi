@@ -14,6 +14,78 @@ final class CarNavigationTests: XCTestCase {
         RouteProgress(traveled: 0, remaining: 1000, distanceFromRoute: 0,
             nextManeuver: .init(instruction: "Rechts abbiegen", distance: 0, coordinateIndex: 2, type: 1), distanceToManeuver: distance)
     }
+    func testAssistanceUsesOnlyMatchedCurrentSectionAndHidesWhenInactive() {
+        var route = route()
+        route.carSpeedLimits = [.init(startIndex: 0, endIndex: 2, kilometersPerHour: 50),
+                                .init(startIndex: 2, endIndex: 3, kilometersPerHour: 30)]
+        route.carLaneSections = [.init(startIndex: 0, endIndex: 2,
+            lanes: [.init(directions: ["LEFT"], follow: nil), .init(directions: ["RIGHT"], follow: "RIGHT")])]
+        var p = progress(distance: 100); p.snappedPosition = route.coordinates[0]
+        XCTAssertEqual(CarNavigation.speedLimit(route: route, progress: p, active: true), 50)
+        XCTAssertNotNil(CarNavigation.lanes(route: route, progress: p, active: true))
+        XCTAssertNil(CarNavigation.speedLimit(route: route, progress: p, active: false))
+        p.traveled = LocalRouteMetrics.distances(route)[2]
+        XCTAssertEqual(CarNavigation.speedLimit(route: route, progress: p, active: true), 30)
+        XCTAssertNil(CarNavigation.lanes(route: route, progress: p, active: true))
+        p.traveled = LocalRouteMetrics.distances(route)[3]
+        XCTAssertNil(CarNavigation.speedLimit(route: route, progress: p, active: true))
+        p.traveled = 0; p.distanceFromRoute = 26
+        XCTAssertNil(CarNavigation.speedLimit(route: route, progress: p, active: true))
+        XCTAssertNil(CarNavigation.lanes(route: route, progress: p, active: true))
+        p.distanceFromRoute = 0; p.snappedPosition = nil
+        XCTAssertNil(CarNavigation.speedLimit(route: route, progress: p, active: true))
+    }
+    func testTrafficExpiresAndNeverLabelsFutureOrOldDataLive() {
+        var route = route()
+        route.carTraffic = .init(fetchedAt: 1000, delaySeconds: 90,
+            sections: [.init(startIndex: 0, endIndex: 2, delaySeconds: 90, category: "JAM")])
+        XCTAssertTrue(CarNavigation.trafficNotice(route: route, now: 1100).contains("+2 min"))
+        XCTAssertTrue(CarNavigation.trafficNotice(route: route, now: 1301).contains("veraltet"))
+        XCTAssertTrue(CarNavigation.trafficNotice(route: route, now: 999).contains("veraltet"))
+        var p = progress(distance: 100); p.snappedPosition = route.coordinates[0]
+        XCTAssertNotNil(CarNavigation.nextTraffic(route: route, progress: p, now: 1100))
+        XCTAssertNil(CarNavigation.nextTraffic(route: route, progress: p, now: 1301))
+        p.traveled = LocalRouteMetrics.distances(route)[2]
+        XCTAssertNil(CarNavigation.nextTraffic(route: route, progress: p, now: 1100))
+        route.carTraffic = nil
+        XCTAssertEqual(CarNavigation.trafficNotice(route: route, now: 1100), CarNavigation.trafficNotice)
+    }
+    func testQuietTrafficSkipsZeroDelayButKeepsClosuresAndLaterDelays() {
+        var route = route()
+        route.carTraffic = .init(fetchedAt: 1000, delaySeconds: 0,
+            sections: [.init(startIndex: 0, endIndex: 1, delaySeconds: 0, category: "ROAD_WORK"),
+                       .init(startIndex: 1, endIndex: 2, delaySeconds: 0, category: "JAM"),
+                       .init(startIndex: 2, endIndex: 3, delaySeconds: 0, category: "ROAD_CLOSURE")])
+        var p = progress(distance: 100); p.snappedPosition = route.coordinates[0]
+        XCTAssertNil(CarNavigation.rideTrafficNotice(route: route, now: 1100))
+        XCTAssertEqual(CarNavigation.nextTraffic(route: route, progress: p, now: 1100)?.category, "ROAD_CLOSURE")
+        route.carTraffic?.sections.removeLast()
+        XCTAssertNil(CarNavigation.nextTraffic(route: route, progress: p, now: 1100))
+        route.carTraffic?.sections.append(.init(startIndex: 2, endIndex: 4, delaySeconds: 30, category: "JAM"))
+        route.carTraffic?.delaySeconds = 30
+        XCTAssertEqual(CarNavigation.nextTraffic(route: route, progress: p, now: 1100)?.delaySeconds, 30)
+        XCTAssertTrue(CarNavigation.rideTrafficNotice(route: route, now: 1100)?.contains("+1 min") == true)
+        XCTAssertTrue(CarNavigation.rideTrafficNotice(route: route, now: 1301)?.contains("veraltet") == true)
+        XCTAssertNil(CarNavigation.nextTraffic(route: route, progress: p, now: 1301))
+    }
+
+    func testTrafficRefreshWaitsFiveMinutesForBothDataAndLastAttempt() {
+        XCTAssertFalse(CarNavigation.trafficRefreshDue(fetchedAt: 1000, lastAttempt: -.infinity, now: 1120))
+        XCTAssertFalse(CarNavigation.trafficRefreshDue(fetchedAt: 1000, lastAttempt: -.infinity, now: 1299))
+        XCTAssertTrue(CarNavigation.trafficRefreshDue(fetchedAt: 1000, lastAttempt: -.infinity, now: 1300))
+        XCTAssertFalse(CarNavigation.trafficRefreshDue(fetchedAt: 1000, lastAttempt: 1300, now: 1599))
+        XCTAssertTrue(CarNavigation.trafficRefreshDue(fetchedAt: 1000, lastAttempt: 1300, now: 1600))
+    }
+
+    func testAdditionalCarDataRoundTripsAndOldRoutesDecode() throws {
+        var route = route()
+        let old = try JSONEncoder().encode(route)
+        XCTAssertNil(try JSONDecoder().decode(CalculatedRoute.self, from: old).carTraffic)
+        route.carSpeedLimits = [.init(startIndex: 0, endIndex: 2, kilometersPerHour: 50)]
+        route.carLaneSections = [.init(startIndex: 0, endIndex: 2, lanes: [.init(directions: ["RIGHT"], follow: "RIGHT")])]
+        route.carTraffic = .init(fetchedAt: 1000, delaySeconds: 20, sections: [])
+        XCTAssertEqual(try JSONDecoder().decode(CalculatedRoute.self, from: JSONEncoder().encode(route)), route)
+    }
     func testSpeedViewAndActionViewIncludeCloseFollowingManeuver() {
         var slow = CarAutoZoom(), fast = CarAutoZoom(), action = CarAutoZoom(), chain = CarAutoZoom()
         let city = slow.update(speed: 5, timestamp: 1, progress: nil)
@@ -47,15 +119,43 @@ final class CarNavigationTests: XCTestCase {
         XCTAssertLessThan(focused, normal)
         XCTAssertGreaterThan(focused, complex.distanceToManeuver)
     }
-    func testVoiceHasEarlyReminderAndImmediateStagesWithoutDuplicates() {
+    func testVoiceHasTwoStagesWithSpacingAndNoStationaryRepeats() {
         var voice = CarVoiceGuidance()
-        XCTAssertNotNil(voice.announcement(progress: progress(distance: 1000), speed: 36, following: nil))
-        XCTAssertNil(voice.announcement(progress: progress(distance: 900), speed: 36, following: nil))
-        XCTAssertNotNil(voice.announcement(progress: progress(distance: 400), speed: 36, following: nil))
-        XCTAssertTrue(voice.announcement(progress: progress(distance: 50), speed: 36, following: nil)?.hasPrefix("Jetzt") == true)
-        XCTAssertNil(voice.announcement(progress: progress(distance: 40), speed: 36, following: nil))
+        XCTAssertNil(voice.announcement(progress: progress(distance: 1000), speed: 36, following: nil, now: 0))
+        XCTAssertNotNil(voice.announcement(progress: progress(distance: 700), speed: 36, following: nil, now: 1))
+        XCTAssertNil(voice.announcement(progress: progress(distance: 400), speed: 36, following: nil, now: 2))
+        XCTAssertNil(voice.announcement(progress: progress(distance: 50), speed: 36, following: nil, now: 3))
+        XCTAssertTrue(voice.announcement(progress: progress(distance: 50), speed: 36, following: nil, now: 6)?.hasPrefix("Jetzt") == true)
+        for second in 7...120 {
+            XCTAssertNil(voice.announcement(progress: progress(distance: 20), speed: 0, following: nil, now: Double(second)))
+        }
         var off = progress(distance: 10); off.distanceFromRoute = 50
-        XCTAssertNil(voice.announcement(progress: off, speed: 36, following: nil))
+        XCTAssertNil(voice.announcement(progress: off, speed: 36, following: nil, now: 121))
+    }
+    func testVoiceRefreshRemapsIndicesWithoutRepeatingTurnButAllowsChangedTurn() {
+        var old = route(); old.maneuvers[0] = progress(distance: 100).nextManeuver!
+        var voice = CarVoiceGuidance()
+        XCTAssertNotNil(voice.announcement(progress: progress(distance: 100), speed: 10, following: nil, now: 1))
+        var updated = old
+        updated.coordinates.insert(old.coordinates[0], at: 0)
+        updated.maneuvers[0].coordinateIndex += 1
+        voice.rebase(from: old, to: updated)
+        var p = progress(distance: 100); p.nextManeuver = updated.maneuvers[0]
+        XCTAssertNil(voice.announcement(progress: p, speed: 10, following: nil, now: 130))
+        p.distanceToManeuver = 20
+        XCTAssertNotNil(voice.announcement(progress: p, speed: 10, following: nil, now: 131))
+        var changed = updated; changed.maneuvers[0].instruction = "Links abbiegen"; changed.maneuvers[0].type = 0
+        voice.rebase(from: updated, to: changed)
+        p.nextManeuver = changed.maneuvers[0]
+        XCTAssertNotNil(voice.announcement(progress: p, speed: 10, following: nil, now: 140))
+    }
+    func testVoiceChainsOnlyFinalInstructionAndDoesNotDuplicateArrival() {
+        var voice = CarVoiceGuidance()
+        let following = (maneuver: Maneuver(instruction: "Links abbiegen", distance: 0, coordinateIndex: 3, type: 0), gap: 40.0)
+        XCTAssertFalse(voice.announcement(progress: progress(distance: 100), speed: 10, following: following, now: 0)!.contains("Danach"))
+        XCTAssertTrue(voice.announcement(progress: progress(distance: 20), speed: 10, following: following, now: 5)!.contains("Danach"))
+        var arrival = progress(distance: 5); arrival.nextManeuver = route().maneuvers.last
+        XCTAssertNil(voice.announcement(progress: arrival, speed: 0, following: nil, now: 20))
     }
     func testRoundaboutAndRoadNamesRemainInCarGuidance() {
         let turn = Maneuver(instruction: "In den Kreisverkehr fahren", distance: 100, coordinateIndex: 1, type: 7,

@@ -1,5 +1,29 @@
 # BikeNavi – Bildschirmgalerie
 
+## Auto-Assistenz und Stimmen
+
+**17. Oktober 2026, geheimer Beifahrer:** **11/93** zeigen die neuen Auto-Einstellungen mit Überraschungscharakter, Wechselbutton und ehrlichem Offline-Status. **88** zeigt die darunter liegende unveränderte Premium-/Siri-Stimmenauswahl. Die zwei gezielten UI-Abläufe prüfen Ein-/Ausschalten und dass der Charakter im Fahrrad-Modus nicht erscheint. Alle drei Bilder stammen aus der öffentlichen synthetischen Auto-Vorschau ohne Pi-Zugang; keine private Fahrt, Adresse oder Zugangsdaten. Visuell geprüft. Kein Nachweis von echter KI-Generierung oder hörbarer Ausgabe.
+
+<img src="images/93-auto-charakter.png" width="300" alt="Auto-Einstellungen mit eingeschaltetem geheimem Überraschungscharakter, Wechselbutton und Hinweis auf nicht verbundenen Pi">
+
+
+**17. Oktober 2026, Spur-Overlay und ruhigere Verkehrsanzeige:** Bilder **70/87** erneuert, **91/92** ergänzt. Große gelb-schwarze Spurempfehlung als Karten-Overlay neben dem Tempolimit; die Karte beginnt direkt unter dem Abbiegehinweis. Autozoom arbeitet ohne Textanzeige weiter. **87** zeigt weiterhin einen synthetischen Stau mit drei Minuten Verzögerung. **91/92** zeigen helle und dunkle Darstellung und enthalten stattdessen eine synthetische Baustelle ohne Verzögerung: weder Baustellenhinweis noch TomTom-Statuszeile erscheinen. Öffentliche Heidelberger Beispieldaten, keine privaten Fahrtaufnahmen. Die UI-Tests prüfen auch die Lage des Overlays innerhalb der Karte und das Ausblenden bei Pause; der Null-Verzögerungsablauf besteht in heller und dunkler Darstellung. Alle vier erneuerten/neuen Bilder visuell geprüft.
+
+| Helle Fahransicht | Dunkle Fahransicht |
+| --- | --- |
+| <img src="images/91-auto-spur-overlay.png" width="300" alt="Synthetische Autofahrt mit großem gelb-schwarzem Spur-Overlay ohne wirkungslose Verkehrshinweise"> | <img src="images/92-auto-spur-nacht.png" width="300" alt="Dasselbe synthetische Beispiel im Dunkelmodus: gelbe Spurempfehlung, keine Autozoom- oder Null-Verzögerungsanzeige"> |
+
+**16. Oktober 2026, Fahrdaten vergrößert:** Bild **87** wurde mit dem aktuellen Layout erneut aufgenommen und visuell gegen die vorige Fassung geprüft: größere Zahlen, kleinere Einheiten und engere Abstände, ohne vergrößerte untere Fläche. Die älteren Ansichten 71 und 89 dokumentieren den jeweiligen vorherigen Prüfstand. Die aktuelle Hörprobe verwendet im Auto dieselbe Freisprech-Ausgabe wie die Navigation; das ist im Simulatorbild nicht als Bluetooth-Nachweis sichtbar.
+
+**15. Oktober 2026:** Bilder **87/88** zeigen die neue Spurleiste, Tempolimit, Verkehrshinweise sowie die Stimmenauswahl. **70** wurde für den weiterhin funktionierenden ORS-Fall mit unbekanntem Tempolimit erneuert, **11/88** wurden nach der Beschränkung auf Premium-/Siri-Stimmen erneut aktualisiert und zeigen den ehrlichen Zustand ohne solche Stimmen im Simulator. Alle Bilder stammen aus erfolgreichen UI-Tests auf dem iPhone-17-Pro-Simulator und wurden visuell geprüft.
+
+| Auto-Assistenz · synthetisches Beispiel | Navigationsstimme |
+| --- | --- |
+| <img src="images/87-auto-assistenz.png" width="300" alt="Als synthetisch markierte Autofahrt mit zwei Spuren, 50-km/h-Beispiellimit und drei Minuten Beispielstau"> | <img src="images/88-navigationsstimme.png" width="300" alt="Premium-/Siri-Auswahl, deaktivierte Hörprobe bei fehlenden Stimmen und Downloadanleitung"> |
+
+**87 verwendet ausdrücklich erfundene Spur-, Tempo- und Verkehrsdaten** auf der öffentlichen ORS-Heidelberg-Geometrie; keine reale TomTom-Antwort und kein Nachweis von Beschilderung oder Stau in Heidelberg. GPS und Tempo sind simuliert. **88** zeigt korrekt, dass auf diesem Simulator keine Premium-/Siri-Stimme verfügbar ist: vorhandene Standardstimmen werden nicht mehr angeboten und die Hörprobe ist deaktiviert. Auf dem echten iPhone setzt die Auswahl passende Systemdownloads voraus; Anna/Petra wurden laut Nutzer dort geladen. Siri erscheint nur, soweit iOS die Stimme für Apps freigibt. Keine private Route, Serveradresse oder Zugangsdaten. Die getrennten echten TomTom-Anbieterprüfungen und verbleibenden Gerätegrenzen stehen im [Prüfstand](UMSETZUNG.md#auto-assistenz-und-stimmen-15-oktober-2026). [Bedienung](AUTO.md).
+
+
 ## POIs in allen Anwendungen (15. Oktober 2026)
 
 **82 und 85 nach Zoomkorrektur erneuert:** Der Marker bleibt im Mittelpunkt, umliegende Straßen und Stadtteile sind bei Zoomstufe 14 sichtbar. Die zuvor übervergrößerte Rasterkarte war eine Folge der automatischen Anpassung auf nur einen Marker, nicht allein fehlender Kartendaten. Native Kameraprüfung und beide Detail-UI-Abläufe erfolgreich; neue Aufnahmen visuell geprüft.
@@ -204,7 +228,7 @@ Die Diagramme und Fahrmodusfarben demonstrieren ausschließlich die Darstellung.
 
 ## Einstellungen und Logo
 
-Die zusätzliche BikeNavi-Titelbox wurde entfernt; die Pi-Server-Einstellungen folgen direkt auf die Lautstärke. Die erste Box regelt auf dem echten iPhone direkt die System-Medienlautstärke über Apples nativen Regler. Die Aufnahme vom 29. September 2026 zeigt den ausdrücklichen Simulatorhinweis, da iOS im Simulator keinen funktionsfähigen Systemregler bereitstellt. Der UI-Test prüft die Position der Box, den Hörprobenknopf und den Wechsel zwischen Reitern. Kopplung mit den Hardwaretasten und hörbare Lautstärke sind am iPhone zu prüfen.
+Die erste Box regelt auf dem echten iPhone die System-Medienlautstärke über Apples nativen Regler. Im Auto-Modus folgt seit 17. Oktober der geheime Beifahrer (Bild 11/93), danach die Navigationsstimme (Bild 88) und der Pi-Server. In anderen Modi entfällt der Beifahrer. Die App zeigt im Simulator weiterhin einen Hinweis auf den dort nicht verfügbaren Systemregler. Hörbare Qualität und Kopplung mit den Hardwaretasten sind am iPhone zu prüfen.
 
 | Einstellungen | App-Logo |
 | --- | --- |
@@ -231,7 +255,7 @@ Original und Entstehung des Logos: [AppIcon.md](../design/AppIcon.md). Die Scree
 
    Für die Kartenwahl den öffentlichen Bestand mit `--elevation` vorbereiten und `MapStyleTests/testStylesSwitchAcrossTabsAndRestartWithGermanDefault` ausführen. Der Test erzeugt Bilder 01/02, 11 und 25–29 und prüft Auswahl, Tabwechsel, Hintergrundpause und Neustartstandard. `DocumentationScreenshotsTests/testCaptureRideScreenshots` erneuert 12/14 mit dem Ebenensymbol in der Fahrt.
 
-   Für den Lautstärkeregler gezielt `SettingsVolumeTests/testSystemVolumeBoxIsFirstAndOffersPreview` ausführen; dessen Anhang `Gallery-11-einstellungen` aktualisiert Bild 11.
+   Für den Lautstärkeregler gezielt `SettingsVolumeTests/testSystemVolumeBoxIsFirstAndOffersPreview` ausführen. Die aktuellen Bilder 11/93 stammen aus `CarModeUITests/testCarAssistanceAndVoiceSettings`, Anhang `Gallery-93-Auto-Charakter`; Bild 88 aus demselben Ablauf, Anhang `Gallery-88-Navigationsstimme`.
 
    Für die Koordinatensuche `CoordinateSearchTests/testCoordinateSearchWithoutServerAndSelection` ausführen. Der Anhang `Gallery-05-suche` aktualisiert Bild 05; der Test verwendet den öffentlichen Heidelberger Beispielpunkt, ohne Serverzugang.
 
@@ -369,3 +393,11 @@ Zur Reproduktion auf dem separaten Dokumentationssimulator `CarModeUITests` ausf
 
 
 Zur Reproduktion des neuen Einstiegs `HomeUITests` auf dem Dokumentationssimulator ausführen. Die Kachel-/Profilprüfung verwendet `BIKENAVI_CAR_PREVIEW=1`, einen leeren Server und die öffentliche ORS-Pkw-Route. Die entstehenden anderen Entwürfe enthalten keine erfundenen Rad-/Wander-/Seewegverbindungen. Getrennte Kern-/AppState-Tests prüfen wiederholtes Öffnen und Neustart der gespeicherten Entwürfe sowie Erhalt bestehender Aufzeichnungen. Simulatoranhänge als Gallery-72–76 exportieren; kompakte Wiederholung von 72/74 als 77/78 führen; allgemeine Profile als 06/17/57/73. Allgemeine Archiv-/Bedienungstests gehen ebenfalls durch den echten Startbildschirm.
+
+## Auto im Stand und Ortesuche
+
+16. Oktober 2026: öffentlicher Heidelberger Simulatorfall mit synthetischen, sekündlich eintreffenden GPS-Messungen an unveränderter Position und 0 km/h. Kein privater Fahrverlauf und kein Feldtest. Beispielangebote, Entfernungen und Zeiten stammen aus dem lokalen Testserver.
+
+| GPS im Stand | Supermärkte ohne Losfahren auswählen |
+| --- | --- |
+| ![Auto-Beispielfahrt im Stand mit gültigem Standort](images/89-auto-stillstand.png) | ![Synthetische Supermarktangebote im Stand](images/90-auto-poi-stillstand.png) |

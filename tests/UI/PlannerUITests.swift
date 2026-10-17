@@ -42,7 +42,7 @@ final class CarModeUITests: XCTestCase {
         app.rideTab.tap()
         let map = app.descendants(matching: .any).matching(identifier: "carRideMap").firstMatch
         XCTAssertTrue(map.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["carAutoZoom"].exists)
+        XCTAssertFalse(app.staticTexts["carAutoZoom"].exists)
         XCTAssertFalse(app.buttons["bikeConnection"].exists)
         XCTAssertTrue(app.staticTexts[trafficNotice].exists)
         snapshot(app, name: "Gallery-70-Auto-Fahren")
@@ -60,6 +60,90 @@ final class CarModeUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Speichern und beenden"].waitForExistence(timeout: 5))
         app.buttons["Speichern und beenden"].tap()
         XCTAssertTrue(app.navigationBars["Deine Touren"].waitForExistence(timeout: 5))
+    }
+    func testCarAssistanceAndVoiceSettings() {
+        let app = XCUIApplication()
+        app.launchEnvironment["BIKENAVI_CAR_PREVIEW"] = "1"
+        app.launchEnvironment["BIKENAVI_CAR_ASSISTANCE_PREVIEW"] = "1"
+        app.launchEnvironment["BIKENAVI_SERVER"] = ""
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launchWorkspace()
+        XCTAssertTrue(app.rideTab.waitForExistence(timeout: 15)); app.rideTab.tap()
+        XCTAssertTrue(app.otherElements["carLaneGuidance"].waitForExistence(timeout: 5)
+            || app.descendants(matching: .any)["carLaneGuidance"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["carSpeedLimit"].exists)
+        XCTAssertTrue(app.staticTexts["carTrafficStatus"].label.contains("TomTom Live-Verkehr"))
+        XCTAssertTrue(app.staticTexts["carTrafficIncident"].exists)
+        snapshot(app, name: "Gallery-87-Auto-Assistenz")
+        app.buttons["carPause"].tap()
+        XCTAssertFalse(app.descendants(matching: .any)["carLaneGuidance"].exists)
+        app.tabBars.buttons["Einstellungen"].tap()
+        let character = app.switches["carCharacterEnabled"]
+        XCTAssertTrue(character.waitForExistence(timeout: 5))
+        if character.value as? String == "0" { character.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap() }
+        XCTAssertTrue(app.buttons["carCharacterChange"].isEnabled)
+        app.buttons["carCharacterChange"].tap()
+        XCTAssertTrue(app.staticTexts["Pi nicht verbunden · vorhandener Charakter oder sachliche Ansagen."].waitForExistence(timeout: 5))
+        snapshot(app, name: "Gallery-93-Auto-Charakter")
+        character.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        XCTAssertFalse(app.buttons["carCharacterChange"].isEnabled)
+        character.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        app.swipeUp()
+        XCTAssertTrue(app.buttons["navigationVoicePreview"].waitForExistence(timeout: 5))
+        snapshot(app, name: "Gallery-88-Navigationsstimme")
+    }
+    func testQuietTrafficHidesZeroDelayAndLaneGuidanceOverlaysMap() {
+        let app = XCUIApplication()
+        app.launchEnvironment["BIKENAVI_CAR_PREVIEW"] = "1"
+        app.launchEnvironment["BIKENAVI_CAR_ASSISTANCE_PREVIEW"] = "1"
+        app.launchEnvironment["BIKENAVI_CAR_QUIET_TRAFFIC_PREVIEW"] = "1"
+        app.launchEnvironment["BIKENAVI_SERVER"] = ""
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launchWorkspace()
+        XCTAssertTrue(app.rideTab.waitForExistence(timeout: 15)); app.rideTab.tap()
+        let lanes = app.descendants(matching: .any)["carLaneGuidance"].firstMatch
+        XCTAssertTrue(lanes.waitForExistence(timeout: 5))
+        let map = app.descendants(matching: .any)["carRideMap"].firstMatch
+        XCTAssertTrue(map.frame.contains(lanes.frame))
+        XCTAssertFalse(app.staticTexts["carAutoZoom"].exists)
+        XCTAssertFalse(app.staticTexts["carTrafficStatus"].exists)
+        XCTAssertFalse(app.staticTexts["carTrafficIncident"].exists)
+        snapshot(app, name: "Gallery-91-Auto-Spur-Overlay")
+        app.buttons["carPause"].tap()
+        XCTAssertFalse(lanes.exists)
+    }
+
+    func testVoiceSelectionOffersPremiumOrExplainsDownload() {
+        let app = XCUIApplication()
+        app.launchEnvironment["BIKENAVI_SERVER"] = ""
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launchWorkspace()
+        app.tabBars.buttons["Einstellungen"].tap()
+        XCTAssertFalse(app.switches["carCharacterEnabled"].exists)
+        let picker = app.descendants(matching: .any)["navigationVoicePicker"].firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 10))
+        picker.tap()
+        let choice = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "navigationVoiceChoice_")).firstMatch
+        let hasPremiumOrSiri = choice.waitForExistence(timeout: 3)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Eddy ·")).firstMatch.exists)
+        snapshot(app, name: "Gallery-89-Stimme-Auswaehlen")
+        if !hasPremiumOrSiri {
+            app.navigationBars.buttons.firstMatch.tap()
+            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Noch keine Premium- oder Siri-Stimme")).firstMatch.waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["navigationVoicePreview"].isEnabled)
+            return
+        }
+        let selectedLabel = choice.label
+        choice.tap()
+        if app.navigationBars["Stimme"].exists { app.navigationBars["Stimme"].buttons.firstMatch.tap() }
+        XCTAssertTrue(app.staticTexts["Aktuell: " + selectedLabel].waitForExistence(timeout: 5))
+        app.buttons["navigationVoicePreview"].tap()
+        app.terminate(); app.launchWorkspace()
+        app.tabBars.buttons["Einstellungen"].tap()
+        XCTAssertTrue(app.staticTexts["Aktuell: " + selectedLabel].waitForExistence(timeout: 5))
+        app.descendants(matching: .any)["navigationVoicePicker"].firstMatch.tap()
+        let automatic = app.descendants(matching: .any)["navigationVoiceAutomatic"].firstMatch
+        XCTAssertTrue(automatic.waitForExistence(timeout: 5)); automatic.tap()
     }
     private var trafficNotice: String { "Fahrzeit geschätzt · ohne Live-Verkehr" }
 }

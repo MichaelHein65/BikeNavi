@@ -217,7 +217,7 @@ struct PlannerView: View {
                             Text("Tiefgang: " + draft.formatted(.number.precision(.fractionLength(1))) + " m · Fahrzeit ca. " + Format.duration(MarineNavigation.travelTime(distance: route.distance, speedKnots: state.boatSpeedKnots) ?? 0)).font(.caption)
                         }
                     } else if state.plan.profile.mode == .car {
-                        Text(CarNavigation.trafficNotice).font(.caption).foregroundStyle(.secondary)
+                        Text(CarNavigation.trafficNotice(route: state.plan.route)).font(.caption).foregroundStyle(.secondary)
                         Text(CarNavigation.onlineNotice).font(.caption).foregroundStyle(.secondary)
                         if let missing = route.destinationAccessDistance {
                             Label("Pkw-Zufahrt · noch ca. " + Format.distance(missing) + " Luftlinie zum Ziel", systemImage: "parkingsign.circle")
@@ -671,7 +671,7 @@ struct RouteDetailsView: View {
                 if isCar {
                     Section("Pkw-Route") {
                         HStack { Metric(label: "Strecke", value: Format.distance(route.distance)); Metric(label: "Fahrzeit ca.", value: Format.duration(route.duration)) }
-                        Text(CarNavigation.trafficNotice).font(.caption)
+                        Text(CarNavigation.trafficNotice(route: route)).font(.caption)
                         if let gap = route.destinationAccessDistance {
                             Label("Pkw-Zufahrt erreicht · " + Format.distance(gap) + " Luftlinie zum Ziel", systemImage: "parkingsign.circle")
                             Text("Restweg und Restzeit sind nicht berechnet. Zugang vor Ort prüfen.").font(.caption)
