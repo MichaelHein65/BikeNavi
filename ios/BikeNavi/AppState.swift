@@ -325,6 +325,7 @@ final class AppState: ObservableObject {
     @Published var progress: RouteProgress?
     @Published var errorMessage: String?
     @Published var notice: String?
+    @Published var speechStatus: String?
     @Published var loadingElevation = false
     @Published var elevationError: String?
     private var elevationTask: Task<Void, Never>?
@@ -521,7 +522,7 @@ final class AppState: ObservableObject {
             self.speech.stopSpeaking(at: .immediate)
             let utterance = AVSpeechUtterance(string: navigation ? "In 300 Metern rechts abbiegen. Danach der Hauptstraße folgen." : "Eine kleine Schnecke sitzt an einer Hecke. Krabbelt hin und her, freut sich dabei sehr.")
             guard let selectedVoice = NavigationVoice.selected(navigationVoiceID) else {
-                notice = "Keine geeignete deutsche Stimme verfügbar. Bitte unter Einstellungen eine Stimme laden."
+                speechStatus = "Keine geeignete deutsche Stimme verfügbar. Bitte unter Einstellungen eine Stimme laden."
                 return
             }
             utterance.voice = selectedVoice
@@ -530,8 +531,9 @@ final class AppState: ObservableObject {
                 let car = (activeRide?.profile.mode ?? plan.profile.mode) == .car
                 let handsFree = try navigationSpeechDelegate.audio.activate(handsFreePreferred: car)
                 utterance.preUtteranceDelay = handsFree ? 0.5 : 0
+                speechStatus = navigationSpeechDelegate.audio.fallbackMessage
             } catch {
-                notice = "Sprachausgabe konnte nicht aktiviert werden. Bitte die Audioverbindung prüfen."
+                speechStatus = NavigationAudio.failureMessage(error)
                 return
             }
             self.volumePreview.speak(utterance)
@@ -758,6 +760,10 @@ final class AppState: ObservableObject {
            let preview = records.first(where: { $0.id == id && !$0.deleted }) {
             plan = preview.document
             UserDefaults.standard.set(value, forKey: "currentPlan")
+        }
+        if ProcessInfo.processInfo.environment["BIKENAVI_AUDIO_STATUS_PREVIEW"] == "1" {
+            speechStatus = "Synthetisches Fehlerbeispiel · " + NavigationAudio.failureMessage(
+                NSError(domain: "AudioTest", code: -50, userInfo: [NSLocalizedDescriptionKey: "Wiedergabe aktivieren: Beispiel einer abgelehnten Audiositzung."]))
         }
         if ProcessInfo.processInfo.environment["BIKENAVI_MARINE_PREVIEW"] == "1",
            plan.id.uuidString == "960E36CE-B7A2-48B4-B49A-6DA189641DAD", let origin = plan.startPoint?.coordinate {
@@ -1729,9 +1735,12 @@ final class AppState: ObservableObject {
         let handsFree: Bool
         do { handsFree = try navigationSpeechDelegate.audio.activate(handsFreePreferred: true) }
         catch {
-            localRideStatus = "Sprachausgabe konnte nicht aktiviert werden · Hinweise auf der Karte beachten"
+            speechStatus = NavigationAudio.failureMessage(error)
+            localRideStatus = "Sprachausgabe konnte nicht aktiviert werden · Details in Einstellungen · Hinweise auf der Karte beachten"
             return
         }
+        speechStatus = navigationSpeechDelegate.audio.fallbackMessage
+        if speechStatus != nil { localRideStatus = "Normale Audioausgabe · im Auto ggf. Bluetooth-Audio wählen" }
         let utterance = AVSpeechUtterance(string: text)
         // Give the car time to open its phone audio path before the first word.
         utterance.preUtteranceDelay = handsFree ? 0.5 : 0

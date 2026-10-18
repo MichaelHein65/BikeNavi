@@ -4,6 +4,20 @@ Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release
 
 ## Unveröffentlicht
 
+### Telefonkanal: ungültige Audiokonfiguration korrigieren (18. Oktober 2026)
+
+- Auf Nutzerwunsch die geprüfte, installierte und am Infotainment bestätigte Audiokorrektur samt Tests, Dokumentation und öffentlichen Simulatorbildern gemeinsam auf `main` in Git/GitHub sichern. Version/Build unverändert, kein neuer Release.
+
+- Nach dem ersten Rückfall bestätigt der Nutzer hörbare Ansagen über den Musikkanal; Ziel bleibt ausdrücklich der Telefonkanal. Der Gerätehinweis belegt `NSOSStatusErrorDomain -50` bereits beim Konfigurieren der bisherigen HFP-Sitzung, vor Aktivierung/Geräteauswahl.
+- HFP jetzt mit `playAndRecord`, Modus `default` und ausschließlich `allowBluetoothHFP` konfigurieren. Die Kombination aus `voicePrompt`, Lautsprecherstandard und Mischoptionen entfällt für HFP; normale Wiedergabe/CarPlay behalten ihren Promptmodus und Ducking. Der Telefonkanal darf andere iPhone-Audiowiedergabe für die Ansage unterbrechen und wird danach wieder freigegeben.
+- Der echte AVAudioSession-Test prüft jetzt ausdrücklich, dass kein Rückfallfehler verborgen bleibt; der vorherige Simulatorlauf hatte die am iPhone abgelehnte Konfiguration akzeptiert. 23 native Simulator-Tests sowie ein Audiotest direkt auf Michaels iPhone erfolgreich. Signierter Release-Build geprüft, installiert und gestartet; anschließender Hörtest über den gewünschten Telefonkanal am Infotainment vom Nutzer als erfolgreich bestätigt. Konkreter Prüf-/Installationsstand unter [HFP-Korrektur](docs/UMSETZUNG.md#hfp-konfiguration-nach-gerätefehler-50-18-oktober-2026). Weiterhin **0.4.0 (4), Unveröffentlicht**.
+
+### Sprachausgabe: Rückfall nach fehlgeschlagenem Freisprechversuch (18. Oktober 2026)
+
+- Scheiterte der Auto-Freisprechversuch, blieben Navigation und beide Hörproben bisher vollständig stumm, auch ohne Bluetooth. Nach Freigabe normale Wiedergabe explizit aktivieren; im Auto kann dafür die Quelle Bluetooth-Audio nötig sein. Unvollständige Freigabe bleibt erneut versuchbar.
+- Fehler und Rückfallursache direkt bei der Hörprobe anzeigen, mit Arbeitsschritt und iOS-Fehlercode; Pi-Status getrennt halten. Hinweis zur getrennten Telefonlautstärke korrigieren. Die bisherige Meldung beweist keinen Defekt der Bluetooth-Verbindung; der konkrete ursprüngliche Gerätefehler ist noch unbekannt.
+- Weiterhin **0.4.0 (4), Unveröffentlicht**. 23 native Tests, zwei abschließende UI-Tests und signierter Gerätebuild erfolgreich; auf Michaels iPhone installiert und gestartet. Hörtest noch offen. Prüfungen, Bereitstellung und Grenzen unter [Audio-Rückfall](docs/UMSETZUNG.md#audio-rückfall-und-diagnose-18-oktober-2026).
+
 ### Dokumentation und Git-Abgleich (17. Oktober 2026)
 
 - Gesamten Auto-Stand einschließlich TomTom-Assistenz, Stimmen/Freisprechkanal, GPS-/POI-Korrekturen und KI-Beifahrer mit Quellen, Tests und öffentlichen Bildern gemeinsam für Git/GitHub zusammenführen. Bedienung, Konzept, Architektur, Installation und Prüfgrenzen aktualisieren.

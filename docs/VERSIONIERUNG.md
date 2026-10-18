@@ -1,5 +1,17 @@
 # Versionierung und Releases
 
+## Git-Abgleich — 18. Oktober 2026
+
+Auf Nutzerwunsch wird die geprüfte und auf dem iPhone installierte Audiokorrektur einschließlich Tests, Bedienungs-/Architekturdokumentation und öffentlicher Simulatorbilder gemeinsam auf `main` in Git/GitHub gesichert. Der Nutzer hat die gewünschte Telefonkanal-Ausgabe am Infotainment bestätigt. **Version/Build bleiben 0.4.0 (4)**; die Änderung bleibt **Unveröffentlicht**. Die nachfolgenden Angaben „kein Commit/Push“ beschreiben die vorherigen Implementierungs- und Installationsschritte. Dieser Git-Abgleich erzeugt keinen neuen Tag oder GitHub-Release und kein weiteres Deployment.
+
+## Telefonkanal nach Fehler −50 — 18. Oktober 2026
+
+HFP-Konfiguration nach konkretem Gerätebefund auf `playAndRecord`/`default` mit ausschließlich `allowBluetoothHFP` korrigiert. 23 native Simulator-Tests und **ein nativer Audiotest direkt auf Michaels iPhone erfolgreich**, einschließlich Aktivierung ohne Fehler-Rückfall. Signierter Release-Build und Signaturprüfung erfolgreich; um **17:18 Uhr MESZ installiert und gestartet**. Anschließender Hörtest über den gewünschten Telefonkanal am Infotainment vom Nutzer als erfolgreich bestätigt. Weiterhin **0.4.0 (4), Unveröffentlicht**; kein Pi-Deployment, Commit/Push, Tag oder GitHub-Release. [Prüfstand](UMSETZUNG.md#hfp-konfiguration-nach-gerätefehler-50-18-oktober-2026).
+
+## Audio-Rückfall — 18. Oktober 2026
+
+Fehlgeschlagener Freisprechversuch fällt nach Freigabe auf normale Wiedergabe zurück; Audiomeldungen mit Ursache direkt bei der Hörprobe. **0.4.0 (4), Unveröffentlicht**, ohne neuen Git-Tag/GitHub-Release. 23 native iOS-Tests, zwei abschließende UI-Tests, Simulatorbuild, signierter Release-Gerätebuild und Signaturprüfung erfolgreich. Auf Michaels iPhone 15 Pro installiert und um 17:10 Uhr MESZ erfolgreich gestartet; Hörtest und Infotainment bleiben zu bestätigen. Kein Pi-Deployment oder Commit/Push. [Details und Grenzen](UMSETZUNG.md#audio-rückfall-und-diagnose-18-oktober-2026).
+
 ## Git-Abgleich — 17. Oktober 2026
 
 Auf Nutzerwunsch wird der gesamte geprüfte Auto-Entwicklungsstand vom 15.–17. Oktober mit Quellen, Tests, Bedienungs-/Architekturdokumentation, öffentlichen Bildschirmbildern und reproduzierbarer Mac-Hörsimulation gemeinsam auf `main` in Git/GitHub gesichert. **Version/Build bleiben 0.4.0 (4)** und die Änderungen unter **Unveröffentlicht**. Dies ist kein neuer Release und kein weiteres Geräte-/Pi-Deployment. Die folgenden Angaben „kein Commit/Push“ dokumentieren die jeweils vorherigen Arbeitsschritte. [Aktueller Gesamtnachweis](UMSETZUNG.md#dokumentation-und-git-abgleich-17-oktober-2026).

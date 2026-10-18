@@ -817,6 +817,25 @@ final class RideLocationTests: XCTestCase {
 
 
 final class SettingsVolumeTests: XCTestCase {
+    func testAudioFailureIsVisibleNextToPreview() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(de)", "-AppleLocale", "de_DE"]
+        app.launchEnvironment["BIKENAVI_SERVER"] = ""
+        app.launchEnvironment["BIKENAVI_TOKEN"] = ""
+        app.launchEnvironment["BIKENAVI_AUDIO_STATUS_PREVIEW"] = "1"
+        app.launchWorkspace()
+        app.tabBars.buttons["Einstellungen"].tap()
+        let status = app.staticTexts["speechStatus"]
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        XCTAssertTrue(status.isHittable)
+        XCTAssertTrue(status.label.contains("Wiedergabe aktivieren"))
+        XCTAssertTrue(app.buttons["volumePreview"].isHittable)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Gallery-94-Audio-Fehlerbeispiel"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     func testSystemVolumeBoxIsFirstAndOffersPreview() {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -828,7 +847,7 @@ final class SettingsVolumeTests: XCTestCase {
         app.tabBars.buttons["Einstellungen"].tap()
         let label = app.staticTexts["systemVolumeLabel"]
         XCTAssertTrue(label.waitForExistence(timeout: 5))
-        XCTAssertLessThan(label.frame.minY, app.buttons["Speichern und Verbindung prüfen"].frame.minY)
+        XCTAssertLessThan(label.frame.minY, app.descendants(matching: .any)["navigationVoicePicker"].firstMatch.frame.minY)
         XCTAssertFalse(app.sliders["speechVolume"].exists)
         XCTAssertTrue(app.buttons["volumePreview"].isHittable)
         app.buttons["volumePreview"].tap()

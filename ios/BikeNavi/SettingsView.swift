@@ -21,8 +21,12 @@ struct SettingsView: View {
                     #endif
                     Button("Kinderreim anhören") { state.previewSystemVolume() }
                         .accessibilityIdentifier("volumePreview")
+                    if let status = state.speechStatus {
+                        Text(status).font(.footnote)
+                            .accessibilityIdentifier("speechStatus")
+                    }
                 } header: { Text("Lautstärke") } footer: {
-                    Text("Dieser Regler und die Lautstärketasten am iPhone steuern dieselbe Medienlautstärke. Beim Verstellen hörst du einen kurzen Kinderreim. Die Lautstärke gilt auch für Navigationsansagen.")
+                    Text("Dieser Regler und die Lautstärketasten am iPhone steuern die Medienlautstärke. Beim Verstellen hörst du einen kurzen Kinderreim. Bei Auto-Ansagen über die Freisprechanlage die Telefonlautstärke während der Ansage am Auto einstellen.")
                 }
                 if state.applicationMode == .car {
                     Section {

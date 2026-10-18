@@ -1,5 +1,12 @@
 # BikeNavi – Bildschirmgalerie
 
+## Audiofehler direkt an der Hörprobe (18. Oktober 2026)
+
+Die Audiomeldung steht jetzt direkt unter **Kinderreim anhören**, getrennt vom Pi-Verbindungsstatus. **94** zeigt ein ausdrücklich synthetisches Fehlerbeispiel mit dem fehlgeschlagenen Arbeitsschritt. Gerätefehler enthalten zusätzlich den iOS-Fehlercode; der Beispieltext ist kein ausgelesener Fehler vom iPhone. Die Lautstärkehilfe erklärt die getrennte Telefonlautstärke der Freisprechanlage. Die aktuelle Einstellungsansicht in **11** zeigt zusätzlich den realen Simulatorhinweis auf fehlende geeignete Stimmen; dies ist kein Befund vom iPhone. Aufnahmen visuell geprüft, ohne private Daten oder Serverzugang; kein Nachweis hörbarer Ausgabe. Reproduktion: `SettingsVolumeTests`, Debug-Fixture `BIKENAVI_AUDIO_STATUS_PREVIEW=1`.
+
+<img src="images/94-audio-fehlerbeispiel.png" width="300" alt="Synthetisches Audiofehlerbeispiel direkt unter dem Kinderreim-Button">
+
+
 ## Auto-Assistenz und Stimmen
 
 **17. Oktober 2026, geheimer Beifahrer:** **11/93** zeigen die neuen Auto-Einstellungen mit Überraschungscharakter, Wechselbutton und ehrlichem Offline-Status. **88** zeigt die darunter liegende unveränderte Premium-/Siri-Stimmenauswahl. Die zwei gezielten UI-Abläufe prüfen Ein-/Ausschalten und dass der Charakter im Fahrrad-Modus nicht erscheint. Alle drei Bilder stammen aus der öffentlichen synthetischen Auto-Vorschau ohne Pi-Zugang; keine private Fahrt, Adresse oder Zugangsdaten. Visuell geprüft. Kein Nachweis von echter KI-Generierung oder hörbarer Ausgabe.
@@ -228,7 +235,7 @@ Die Diagramme und Fahrmodusfarben demonstrieren ausschließlich die Darstellung.
 
 ## Einstellungen und Logo
 
-Die erste Box regelt auf dem echten iPhone die System-Medienlautstärke über Apples nativen Regler. Im Auto-Modus folgt seit 17. Oktober der geheime Beifahrer (Bild 11/93), danach die Navigationsstimme (Bild 88) und der Pi-Server. In anderen Modi entfällt der Beifahrer. Die App zeigt im Simulator weiterhin einen Hinweis auf den dort nicht verfügbaren Systemregler. Hörbare Qualität und Kopplung mit den Hardwaretasten sind am iPhone zu prüfen.
+Die erste Box regelt auf dem echten iPhone die System-Medienlautstärke über Apples nativen Regler. Im Auto-Modus folgt seit 17. Oktober der geheime Beifahrer (Bild 93), danach die Navigationsstimme (Bild 88) und der Pi-Server. In anderen Modi entfällt der Beifahrer. Die App zeigt im Simulator weiterhin einen Hinweis auf den dort nicht verfügbaren Systemregler. Hörbare Qualität und Kopplung mit den Hardwaretasten sind am iPhone zu prüfen.
 
 | Einstellungen | App-Logo |
 | --- | --- |

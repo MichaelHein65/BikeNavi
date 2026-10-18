@@ -25,18 +25,35 @@ private final class TestNavigationAudioRouting: NavigationAudioRouting {
     var usesCarPlay = false
     var handsFreeInputID: String?
     var category: AVAudioSession.Category?
+    var mode: AVAudioSession.Mode?
     var options: AVAudioSession.CategoryOptions = []
     var calls: [String] = []
     var failInput = false
-    func configure(_ category: AVAudioSession.Category, options: AVAudioSession.CategoryOptions) throws {
-        self.category = category; self.options = options; calls.append(category == .playAndRecord ? "phone" : "playback")
+    var failPhoneConfiguration = false
+    var failPhoneActivation = false
+    var failPlaybackActivation = false
+    var failDeactivation = false
+    var failClearInput = false
+    private var failure: NSError { NSError(domain: "AudioTest", code: -50,
+        userInfo: [NSLocalizedDescriptionKey: "Synthetic audio failure"]) }
+    func configure(_ category: AVAudioSession.Category, mode: AVAudioSession.Mode, options: AVAudioSession.CategoryOptions) throws {
+        self.category = category; self.mode = mode; self.options = options; calls.append(category == .playAndRecord ? "phone" : "playback")
+        if category == .playAndRecord && failPhoneConfiguration { throw failure }
     }
-    func activate() throws { calls.append("activate") }
+    func activate() throws {
+        calls.append("activate")
+        if category == .playAndRecord && failPhoneActivation { throw failure }
+        if category == .playback && failPlaybackActivation { throw failure }
+    }
     func preferInput(_ identifier: String?) throws {
         calls.append(identifier ?? "clear")
-        if failInput && identifier != nil { throw APIError(status: 0, message: "Disconnected") }
+        if failInput && identifier != nil { throw failure }
+        if failClearInput && identifier == nil { throw failure }
     }
-    func deactivate() throws { calls.append("deactivate") }
+    func deactivate() throws {
+        calls.append("deactivate")
+        if failDeactivation { throw failure }
+    }
 }
 
 final class CarRideTests: XCTestCase {
@@ -45,8 +62,8 @@ final class CarRideTests: XCTestCase {
         let audio = NavigationAudio(routing: routing)
         XCTAssertTrue(try audio.activate(handsFreePreferred: true))
         XCTAssertEqual(routing.calls, ["phone", "activate", "public-hfp-example"])
-        XCTAssertTrue(routing.options.contains(.allowBluetoothHFP))
-        XCTAssertFalse(routing.options.contains(.allowBluetoothA2DP))
+        XCTAssertEqual(routing.mode, .default)
+        XCTAssertEqual(routing.options, [.allowBluetoothHFP])
         audio.release()
         XCTAssertEqual(Array(routing.calls.suffix(3)), ["clear", "deactivate", "playback"])
         XCTAssertFalse(audio.active)
@@ -57,6 +74,8 @@ final class CarRideTests: XCTestCase {
         let audio = NavigationAudio(routing: carPlay)
         XCTAssertFalse(try audio.activate(handsFreePreferred: true))
         XCTAssertEqual(carPlay.calls, ["playback", "activate"])
+        XCTAssertEqual(carPlay.mode, .voicePrompt)
+        XCTAssertTrue(carPlay.options.contains(.duckOthers))
         audio.release()
         let disconnected = TestNavigationAudioRouting()
         let other = NavigationAudio(routing: disconnected)
@@ -64,23 +83,97 @@ final class CarRideTests: XCTestCase {
         XCTAssertEqual(disconnected.category, .playback)
         other.release()
         disconnected.handsFreeInputID = "gone"; disconnected.failInput = true
-        XCTAssertThrowsError(try other.activate(handsFreePreferred: true))
+        XCTAssertFalse(try other.activate(handsFreePreferred: true))
+        XCTAssertTrue(other.active)
+        XCTAssertEqual(disconnected.category, .playback)
+        XCTAssertTrue(other.fallbackReason?.contains("Freisprecheinrichtung auswählen") == true)
+        XCTAssertTrue(disconnected.calls.contains("clear"))
+        other.release()
         XCTAssertFalse(other.active)
-        XCTAssertEqual(Array(disconnected.calls.suffix(2)), ["deactivate", "playback"])
     }
 
-    func testRealAudioSessionAcceptsPhonePromptConfigurationAndReturnsToPlayback() throws {
+    func testPhoneFailuresFallBackToPlaybackAndPreserveTheirCause() throws {
+        for failureStep in ["configure", "activate"] {
+            let routing = TestNavigationAudioRouting()
+            routing.failPhoneConfiguration = failureStep == "configure"
+            routing.failPhoneActivation = failureStep == "activate"
+            let audio = NavigationAudio(routing: routing)
+            XCTAssertFalse(try audio.activate(handsFreePreferred: true))
+            XCTAssertTrue(audio.active)
+            XCTAssertEqual(routing.category, .playback)
+            XCTAssertFalse(routing.options.contains(.allowBluetoothHFP))
+            XCTAssertTrue(audio.fallbackReason?.contains("AudioTest, -50") == true)
+            XCTAssertTrue(audio.fallbackMessage?.contains("Bluetooth-Audio") == true)
+            audio.release()
+            XCTAssertFalse(audio.active)
+            routing.failPhoneConfiguration = false; routing.failPhoneActivation = false
+            routing.handsFreeInputID = "public-hfp-example"
+            XCTAssertTrue(try audio.activate(handsFreePreferred: true))
+            XCTAssertNil(audio.fallbackReason)
+            audio.release()
+        }
+    }
+
+    func testNoBluetoothEndsInputSessionBeforeActivatingPlayback() throws {
+        let routing = TestNavigationAudioRouting()
+        let audio = NavigationAudio(routing: routing)
+        XCTAssertFalse(try audio.activate(handsFreePreferred: true))
+        XCTAssertEqual(routing.calls, ["phone", "activate", "deactivate", "playback", "playback", "activate"])
+        XCTAssertTrue(audio.active)
+        XCTAssertNil(audio.fallbackMessage)
+        audio.release()
+    }
+
+    func testFailedPlaybackReportsBothAttemptsAndDoesNotClaimAnActiveSession() {
+        let routing = TestNavigationAudioRouting()
+        routing.failPhoneActivation = true; routing.failPlaybackActivation = true
+        let audio = NavigationAudio(routing: routing)
+        XCTAssertThrowsError(try audio.activate(handsFreePreferred: true)) { error in
+            let message = NavigationAudio.failureMessage(error)
+            XCTAssertTrue(message.contains("Wiedergabe aktivieren"))
+            XCTAssertTrue(message.contains("Freisprechkanal aktivieren"))
+            XCTAssertTrue(message.contains("AudioTest, -50"))
+        }
+        XCTAssertFalse(audio.active)
+    }
+
+    func testFailedCleanupRetainsOwnershipAndCanBeRetried() throws {
+        for failClear in [false, true] {
+            let routing = TestNavigationAudioRouting()
+            routing.handsFreeInputID = "public-hfp-example"; routing.failInput = true
+            routing.failClearInput = failClear; routing.failDeactivation = !failClear
+            let audio = NavigationAudio(routing: routing)
+            XCTAssertThrowsError(try audio.activate(handsFreePreferred: true))
+            XCTAssertEqual(routing.calls.filter { $0 == "activate" }.count, 1)
+            routing.failClearInput = false; routing.failDeactivation = false
+            audio.release()
+            XCTAssertFalse(audio.active)
+            routing.failInput = false
+            XCTAssertTrue(try audio.activate(handsFreePreferred: true))
+            audio.release()
+        }
+    }
+
+    func testRealAudioSessionAcceptsHandsFreeConfigurationWithoutFallbackError() throws {
         let session = AVAudioSession.sharedInstance()
-        defer { try? session.setActive(false, options: .notifyOthersOnDeactivation) }
-        // Simulator can validate the category/mode contract, not Bluetooth or car wake-up.
-        try session.setCategory(.playAndRecord, mode: .voicePrompt, options: [.allowBluetoothHFP, .defaultToSpeaker, .duckOthers, .interruptSpokenAudioAndMixWithOthers])
-        XCTAssertEqual(session.category, .playAndRecord)
-        XCTAssertEqual(session.mode, .voicePrompt)
         let audio = NavigationAudio()
-        _ = try audio.activate(handsFreePreferred: true)
-        XCTAssertEqual(session.category, .playback)
+        defer { audio.release() }
+        // Run this same test on a physical iPhone: the simulator accepted the old
+        // configuration that the user's phone rejected before any route selection.
+        let handsFree = try audio.activate(handsFreePreferred: true)
+        XCTAssertNil(audio.fallbackReason, audio.fallbackReason ?? "")
+        XCTAssertTrue(audio.active)
+        XCTAssertEqual(session.category, handsFree ? .playAndRecord : .playback)
+        XCTAssertEqual(session.mode, handsFree ? .default : .voicePrompt)
+        if handsFree {
+            XCTAssertTrue(session.categoryOptions.contains(.allowBluetoothHFP))
+            XCTAssertFalse(session.categoryOptions.contains(.mixWithOthers))
+            XCTAssertFalse(session.categoryOptions.contains(.allowBluetoothA2DP))
+        }
         audio.release()
         XCTAssertFalse(audio.active)
+        XCTAssertEqual(session.category, .playback)
+        XCTAssertEqual(session.mode, .voicePrompt)
     }
 
     @MainActor
