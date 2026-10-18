@@ -61,6 +61,8 @@ Eine laufende oder pausierte Aufzeichnung bleibt beim Besuch des Startbildschirm
 
 ## Auto-Modus
 
+**18. Oktober 2026:** Den geheimen Beifahrer nach stiller Prüfung von zehn Rollen überarbeitet: mehr Situationspointen, weniger austauschbare Selbstbeschreibungen und zusätzliche Textprüfungen. Auf dem Pi aktiv; neue Texte bei der nächsten Auto-Planung oder beim Charakterwechsel. Die Systemstimme bleibt unverändert. [Prüfung und ehrliche Qualitätsgrenzen](docs/UMSETZUNG.md#stille-humorprüfung-und-korrektur-18-oktober-2026).
+
 Auf dem Startbildschirm **Auto** antippen. Die Planung verwendet die schnellste Pkw-Route; **Autobahnen**, **Mautstraßen** und **Fähren** lassen sich getrennt vermeiden. Diese Berechnung benötigt Internet und das aktualisierte Pi-Backend. Fahrradtyp, Belagswahl und Höhenbudget beeinflussen die Auto-Route nicht. Liegt das gewünschte Ziel abseits einer erreichbaren Straße, zeigt die App den berechneten Endpunkt und den verbleibenden Luftlinienabstand; dieser Restweg und seine Zeit sind nicht berechnet.
 
 Unter **Fahren** erscheinen große Abbiegehinweise, Ankunft, Restzeit, Reststrecke und Tempo. Straßenfahrzeiten stammen aus den gespeicherten Routingabschnitten. Mit der neuen optionalen TomTom-Anbindung berücksichtigen sie Verkehrsdaten; ORS-Routen bleiben ausdrücklich ohne Live-Verkehr. Die Sprachausgabe warnt abhängig vom Tempo frühzeitig, erinnert vor dem Manöver und kündigt nahe folgende Aktionen mit an. Die Standardkarte folgt der hellen/dunklen iPhone-Darstellung; andere Kartenstile lassen sich im Kartenmenü wählen. Bike-Messwerte werden bei Autofahrten weder angezeigt noch aufgezeichnet. Ohne Route beginnt eine **freie Autofahrt**.

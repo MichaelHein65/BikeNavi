@@ -4,6 +4,13 @@ Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release
 
 ## Unveröffentlicht
 
+### Auto-Beifahrer: Humor nach stiller Zehn-Rollen-Prüfung (18. Oktober 2026)
+
+- Zehn Rollen zunächst mit bisherigen Regeln geprüft: sieben bestehende und drei zusätzliche Kandidaten, je 27 Texte. Redaktionelles Ergebnis: überwiegend fantasievolle Selbstbeschreibungen ohne Pointe und zu ähnliche Stimmen. Generierungsauftrag auf kurze Situationspointen, erkennbare Rollenhaltung und natürliche Sprache umgestellt; Rollenpool auf zehn erweitert. Keine Beispielansagen oder Rollenauflösung in der Ergebniszusammenfassung.
+- Sachansage und humorvollen zweiten Satz deutlicher trennen. Neue KI-Repertoires zusätzlich gegen Duplikate, stereotype innere Selbstbeschreibungen, kopierte Stilbeispiele und wiederholte Tempoanweisungen prüfen. Ersatztexte bei anhaltender Überschreitung bleiben ernst. Höchstens ein Korrekturversuch innerhalb der bestehenden 30 Sekunden; keine neue Anfrage während einer Ansage.
+- **415 Backendtests erfolgreich**; Serverkorrektur auf Pi installiert, zwei echte KI-Repertoires über den regulären App-Zugang bestätigt.
+- `scripts/evaluate_car_characters.py` für reproduzierbare stille Pi-Prüfung aller Rollen ergänzt; Rohtexte nur lokal unter ignoriertem `build/`. Keine Audioerzeugung oder Wiedergabe in dieser Prüfung. App-Vertrag, Systemstimme, Modi außerhalb Auto und **0.4.0 (4)** unverändert. [Prüfung und Grenzen](docs/UMSETZUNG.md#stille-humorprüfung-und-korrektur-18-oktober-2026).
+
 ### Telefonkanal: ungültige Audiokonfiguration korrigieren (18. Oktober 2026)
 
 - Auf Nutzerwunsch die geprüfte, installierte und am Infotainment bestätigte Audiokorrektur samt Tests, Dokumentation und öffentlichen Simulatorbildern gemeinsam auf `main` in Git/GitHub sichern. Version/Build unverändert, kein neuer Release.

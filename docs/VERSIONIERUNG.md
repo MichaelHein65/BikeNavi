@@ -1,5 +1,7 @@
 # Versionierung und Releases
 
+**18. Oktober 2026, Humorprüfung:** Zehn Rollen still geprüft und die Textgenerierung in mehreren Gegenproben verbessert; zehn Rollen im Repertoire, ausdrückliche Trennung von Pointe und Sachansage, zusätzliche Textprüfungen und ernste Ersatzwarnungen. **415 Backendtests erfolgreich**, auf dem Pi installiert und über den regulären HTTPS-App-Zugang mit zwei echten KI-Repertoires geprüft; unverändert **0.4.0 (4), Unveröffentlicht**. iPhone-Code und API-Vertrag bleiben kompatibel; bestehende Texte wechseln erst bei neuer Planung oder Charakterwechsel. [Prüfung und Grenzen](UMSETZUNG.md#stille-humorprüfung-und-korrektur-18-oktober-2026).
+
 ## Git-Abgleich — 18. Oktober 2026
 
 Auf Nutzerwunsch wird die geprüfte und auf dem iPhone installierte Audiokorrektur einschließlich Tests, Bedienungs-/Architekturdokumentation und öffentlicher Simulatorbilder gemeinsam auf `main` in Git/GitHub gesichert. Der Nutzer hat die gewünschte Telefonkanal-Ausgabe am Infotainment bestätigt. **Version/Build bleiben 0.4.0 (4)**; die Änderung bleibt **Unveröffentlicht**. Die nachfolgenden Angaben „kein Commit/Push“ beschreiben die vorherigen Implementierungs- und Installationsschritte. Dieser Git-Abgleich erzeugt keinen neuen Tag oder GitHub-Release und kein weiteres Deployment.
