@@ -26,7 +26,8 @@ struct SimulateCarTrip {
                              .init(startIndex: 80, endIndex: 90, kilometersPerHour: 50)])
         let distances = LocalRouteMetrics.distances(route)
         var speed = CarSpeedGuidance(), deviation = CarDeviationGuidance(), policy = ReroutePolicy(), tracker = RouteTracker()
-        var traveled = 0.0, moments: [Moment] = [], variant = 0
+        var traveled = 0.0, moments: [Moment] = [], lastSpeech = -Double.infinity
+        var history = CarCharacterSpeechHistory()
         for second in 0...100 {
             let kph: Double = second < 18 ? 48 : second < 57 ? 42 : second < 70 ? 28 : 45
             if second > 0 { traveled = min(distances.last! - 1, traveled + kph / 3.6) }
@@ -40,19 +41,22 @@ struct SimulateCarTrip {
             let confirmed = policy.observe(distanceFromRoute: progress.distanceFromRoute, timestamp: now, accuracy: 5, now: now)
             var notice = deviation.observe(confirmed: confirmed, onRoute: progress.snappedPosition != nil && progress.distanceFromRoute <= 25, now: now)
             if let speedNotice = speed.update(route: route, progress: progress, speed: kph / 3.6,
-                timestamp: now, now: now, active: true, canSpeak: notice == nil) { notice = speedNotice }
-            let speech = notice.map { pack.decorate($0.text, event: $0.event, variant: variant) }
-            if notice != nil { variant += 1 }
+                timestamp: now, now: now, active: true, canSpeak: notice == nil, lastAnnouncement: lastSpeech) { notice = speedNotice }
+            let speech = notice.map { history.decorate($0.text, pack: pack, event: $0.event, now: now) }
+            if notice != nil { lastSpeech = now }
             moments.append(.init(second: second, meters: traveled, speedKPH: kph,
                 limitKPH: CarNavigation.speedLimit(route: route, progress: progress, active: true),
                 offRoute: isOffRoute, event: notice?.event.rawValue, speech: speech))
         }
         let events = moments.compactMap(\.event)
         print(moments.filter { $0.event != nil }.map { "\($0.second):\($0.event!)" }); fflush(stdout)
-        for required in ["slower", "overspeed", "compliant", "faster", "offRoute", "rerouted"] {
+        for required in ["slower", "overspeed", "compliant", "offRoute", "rerouted"] {
             guard events.contains(required) else { fatalError("Missing simulation event: \(required)") }
         }
         guard events.filter({ $0 == "overspeed" }).count >= 2 else { fatalError("No persistent overspeed reminder") }
+        guard !events.contains("faster"), events.filter({ $0 == "slower" }).count == 1 else {
+            fatalError("Frequent limit changes bypassed the quiet period")
+        }
         // Immediate instructions must remain factual and suppress secondary speech.
         var turns = CarVoiceGuidance()
         let maneuver = Maneuver(instruction: "Rechts abbiegen", distance: 0, coordinateIndex: 4, type: 1)
@@ -65,6 +69,6 @@ struct SimulateCarTrip {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(moments).write(to: URL(fileURLWithPath: CommandLine.arguments[2]), options: .atomic)
         print("101 simulierte Sekunden, \(Int(traveled)) m, \(events.count) Ansagen; echte Pi-Texte, Rolle bleibt geheim.")
-        print("Geprüft: Vorwarnung, geltendes Limit, wiederholte Überschreitung, Tempo angepasst, höheres Limit, Abweichung, Rückkehr, Abbiegepriorität, Pause.")
+        print("Geprüft: Vorwarnung, gedrosselte Limitwechsel, wiederholte Überschreitung, Tempo angepasst, Abweichung, Rückkehr, Abbiegepriorität, Pause.")
     }
 }

@@ -13,7 +13,7 @@ final class CarCompanionTests: XCTestCase {
         p.snappedPosition = points[3]
         return (route, p)
     }
-    func testPreviewReductionAndHigherLimitAtBoundaryOnly() {
+    func testFrequentLimitChangesStayQuietAfterPreview() {
         let (route, p) = fixture(); var guidance = CarSpeedGuidance()
         XCTAssertEqual(guidance.update(route: route, progress: p, speed: 20, timestamp: 100, now: 100, active: true)?.event, .slower)
         XCTAssertNil(guidance.update(route: route, progress: p, speed: 20, timestamp: 101, now: 101, active: true))
@@ -24,7 +24,58 @@ final class CarCompanionTests: XCTestCase {
         later.traveled += 1
         XCTAssertNil(guidance.update(route: route, progress: later, speed: 13, timestamp: 112, now: 112, active: true, canSpeak: false))
         for time in 113...115 { _ = guidance.update(route: route, progress: later, speed: 13, timestamp: Double(time), now: Double(time), active: true, canSpeak: false) }
-        XCTAssertEqual(guidance.update(route: route, progress: later, speed: 13, timestamp: 116, now: 116, active: true)?.event, .faster)
+        XCTAssertNil(guidance.update(route: route, progress: later, speed: 13, timestamp: 116, now: 116, active: true))
+    }
+    func testPreviewRequiresThreeMinutesSinceAnyAnnouncementAndSurvivesGPSReset() {
+        let (route, p) = fixture(); var guidance = CarSpeedGuidance()
+        XCTAssertNil(guidance.update(route: route, progress: p, speed: 20, timestamp: 279, now: 279, active: true, lastAnnouncement: 100))
+        XCTAssertEqual(guidance.update(route: route, progress: p, speed: 20, timestamp: 280, now: 280, active: true, lastAnnouncement: 100)?.event, .slower)
+        XCTAssertNil(guidance.update(route: route, progress: nil, speed: 20, timestamp: 281, now: 281, active: true))
+        XCTAssertNil(guidance.update(route: route, progress: p, speed: 20, timestamp: 459, now: 459, active: true))
+        XCTAssertEqual(guidance.update(route: route, progress: p, speed: 20, timestamp: 460, now: 460, active: true)?.event, .slower)
+    }
+    func testHigherLimitStillAnnouncedAfterQuietAndNoStaleCatchup() {
+        let (route, original) = fixture(); var p = original; p.traveled = 500
+        var guidance = CarSpeedGuidance()
+        XCTAssertNil(guidance.update(route: route, progress: p, speed: 13, timestamp: 279, now: 279, active: true, lastAnnouncement: 100))
+        p.traveled = LocalRouteMetrics.distances(route)[7]
+        XCTAssertEqual(guidance.update(route: route, progress: p, speed: 13, timestamp: 280, now: 280, active: true, lastAnnouncement: 100)?.event, .faster)
+        p.traveled = 500
+        XCTAssertNil(guidance.update(route: route, progress: p, speed: 13, timestamp: 281, now: 281, active: true))
+        for t in 282...460 {
+            XCTAssertNil(guidance.update(route: route, progress: p, speed: 13, timestamp: Double(t), now: Double(t), active: true))
+        }
+    }
+    func testOverspeedWarningIsNotBlockedByThreeMinuteQuietPeriod() {
+        let (route, original) = fixture(); var p = original; p.traveled = 500
+        var guidance = CarSpeedGuidance()
+        for t in 100...105 {
+            XCTAssertNil(guidance.update(route: route, progress: p, speed: 20, timestamp: Double(t), now: Double(t), active: true, lastAnnouncement: 98))
+        }
+        XCTAssertEqual(guidance.update(route: route, progress: p, speed: 20, timestamp: 106, now: 106, active: true, lastAnnouncement: 98)?.event, .overspeed)
+    }
+    func testCharacterUsesUnusedVariantsAndSuppressesDuplicatesAcrossEventsAndPacks() throws {
+        var history = CarCharacterSpeechHistory()
+        let pack = CarCharacterPack(characterID: "hidden", source: "test", phrases: ["navigation": ["Erster Kommentar.", "Zweiter Kommentar.", "Dritter Kommentar."]])
+        let fact = "Geradeaus weiter."
+        for (offset, expected) in pack.phrases["navigation"]!.enumerated() {
+            XCTAssertEqual(history.decorate(fact, pack: pack, event: .navigation, now: 100 + Double(offset)), fact + " " + expected)
+        }
+        XCTAssertEqual(history.decorate(fact, pack: pack, event: .navigation, now: 104), fact)
+        var restored = try JSONDecoder().decode(CarCharacterSpeechHistory.self, from: JSONEncoder().encode(history))
+        let replacement = CarCharacterPack(characterID: "another", source: "template", phrases: ["slower": ["ERSTER Kommentar!", "Neuer Kommentar."]])
+        XCTAssertEqual(restored.decorate(fact, pack: replacement, event: .slower, now: 105), fact + " Neuer Kommentar.")
+        XCTAssertEqual(restored.decorate(fact, pack: replacement, event: .slower, now: 106), fact)
+        XCTAssertEqual(restored.decorate(fact, pack: pack, event: .navigation, now: 1899), fact)
+        XCTAssertEqual(restored.decorate(fact, pack: pack, event: .navigation, now: 1900), fact + " Erster Kommentar.")
+    }
+    func testSuppressedOrInvalidAsideDoesNotConsumeValidVariantAndClockRollbackDoesNotRepeat() {
+        var history = CarCharacterSpeechHistory()
+        let pack = CarCharacterPack(characterID: "hidden", source: "test", phrases: ["navigation": ["Noch 50 Meter.", "Ein Kommentar."]])
+        let twoSentences = "Jetzt rechts. Danach links."
+        XCTAssertEqual(history.decorate(twoSentences, pack: pack, event: .navigation, now: 100), twoSentences)
+        XCTAssertEqual(history.decorate("Geradeaus.", pack: pack, event: .navigation, now: 101), "Geradeaus. Ein Kommentar.")
+        XCTAssertEqual(history.decorate("Geradeaus.", pack: pack, event: .navigation, now: 99), "Geradeaus.")
     }
     func testPersistentOverspeedEscalatesAndAcknowledgesCompliance() {
         let (route, original) = fixture(); var p = original; p.traveled = 500

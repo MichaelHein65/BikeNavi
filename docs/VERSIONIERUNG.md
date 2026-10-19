@@ -1,5 +1,7 @@
 # Versionierung und Releases
 
+**19. Oktober 2026, ruhigere Auto-Ansagen:** Drei Minuten Ruhe vor Vorausschau/Limitwechseln und persistente 30-Minuten-Sperre für wiederholte Charaktersprüche. **194 Kerntests und 40 native Simulatortests erfolgreich**, stille Mac-Kernsimulation und signierter Release-Build geprüft. Um **16:03 Uhr MESZ auf Michaels iPhone 15 Pro installiert und gestartet**. **0.4.0 (4), Unveröffentlicht** bleibt bestehen; kein Pi-Deployment oder neuer Release/Tag. Quellen, Tests und Doku auf `main` für Git/GitHub. [Prüfung und Grenzen](UMSETZUNG.md#ruhigere-auto-ansagen-19-oktober-2026).
+
 **18. Oktober 2026, Humorprüfung:** Zehn Rollen still geprüft und die Textgenerierung in mehreren Gegenproben verbessert; zehn Rollen im Repertoire, ausdrückliche Trennung von Pointe und Sachansage, zusätzliche Textprüfungen und ernste Ersatzwarnungen. **415 Backendtests erfolgreich**, auf dem Pi installiert und über den regulären HTTPS-App-Zugang mit zwei echten KI-Repertoires geprüft; unverändert **0.4.0 (4), Unveröffentlicht**. iPhone-Code und API-Vertrag bleiben kompatibel; bestehende Texte wechseln erst bei neuer Planung oder Charakterwechsel. [Prüfung und Grenzen](UMSETZUNG.md#stille-humorprüfung-und-korrektur-18-oktober-2026).
 
 ## Git-Abgleich — 18. Oktober 2026

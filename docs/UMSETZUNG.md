@@ -1,5 +1,15 @@
 # Umsetzungsstand – Version 0.4.0
 
+## Ruhigere Auto-Ansagen (19. Oktober 2026)
+
+Nach einer echten Fahrt meldete der Nutzer zu häufige Tempohinweise im Innenstadtbereich und wiederholte Charaktersprüche. Vorausschau und Hinweise am Limitwechsel benötigen jetzt drei Minuten ohne Auto-Ansage, einschließlich Navigation und Abweichungsreaktionen. Unterdrückte Übergänge werden verworfen; Warnungen bei anhaltender Überschreitung und Bestätigung nach Tempoanpassung bleiben aktiv.
+
+Die App wählt ungesprochene gültige Varianten und speichert eine ereignis-/charakterübergreifende 30-Minuten-Sperre in UserDefaults. Groß-/Kleinschreibung und Satzzeichen umgehen die Sperre nicht. Ohne freie Variante bleibt die Sachansage allein; nach erfolgloser Stimmenwahl oder Audioaktivierung wird kein Text verbraucht. Keine zusätzlichen Pi-/OpenAI-Aufrufe während der Fahrt; neue Repertoires weiterhin durch Planung/Charakterwechsel.
+
+**194 Swift-Kerntests und 40 native iOS-Simulatortests erfolgreich.** Fünf neue Kernprüfungen für exakte Zeitgrenzen, GPS-Unterbrechung, ausbleibendes Nachholen, weiter aktive Überschreitungswarnung und gespeicherte Spruchhistorie einschließlich Ereignis-/Repertoirewechsel und Uhrzeitrückstellung. Bestehenden Limitwechseltest angepasst. Stille Mac-Kernsimulation frisch kompiliert: 101 synthetische Sekunden, 899 Meter und **sechs statt acht Ansagen**, mit bereits vorhandenem echten Pi-Repertoire. Kein neuer KI-Aufruf, keine Audioerzeugung/Wiedergabe und kein Feldtest dieser Korrektur.
+
+Signierter Release-Gerätebuild und strenge Signaturprüfung erfolgreich. Am **19. Oktober um 16:03 Uhr MESZ auf Michaels iPhone 15 Pro installiert und gestartet**, nachdem die USB-Verbindung hergestellt war. Weiterhin **0.4.0 (4), Unveröffentlicht**. Kein Pi-Deployment erforderlich, da Server/API unverändert; keine sichtbare UI-Änderung und deshalb keine neuen Galeriebilder. Quellen, Tests und Dokumentation werden auf `main` in Git/GitHub gesichert; kein Tag/GitHub-Release. Diagnoseprotokolle, Simulationstexte und Buildprodukte bleiben unversioniert.
+
 
 ## Stille Humorprüfung und Korrektur (18. Oktober 2026)
 

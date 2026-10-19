@@ -354,7 +354,8 @@ final class AppState: ObservableObject {
     private var carSpeedGuidance = CarSpeedGuidance()
     private var carDeviationGuidance = CarDeviationGuidance()
     private var carLastSpeech = -Double.infinity
-    private var carCharacterVariant = 0
+    private var carCharacterHistory = UserDefaults.standard.data(forKey: "carCharacterSpeechHistory")
+        .flatMap { try? JSONDecoder().decode(CarCharacterSpeechHistory.self, from: $0) } ?? CarCharacterSpeechHistory()
     private var carCharacterTask: Task<Void, Never>?
     private var carCharacterRequestID: UUID?
     private var carCharacterPack: CarCharacterPack? = UserDefaults.standard.data(forKey: "carCharacterPack")
@@ -1600,7 +1601,7 @@ final class AppState: ObservableObject {
             lastAnnouncement = nil
             carZoom = CarAutoZoom(); carLookAhead = 450; carVoice = CarVoiceGuidance()
             carRerouteAttempt = -.infinity; carArrivalAnnounced = false
-            carSpeedGuidance = CarSpeedGuidance(); carDeviationGuidance = CarDeviationGuidance(); carLastSpeech = -.infinity
+            carSpeedGuidance = CarSpeedGuidance(); carDeviationGuidance = CarDeviationGuidance()
             if ride.profile.mode == .car && carCharacterPack == nil { prepareCarCharacter() }
             location.setRiding(true)
 
@@ -1722,10 +1723,6 @@ final class AppState: ObservableObject {
     }
     private func speakCar(_ instruction: String, event: CarSpeechEvent = .navigation, character: Bool = true) {
         guard voice, activeRide?.profile.mode == .car, activeRide?.recordingState == .recording else { return }
-        let text = carCharacterEnabled && character
-            ? carCharacterPack?.decorate(instruction, event: event, variant: carCharacterVariant) ?? instruction : instruction
-        carCharacterVariant += 1
-        carLastSpeech = Date().timeIntervalSince1970
         stopVolumePreview()
         speech.stopSpeaking(at: .immediate)
         guard let selectedVoice = NavigationVoice.selected(navigationVoiceID) else {
@@ -1741,6 +1738,15 @@ final class AppState: ObservableObject {
         }
         speechStatus = navigationSpeechDelegate.audio.fallbackMessage
         if speechStatus != nil { localRideStatus = "Normale Audioausgabe · im Auto ggf. Bluetooth-Audio wählen" }
+        let now = Date().timeIntervalSince1970
+        var text = instruction
+        if carCharacterEnabled && character, let pack = carCharacterPack {
+            text = carCharacterHistory.decorate(instruction, pack: pack, event: event, now: now)
+            if let saved = try? JSONEncoder().encode(carCharacterHistory) {
+                UserDefaults.standard.set(saved, forKey: "carCharacterSpeechHistory")
+            }
+        }
+        carLastSpeech = now
         let utterance = AVSpeechUtterance(string: text)
         // Give the car time to open its phone audio path before the first word.
         utterance.preUtteranceDelay = handsFree ? 0.5 : 0
@@ -2319,7 +2325,8 @@ final class AppState: ObservableObject {
             }
             if let route = ridingRoute, let warning = carSpeedGuidance.update(route: route, progress: progress,
                 speed: point.speed, timestamp: point.timestamp, now: now, active: !rerouting,
-                canSpeak: voice && !turnSoon && !speech.isSpeaking && now - carLastSpeech >= 8) {
+                canSpeak: voice && !turnSoon && !speech.isSpeaking && now - carLastSpeech >= 8,
+                lastAnnouncement: carLastSpeech) {
                 speakCar(warning.text, event: warning.event)
             }
         }

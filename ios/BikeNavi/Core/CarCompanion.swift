@@ -22,6 +22,26 @@ struct CarCharacterPack: Codable {
     }
 }
 
+/// Shared across events and repertoires; persisted by the app after speech is queued.
+struct CarCharacterSpeechHistory: Codable {
+    private var spoken: [String: Double] = [:]
+
+    mutating func decorate(_ instruction: String, pack: CarCharacterPack, event: CarSpeechEvent, now: Double) -> String {
+        guard now.isFinite else { return instruction }
+        // A clock moving backwards must not immediately unlock repeated comments.
+        spoken = spoken.filter { now - $0.value < 30 * 60 }
+        for (index, aside) in (pack.phrases[event.rawValue] ?? []).enumerated() {
+            let key = aside.lowercased().filter { $0.isLetter || $0.isNumber }
+            guard !key.isEmpty, spoken[key] == nil else { continue }
+            let decorated = pack.decorate(instruction, event: event, variant: index)
+            guard decorated != instruction else { continue }
+            spoken[key] = now
+            return decorated
+        }
+        return instruction
+    }
+}
+
 struct CarSpeechNotice: Equatable {
     var event: CarSpeechEvent
     var text: String
@@ -41,11 +61,14 @@ struct CarSpeedGuidance {
     private var transition: (notice: CarSpeechNotice, expires: Double)?
 
     mutating func update(route: CalculatedRoute, progress: RouteProgress?, speed: Double,
-                         timestamp: Double, now: Double, active: Bool, canSpeak: Bool = true) -> CarSpeechNotice? {
+                         timestamp: Double, now: Double, active: Bool, canSpeak: Bool = true,
+                         lastAnnouncement: Double = -.infinity) -> CarSpeechNotice? {
         guard active, timestamp.isFinite, now.isFinite, abs(now - timestamp) < 5,
               speed.isFinite, speed >= 0,
               let current = CarNavigation.speedLimit(route: route, progress: progress, active: active), let progress else {
-            self = CarSpeedGuidance(); return nil
+            let speechTime = lastSpoken
+            self = CarSpeedGuidance(); lastSpoken = speechTime
+            return nil
         }
         guard lastTime.map({ timestamp > $0 }) ?? true else { return nil }
         if let lastTime, timestamp - lastTime >= 5 {
@@ -82,10 +105,16 @@ struct CarSpeedGuidance {
             lastWarning = now; lastSpoken = now; warned = true; transition = nil
             return .init(event: .overspeed, text: "Du fährst weiterhin zu schnell, bitte auf höchstens \(Int(current)) Kilometer pro Stunde reduzieren!")
         }
+        let quiet = now - max(lastSpoken, lastAnnouncement) >= 180
         if let pending = transition {
-            transition = nil; lastSpoken = now
-            return pending.notice
+            transition = nil
+            if pending.notice.event == .compliant || quiet {
+                lastSpoken = now
+                return pending.notice
+            }
         }
+        // Suppressed changes are not queued for later playback in another section.
+        guard quiet else { return nil }
         let distances = LocalRouteMetrics.distances(route)
         let sections = (route.carSpeedLimits ?? []).sorted { $0.startIndex < $1.startIndex }
         // Follow only a continuous run of known limits. Never bridge unknown stretches.

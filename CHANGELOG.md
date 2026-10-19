@@ -4,6 +4,12 @@ Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release
 
 ## Unveröffentlicht
 
+### Auto-Ansagen nach Fahrtrückmeldung beruhigen (19. Oktober 2026)
+
+- Vorausschau auf niedrigere Limits und Hinweise direkt am Limitwechsel erst nach mindestens drei Minuten ohne Auto-Ansage; Abbiegehinweise zählen mit. Unterdrückte Übergänge werden nicht später nachgeholt. Warnungen bei anhaltender Überschreitung und die kurze Bestätigung nach Tempoanpassung behalten ihre bisherigen Abstände.
+- Ungesprochene Charaktersprüche statt zyklischer Wiederholung wählen. Derselbe Text bleibt für 30 Minuten gesperrt, unabhängig von Ereignis und Charakter, auch nach Pause oder App-Neustart. Sind keine gültigen unbenutzten Varianten übrig, bleibt die sachliche Ansage allein. Neue Pi-Repertoires weiterhin bei Planung/Charakterwechsel, keine zusätzlichen KI-Aufrufe während der Fahrt.
+- Weiterhin **0.4.0 (4), Unveröffentlicht**. [Prüfung und Bereitstellungsgrenzen](docs/UMSETZUNG.md#ruhigere-auto-ansagen-19-oktober-2026).
+
 ### Auto-Beifahrer: Humor nach stiller Zehn-Rollen-Prüfung (18. Oktober 2026)
 
 - Zehn Rollen zunächst mit bisherigen Regeln geprüft: sieben bestehende und drei zusätzliche Kandidaten, je 27 Texte. Redaktionelles Ergebnis: überwiegend fantasievolle Selbstbeschreibungen ohne Pointe und zu ähnliche Stimmen. Generierungsauftrag auf kurze Situationspointen, erkennbare Rollenhaltung und natürliche Sprache umgestellt; Rollenpool auf zehn erweitert. Keine Beispielansagen oder Rollenauflösung in der Ergebniszusammenfassung.
