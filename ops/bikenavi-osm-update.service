@@ -1,0 +1,17 @@
+[Unit]
+Description=BikeNavi Croatia OSM extract update
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+User=pi
+WorkingDirectory=/srv/bikenavi
+ExecStart=/bin/sh /srv/bikenavi/ops/bikenavi-osm-update.sh
+ExecStopPost=-/usr/bin/docker rm -f bikenavi-osm-update
+TimeoutStartSec=2h
+TimeoutStopSec=30s
+Restart=on-failure
+RestartSec=1h

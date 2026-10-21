@@ -18,6 +18,7 @@ def main():
     parser.add_argument('--latitude',type=float,required=True)
     parser.add_argument('--longitude',type=float,required=True)
     parser.add_argument('--radius',type=int,choices=[1,2],default=1)
+    parser.add_argument('--refresh',action='store_true',help='Recompile every tile from the installed source before checking cache replay')
     args=parser.parse_args()
     if not math.isfinite(args.latitude) or not math.isfinite(args.longitude) or abs(args.latitude)>=75 or abs(args.longitude)>=179:
         parser.error('Choose a center within supported region bounds')
@@ -34,7 +35,7 @@ def main():
         assert client.get(f'/v1/region-tiles/{x}/{y}',headers={'Authorization':''}).status_code==401
         for yy in range(y-args.radius,y+args.radius+1):
             for xx in range(x-args.radius,x+args.radius+1):
-                start=time.monotonic();response=client.get(f'/v1/region-tiles/{xx}/{yy}');response.raise_for_status()
+                start=time.monotonic();response=client.get(f'/v1/region-tiles/{xx}/{yy}',params={'refresh':'true'} if args.refresh else None);response.raise_for_status()
                 package=response.json();data=base64.b64decode(package['data'],validate=True)
                 assert package['schema']==1 and package['bytes']==len(data)<=32*1024*1024
                 assert hashlib.sha256(data).hexdigest()==package['sha256']

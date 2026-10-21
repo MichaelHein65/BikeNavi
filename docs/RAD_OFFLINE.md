@@ -40,9 +40,9 @@ Paketlimits: maximal 25 Bereiche, insgesamt 250 MiB für Regionsdateien einschli
 
 Seit der Serverkorrektur vom 21. Oktober kann der Pi Regionspakete aus einem lokal installierten Geofabrik-Länderauszug erstellen. Ein solcher Auszug enthält echte OpenStreetMap-Daten und verwendet denselben Fahrradcompiler. Der erste iPhone-Download benötigt weiterhin die Verbindung zum Pi. Der Pi benötigt für abgedeckte Bereiche keine funktionierende Overpass-Instanz.
 
-Installiert ist **Kroatien**, OSM-Stand **20. Oktober 2026, 20:23:47 UTC**. Außerhalb der tatsächlichen Abdeckung und an abgeschnittenen Landesrändern greift der bisherige Onlinepfad; eine leere Teilabdeckung wird nicht als vollständige Region ausgegeben. Die Daten dürfen höchstens 30 Tage alt sein. **Aktualisieren** in der App verwendet den aktuell auf dem Pi installierten Quellenstand; es lädt nicht selbst einen neuen Länderauszug. Ein Betreiber muss neue Auszüge installieren, bevor der bisherige Stand abläuft. Der Katalog enthält Nodes, Ways und vollständig auflösbare einfache POI-Relations; verschachtelte POI-Relations werden ausgelassen. Die Quelle bleibt eine OSM-Momentaufnahme ohne Zusicherung aktueller Sperrungen.
+Installiert ist **Kroatien**, OSM-Stand **20. Oktober 2026, 20:23:47 UTC**. Außerhalb der tatsächlichen Abdeckung und an abgeschnittenen Landesrändern greift der bisherige Onlinepfad; eine leere Teilabdeckung wird nicht als vollständige Region ausgegeben. Die Daten dürfen höchstens 30 Tage alt sein. **Aktualisieren** in der App verwendet den aktuell auf dem Pi installierten Quellenstand; es lädt nicht selbst einen neuen Länderauszug. Der Pi prüft den Kroatien-Auszug täglich automatisch und gibt nur erfolgreich geprüfte neue Indizes frei; bei Fehlern folgen stündliche Wiederholungen. [Zeitplan, Schutzprüfungen und Diagnose](OSM_AKTUALISIERUNG.md). Der Katalog enthält Nodes, Ways und vollständig auflösbare einfache POI-Relations; verschachtelte POI-Relations werden ausgelassen. Die Quelle bleibt eine OSM-Momentaufnahme ohne Zusicherung aktueller Sperrungen.
 
-Für weitere Länder beziehungsweise Aktualisierungen:
+Für weitere Länder beziehungsweise eine manuelle Installation:
 
 1. Einen aktuellen `.osm.pbf`-Auszug und die zugehörige `.poly`-Abdeckung vom [Geofabrik-Downloadserver](https://download.geofabrik.de/) herunterladen. Dateien nur unter ignoriertem `build/` oder `server/data/` ablegen.
 2. Mit Python und `osmium==4.3.2` einen **neuen, datierten** Index erstellen:
@@ -57,7 +57,7 @@ Für weitere Länder beziehungsweise Aktualisierungen:
    ```
    `--radius 2` prüft 5×5 Kacheln. Das Skript prüft Anmeldung, Pakete, SHA-256, Quellalter und identische Wiederholung aus dem Cache. Es erzeugt keine Fahrt. Öffentliche OSM-Pakete bleiben unter ignoriertem `build/region-live/`.
 
-Für die Indexerzeugung direkt auf dem Pi kann das Backend-Image als einmaliger Container mit Schreibzugriff auf den Datenordner verwendet werden; der laufende API-Container bleibt lesend. Die benötigte XML-Bibliothek `libexpat1` und Pyosmium sind im Image enthalten. Keine zusätzliche öffentliche Schnittstelle, kein automatischer Download ganzer Länder und keine Änderung der Fahrten-Datenbank.
+Für die Indexerzeugung direkt auf dem Pi kann das Backend-Image als einmaliger Container mit Schreibzugriff auf den Datenordner verwendet werden; der laufende API-Container bleibt lesend. Die benötigte XML-Bibliothek `libexpat1` und Pyosmium sind im Image enthalten. Keine zusätzliche öffentliche Schnittstelle, automatische Länderdownloads ausschließlich für Kroatien und keine Änderung der Fahrten-Datenbank.
 
 ## Drei Fahransichten
 

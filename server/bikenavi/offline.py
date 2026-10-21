@@ -138,7 +138,12 @@ class OfflineTiles:
         async with self.lock:
             cached = self.storage.offline_tile(key)
             if cached and not refresh and time.time() - cached["generatedAt"] < 30 * 86400:
-                return cached
+                try:
+                    source_date = self.extracts.source_date(x, y)
+                except (OSError, ValueError, KeyError, TypeError):
+                    source_date = None
+                if source_date is None or source_date <= cached["generatedAt"]:
+                    return cached
             # A verified local country extract avoids public query-service outages.
             # Keep the lock until the bounded worker stops, including on cancellation.
             worker = asyncio.create_task(asyncio.to_thread(self.extracts.tile, x, y))
@@ -157,6 +162,8 @@ class OfflineTiles:
                 result = compile_tile(elements, x, y, generated_at=source_date)
                 self.storage.save_offline_tile(key, result)
                 return result
+            if cached and not refresh and time.time() - cached["generatedAt"] < 30 * 86400:
+                return cached  # Keep a valid cached tile if a newly published source is damaged.
             if not self.url:
                 raise HTTPException(503, "Der Download des lokalen Wegenetzes ist auf dem Pi nicht eingerichtet.")
             south, west = y * TILE_DEGREES - 90, x * TILE_DEGREES - 180

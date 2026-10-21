@@ -67,16 +67,22 @@ def extract_elements(path, bounds):
 
 
 class LocalExtracts:
-    def __init__(self, directory):
+    def __init__(self, directory, manifest_pattern="*.json"):
         self.directory = Path(directory) if directory else None
         self.verified = {}
+        self.manifest_pattern = manifest_pattern
 
-    def tile(self, x, y):
+    def candidates(self, x, y):
         if self.directory is None or not self.directory.is_dir():
             return None
         bounds = (x*.05-180, y*.05-90, (x+1)*.05-180, (y+1)*.05-90)
         footprint = box(*bounds).buffer(.001)
-        manifests = [json.loads(p.read_text()) for p in self.directory.glob('*.json')]
+        manifests = []
+        for path in self.directory.glob(self.manifest_pattern):
+            try:
+                manifests.append(json.loads(path.read_text()))
+            except FileNotFoundError:
+                continue  # Retention may remove an obsolete manifest during enumeration.
         for metadata in sorted(manifests, key=lambda m: m.get('sourceDate', ''), reverse=True):
             if metadata.get('schema') != 1:
                 raise ValueError('Unknown OSM extract manifest')
@@ -86,6 +92,14 @@ class LocalExtracts:
             stamp = datetime.fromisoformat(metadata['sourceDate'].replace('Z', '+00:00')).timestamp()
             if not 0 <= time.time() - stamp <= MAX_AGE:
                 continue
+            yield metadata, stamp
+
+    def source_date(self, x, y):
+        return next((stamp for _, stamp in self.candidates(x, y)), None)
+
+    def tile(self, x, y):
+        bounds = (x*.05-180, y*.05-90, (x+1)*.05-180, (y+1)*.05-90)
+        for metadata, stamp in self.candidates(x, y):
             path = (self.directory / metadata['file']).resolve()
             if path.parent != self.directory.resolve() or not path.name.endswith('.sqlite'):
                 raise ValueError('Invalid OSM extract path')

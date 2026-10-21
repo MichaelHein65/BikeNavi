@@ -4,6 +4,13 @@ Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release
 
 ## Unveröffentlicht
 
+### Automatische OSM-Länderpflege auf dem Pi — 21. Oktober 2026
+
+- Kroatien täglich direkt auf dem Pi aktualisieren, bei Fehlern stündlich erneut versuchen und verpasste Läufe nachholen. Unveränderte Quellen benötigen nur eine Prüfsummenabfrage und lokale Prüfung.
+- Neue Daten vor Freigabe auf Download-Prüfsummen, Quellalter, SQLite-/SHA-256-Integrität, vollständige Wege, Größenentwicklung und einen Radgraphen prüfen. Atomare Aktivierung, Mindestfreiraum, Prozesssperre und Aufbewahrung geprüfter Vorgänger; fehlerhafte Importe lassen den bisherigen Stand bestehen.
+- Vollständiger automatischer Import und anschließender unveränderter Prüflauf auf dem Pi erfolgreich; 25 Regionskacheln erzwungen aus dem automatisch erzeugten Index geladen. **463 Backendtests und 37 gezielte Pi-Tests bestanden**.
+- Neuere OSM-Quellen erneuern auch ältere Server-Cachekacheln. Bereits auf dem iPhone gespeicherte Regionen weiterhin über **Aktualisieren** erneuern. Keine App-/Build- oder Release-Tag-Änderung. [Betrieb](docs/OSM_AKTUALISIERUNG.md) · [Abnahme](docs/UMSETZUNG.md#automatische-osm-aktualisierung--21-oktober-2026).
+
 ### Offline-Regionsdownloads bei ausgefallenen OSM-Abfragediensten — 21. Oktober 2026
 
 - Optionaler lokaler OSM-Länderindex auf dem Pi: vollständig abgedeckte Kacheln werden aus einem geprüften Geofabrik-Auszug erzeugt. Die App verwendet weiter denselben Regionsendpunkt, Compiler, Prüfsummen- und Cachevertrag. Keine Änderung an iPhone-Version oder Datenbankformat der Fahrten.

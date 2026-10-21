@@ -27,7 +27,9 @@ ssh("mkdir -p /srv/bikenavi/server/data/osm")
 archive = ROOT / "build/bikenavi-deploy.tar.gz"
 archive.parent.mkdir(exist_ok=True)
 with tarfile.open(archive, "w:gz") as tar:
-    for relative in ["compose.yaml", "ops/bikenavi-ipv6.sh", "server/Dockerfile", "server/.dockerignore", "server/requirements.lock", "server/pyproject.toml"]:
+    for relative in ["compose.yaml", "ops/bikenavi-ipv6.sh", "ops/bikenavi-osm-update.sh", "ops/install-osm-updater.sh",
+                     "ops/bikenavi-osm-update.service", "ops/bikenavi-osm-update.timer",
+                     "scripts/prepare_offline_extract.py", "scripts/update_offline_extract.py", "server/Dockerfile", "server/.dockerignore", "server/requirements.lock", "server/pyproject.toml"]:
         tar.add(ROOT / relative, arcname=relative)
     for path in sorted((ROOT / "server/bikenavi").glob("*.py")):
         tar.add(path, arcname=path.relative_to(ROOT))
@@ -54,5 +56,6 @@ file.chmod(0o600)
 '''
 ssh("python3 -c " + shlex.quote(merge_environment), input=(ROOT / ".env").read_bytes())
 ssh("chmod 600 /srv/bikenavi/.env && cd /srv/bikenavi && tar xzf release.tar.gz && sudo -n sh ops/bikenavi-ipv6.sh --install && docker compose up --build -d")
+ssh("cd /srv/bikenavi && sudo -n sh ops/install-osm-updater.sh")
 ssh("sudo -n tailscale serve --bg --https=10443 http://127.0.0.1:8093")
 print("BikeNavi wurde als eigenes Compose-Projekt bereitgestellt.")

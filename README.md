@@ -10,7 +10,7 @@
 
 [Release-Notizen](docs/releases/0.5.0-rc.1.md) · Stabile Version weiterhin [v0.4.0](https://github.com/MichaelHein65/BikeNavi/releases/tag/v0.4.0).
 
-Serverkorrektur nach RC1: **Offline-Regionsdownloads für Kroatien über den Pi wieder funktionsfähig**, mit lokalem geprüftem OSM-Länderindex. Bestehende App 0.5.0 (5) bleibt kompatibel; Korrektur unter Unveröffentlicht. [Quellenstand, Abdeckung und Aktualisierung](docs/RAD_OFFLINE.md#lokale-osm-quelle-auf-dem-pi).
+Serverkorrektur nach RC1: **Offline-Regionsdownloads für Kroatien über den Pi wieder funktionsfähig**, mit lokalem geprüftem OSM-Länderindex. Der Pi aktualisiert seinen Kroatien-OSM-Auszug täglich automatisch. [Zeitplan, Prüfungen und Betrieb](docs/OSM_AKTUALISIERUNG.md). Bestehende App 0.5.0 (5) bleibt kompatibel; Korrektur unter Unveröffentlicht. [Quellenstand, Abdeckung und Aktualisierung](docs/RAD_OFFLINE.md#lokale-osm-quelle-auf-dem-pi).
 
 [Änderungen](CHANGELOG.md) · [GitHub-Releases](https://github.com/MichaelHein65/BikeNavi/releases) · [Alle Bildschirme](docs/BILDSCHIRME.md) · [Versionierung](docs/VERSIONIERUNG.md)
 
