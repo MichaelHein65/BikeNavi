@@ -14,7 +14,7 @@ Diese Anleitung ist für einen Arbeits-Thread, der Änderungen an der iPhone-App
 
 Am 21. Oktober 2026 nach erfolgreicher Sicherungs-/Wiederherstellungsprüfung von 307 Archivdatensätzen auf **0.5.0-rc.1** aktualisiert. Backend und Datenbank gesund; 20 laufende Quellmodule stimmen per SHA-256 mit Commit `3765b1f` überein. HTTPS, Anmeldung, Beispielrouting, Speicherung/Abgleich und GPX-Metadatenerhalt live erfolgreich. Technische Testtouren wieder gelöscht.
 
-Neue regionale OSM-Pakete konnten in zwei Live-Versuchen wegen Anbieter-/Verbindungsfehlern nicht geladen werden (HTTP 503). Diese verbleibende Einschränkung wird nicht als bestandener Downloadtest ausgegeben. [Details](UMSETZUNG.md#pi-bereitstellung-und-live-abnahme).
+Bei der ursprünglichen RC1-Abnahme scheiterten neue OSM-Pakete zweimal mit HTTP 503. Die anschließende **Serverkorrektur unter Unveröffentlicht** verwendet für Kroatien einen lokalen geprüften Länderindex und hat die erneuten 3×3- und 5×5-Downloads über den Pi samt Swift-Verarbeitung bestanden. Die vorhandene iPhone-App **0.5.0 (5)** ist kompatibel; keine erneute Installation nötig. Außerhalb installierter Länder bleibt der Onlineanbieter erforderlich. [Korrektur und Live-Abnahme](UMSETZUNG.md#offline-regionsdownloads-korrigieren--21-oktober-2026).
 
 ## Vor dem ersten Gerätetest
 

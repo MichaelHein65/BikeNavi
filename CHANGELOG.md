@@ -4,6 +4,15 @@ Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release
 
 ## Unveröffentlicht
 
+### Offline-Regionsdownloads bei ausgefallenen OSM-Abfragediensten — 21. Oktober 2026
+
+- Optionaler lokaler OSM-Länderindex auf dem Pi: vollständig abgedeckte Kacheln werden aus einem geprüften Geofabrik-Auszug erzeugt. Die App verwendet weiter denselben Regionsendpunkt, Compiler, Prüfsummen- und Cachevertrag. Keine Änderung an iPhone-Version oder Datenbankformat der Fahrten.
+- SHA-256, Quellzeitpunkt, tatsächliche Landesgrenze mit Sicherheitsabstand und 30-Tage-Altersgrenze prüfen; unvollständige Weggeometrien ablehnen. Zugangssperren und Abbiegebeschränkungen bleiben erhalten. Mehrfach ausgewählte POIs nicht doppelt ausgeben.
+- Betreiberwerkzeug `prepare_offline_extract.py` erstellt einen räumlichen SQLite-Index; große OSM-Dateien bleiben außerhalb von Git. Downloadprüfung `check_region_download.py` prüft echte 3×3-/5×5-Pakete samt Cachewiederholung. Swift-Prüfung kann diese realen Pakete einschließlich Unterbrechung/Fortsetzung, Graph, lokaler Karte und Brückenroute verarbeiten.
+- Auf dem Pi nach geprüfter Sicherung (310 Archivdatensätze) bereitgestellt. Kroatien-Index mit OSM-Stand 20.10.2026 installiert; **3×3 und 5×5 Tisno über HTTPS vollständig geladen**, Cache-/Aktualisierungs- und Swift-Prüfungen erfolgreich. **446 Backendtests, 20 gezielte Tests im Pi-Container und 224 Swift-Kerntests bestanden**. Außerhalb installierter Länder bleiben Anbietergrenzen bestehen. [Live-Abnahme](docs/UMSETZUNG.md#abschließende-live-abnahme-über-den-pi).
+- Öffentliche Anbieter nach Fehlern mindestens 60 Sekunden pausieren, `Retry-After` berücksichtigen und HTTP 403/406 eine Stunde aussetzen. Diagnose nennt Anbieterhost und HTTP-Status ohne Zugangsdaten. Eigene Anbieter bleiben exklusiv konfiguriert. [Betrieb und Grenzen](docs/RAD_OFFLINE.md#lokale-osm-quelle-auf-dem-pi).
+
+
 ### Bereitstellungsnachweis und Versionsdokumentation — 21. Oktober 2026
 
 - Veröffentlichten Quellstand `3765b1f` / **v0.5.0-rc.1** auf Pi und iPhone übertragen. Pi-Sicherung mit 307 Archivdatensätzen erfolgreich wiederhergestellt; Backend gesund und Quellhashes bestätigt, HTTPS-/Routing-/Sync-/GPX-Prüfungen erfolgreich. Neuer OSM-Regionsabruf in zwei Versuchen mit HTTP 503 gescheitert; Einschränkung dokumentiert.

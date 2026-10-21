@@ -43,7 +43,7 @@ def create_app(database_url: str | None = None, token: str | None = None,
             app.state.pois = POIService(client, app.state.ors, os.getenv("POI_OVERPASS_URL") or context_url,
                                        os.getenv("TANKERKOENIG_API_KEY", ""), app.state.storage,
                                        os.getenv("GEOAPIFY_API_KEY", ""))
-            app.state.offline = OfflineTiles(client, app.state.storage, context_url)
+            app.state.offline = OfflineTiles(client, app.state.storage, context_url, os.getenv("OFFLINE_EXTRACT_DIR", ""))
             app.state.blogs = BlogRepository(app.state.storage)
             app.state.blog_generator = BlogGenerator(client, app.state.blogs)
             app.state.blog_jobs = BlogJobs(app.state.blog_generator)

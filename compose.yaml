@@ -31,6 +31,9 @@ services:
       BLOG_WEB_SEARCH: ${BLOG_WEB_SEARCH:-true}
       OVERPASS_URL: ${OVERPASS_URL:-https://overpass-api.de/api/interpreter}
       POI_OVERPASS_URL: ${POI_OVERPASS_URL:-}
+      OFFLINE_EXTRACT_DIR: /maps
+    volumes:
+      - ./server/data/osm:/maps:ro
     networks:
       - default
       - map_egress

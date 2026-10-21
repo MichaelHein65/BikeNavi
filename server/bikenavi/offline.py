@@ -7,8 +7,11 @@ import asyncio
 import math
 import logging
 import time
+import sqlite3
+from email.utils import parsedate_to_datetime
 
 from .regions import extract_pois
+from .osm_extract import LocalExtracts
 
 import httpx
 from fastapi import HTTPException
@@ -124,9 +127,11 @@ def compile_tile(elements, x, y, generated_at=None):
 
 
 class OfflineTiles:
-    def __init__(self, client, storage, url):
+    def __init__(self, client, storage, url, extract_dir=""):
         self.client, self.storage, self.url = client, storage, url
         self.lock = asyncio.Lock()  # Respect public Overpass resources; one preparation at a time.
+        self.extracts = LocalExtracts(extract_dir)
+        self.retry_at = {}
 
     async def tile(self, x, y, refresh=False):
         key = f"{VERSION}/{COMPILER_REVISION}/q{QUALITY_REVISION}/{x}/{y}"
@@ -134,6 +139,24 @@ class OfflineTiles:
             cached = self.storage.offline_tile(key)
             if cached and not refresh and time.time() - cached["generatedAt"] < 30 * 86400:
                 return cached
+            # A verified local country extract avoids public query-service outages.
+            # Keep the lock until the bounded worker stops, including on cancellation.
+            worker = asyncio.create_task(asyncio.to_thread(self.extracts.tile, x, y))
+            try:
+                local = await asyncio.shield(worker)
+            except asyncio.CancelledError:
+                try:
+                    await worker
+                finally:
+                    raise
+            except (OSError, ValueError, KeyError, TypeError, RuntimeError, sqlite3.Error) as error:
+                logger.warning("Offline tile %s: local extract rejected (%s)", key, type(error).__name__)
+                local = None
+            if local is not None:
+                elements, source_date = local
+                result = compile_tile(elements, x, y, generated_at=source_date)
+                self.storage.save_offline_tile(key, result)
+                return result
             if not self.url:
                 raise HTTPException(503, "Der Download des lokalen Wegenetzes ist auf dem Pi nicht eingerichtet.")
             south, west = y * TILE_DEGREES - 90, x * TILE_DEGREES - 180
@@ -150,6 +173,8 @@ class OfflineTiles:
                 urls.append(FALLBACK_OVERPASS)
             last_error = None
             for url in urls:
+                if self.retry_at.get(url, 0) > time.monotonic():
+                    continue
                 try:
                     async with self.client.stream("POST", url, data={"data": query}, headers={"User-Agent": "BikeNavi/0.1 personal cycling navigation"}, timeout=40) as response:
                         response.raise_for_status()
@@ -165,7 +190,20 @@ class OfflineTiles:
                     result = compile_tile(payload["elements"], x, y)
                 except (httpx.HTTPError, ValueError, KeyError, TypeError) as error:
                     last_error = error
-                    logger.warning("Offline tile %s: map download failed (%s)", key, type(error).__name__)
+                    pause, status = 60, None
+                    if isinstance(error, httpx.HTTPStatusError):
+                        status = error.response.status_code
+                        if status in {403, 406}:
+                            pause = 3600
+                        retry = error.response.headers.get("Retry-After", "")
+                        try:
+                            pause = max(pause, int(retry) if retry.isdigit() else parsedate_to_datetime(retry).timestamp() - time.time())
+                        except (ValueError, TypeError, OverflowError):
+                            pass
+                    self.retry_at[url] = time.monotonic() + pause
+                    # Never log credentials, query paths or downloaded OSM contributor metadata.
+                    logger.warning("Offline tile %s: provider %s failed (%s, HTTP %s); cooldown %ss",
+                                   key, httpx.URL(url).host, type(error).__name__, status, math.ceil(pause))
                     continue
                 self.storage.save_offline_tile(key, result)
                 return result

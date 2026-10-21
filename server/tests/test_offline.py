@@ -175,3 +175,42 @@ def test_osm_node_versions_are_kept_without_contributor_metadata():
     assert tile['nodes'][0]['osmVersion'] == 7
     assert 'osmVersion' not in tile['nodes'][1]
     assert all(not {'user', 'uid', 'changeset'} & node.keys() for node in tile['nodes'])
+
+
+def test_provider_cooldown_retry_after_and_recovery(tmp_path, monkeypatch, caplog):
+    from bikenavi.offline import DEFAULT_OVERPASS, FALLBACK_OVERPASS
+    import bikenavi.offline as offline
+    now = [100.0]
+    monkeypatch.setattr(offline.time, 'monotonic', lambda: now[0])
+    calls = []
+    def upstream(request):
+        calls.append(str(request.url))
+        if now[0] < 400:
+            return httpx.Response(429, headers={'Retry-After': '300'})
+        return httpx.Response(200, json={'elements': elements()})
+    app = create_app(f'sqlite:///{tmp_path/"cooldown.sqlite"}', token=TOKEN,
+                     transport=httpx.MockTransport(upstream), overpass_url=DEFAULT_OVERPASS)
+    with TestClient(app) as client:
+        assert client.get('/v1/region-tiles/3912/2675', headers=AUTH).status_code == 503
+        assert calls == [DEFAULT_OVERPASS, FALLBACK_OVERPASS]
+        now[0] = 200
+        assert client.get('/v1/region-tiles/3913/2675', headers=AUTH).status_code == 503
+        assert len(calls) == 2
+        now[0] = 401
+        assert client.get('/v1/region-tiles/3912/2675', headers=AUTH).status_code == 200
+        assert len(calls) == 3
+        assert 'HTTP 429' in caplog.text and 'cooldown 300s' in caplog.text
+
+
+def test_custom_provider_not_replaced_and_rejected_provider_pauses(tmp_path):
+    calls = []
+    secret_url = 'https://user:password@custom.test/private-key/interpreter'
+    def upstream(request):
+        calls.append(request)
+        return httpx.Response(406)
+    app = create_app(f'sqlite:///{tmp_path/"custom.sqlite"}', token=TOKEN,
+                     transport=httpx.MockTransport(upstream), overpass_url=secret_url)
+    with TestClient(app) as client:
+        for _ in range(2):
+            assert client.get('/v1/region-tiles/3912/2675', headers=AUTH).status_code == 503
+        assert len(calls) == 1

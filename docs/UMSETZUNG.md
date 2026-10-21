@@ -1,5 +1,41 @@
 # Umsetzungsstand – Vorabversion 0.5.0-rc.1
 
+## Offline-Regionsdownloads korrigieren — 21. Oktober 2026
+
+Die erneute Diagnose bestätigte Fehler der öffentlichen Abfragedienste: HTTP 406 bei Statusproben der Hauptquelle sowie Timeouts mit App-Kennung, Timeouts bei Private.coffee und HTTP 504 bei vollständigen Abfragen an eine weitere Instanz. IPv4 und IPv6 vom Pi aus funktionierten grundsätzlich; auch der Mac konnte die ausgefallene Ersatzquelle nicht nutzen. Eine kleine Einzelobjekt-Abfrage an die Alternative funktionierte, die vollständige Kachel jedoch nicht. Es wurde deshalb kein bloßer URL-Wechsel als Lösung ausgegeben.
+
+Als unabhängiger Datenweg wurde ein offizieller [Geofabrik-Kroatienauszug](https://download.geofabrik.de/europe/croatia.html) mit OSM-Quellstand **20. Oktober 2026, 20:23:47 UTC** auf Mac und Pi geladen. Die PBF-Dateien stimmen per SHA-256 überein. Der räumliche SQLite-Index enthält **25.797.769 Knoten und 2.660.992 Ways**; beim Mac-Import keine unvollständigen Wege. Dies ist eine zusätzliche Betreiberquelle im ignorierten Datenordner, kein Bestandteil des Git-Repositories und keine Fahrten-Datenbankmigration. Abdeckung/Alter/Hash, vollständige Straßenknoten und Restriktionen werden geprüft; keine Änderung des App-API-Vertrags. [Betrieb, Aktualisierung und Grenzen](RAD_OFFLINE.md#lokale-osm-quelle-auf-dem-pi).
+
+Vor Bereitstellung frische Sicherung: Mac-Kopie und Pi-Datei per SHA-256 identisch, Wiederherstellung auf dem Pi in eine separate temporäre Datenbank erfolgreich mit **310 Archivdatensätzen**; temporäre Datenbank anschließend entfernt. Damit wurde derselbe auf dem Mac gesicherte Datenbestand geprüft, ohne ihn ein zweites Mal über die langsame Uploadstrecke zu senden. Sicherung liegt ausschließlich unter ignoriertem `artifacts/backups/`.
+
+Prüfung der Korrektur: **446 Backendtests erfolgreich**, anschließend **20 gezielte Tests im echten ARM/Pi-Container erfolgreich**, jeweils zwei bestehende Deprecation-Warnungen. Beim ersten Betreiber-Containerlauf fehlte `libexpat.so.1`; Docker-Image um `libexpat1` und einen Build-Importcheck für Pyosmium ergänzt, erneut erfolgreich gebaut und getestet. Alle **21 laufenden Backendmodule** stimmen per SHA-256 mit dem lokalen Korrekturstand überein. Der neue Test verhindert auch, dass POI-Ways ohne zugehörige Restriktionen zusätzliche Straßen in den Graph einbringen.
+
+Vorprüfung am Mac mit dem echten Länderindex: 3×3 Tisno mit **14.696 zusammengeführten Knoten, 29.528 Kanten, 128 Offline-Orten** und **69,50 m Brückenroute** erfolgreich durch den tatsächlichen Swift-Regionsstore verarbeitet. Unterbrechung nach drei Kacheln, Neustart/Fortsetzung ohne erneuten Abruf dieser Kacheln, Prüfsummen, lokale Karte und Routing bestanden. Diese Vorprüfung ist vom anschließenden echten Pi-Download getrennt; ein iPhone-Feldtest ist sie nicht.
+
+### Abschließende Live-Abnahme über den Pi
+
+Der abschließende `swift test`-Gesamtlauf mit den echten 5×5-Pi-Paketen bestand **224 Kerntests ohne Fehler oder übersprungene Tests**.
+
+Der Pi-Import endete erfolgreich mit denselben **25.797.769 Knoten und 2.660.992 Ways** und ohne unvollständige Wege. Sein Index wurde erst nach Integritätsprüfung und Manifest aktiviert. Über den normalen HTTPS-App-Zugang bestanden:
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| Fähigkeitsmeldung und Zugangsschutz | `offlineRegionsAvailable=true`, API 0.5.0-rc.1; Zugriff ohne Token HTTP 401 |
+| Tisno 3×3 | **9/9 Kacheln HTTP 200**, SHA-256/Länge/Quellalter gültig; 6.362.425 Rohbytes; einschließlich identischer Cachewiederholung **22,95 s** |
+| Zuvor fehlgeschlagene Kachel 3912/2675 | **HTTP 200 in 0,81 s**, 2.196 Knoten, 4.562 Kanten, 15 POIs |
+| Tisno 5×5 | **25/25 Kacheln HTTP 200**, alle Prüfungen und identische Cachewiederholung bestanden; 12.752.902 Rohbytes; **23,86 s** einschließlich Wiederholung |
+| Swift-Verarbeitung echter Pi-Pakete | Unterbrechung/Fortsetzung ohne erneuten Abruf fertiger Kacheln, vollständiger Graph, lokale Karte, POIs und **69,50-m-Brückenroute** erfolgreich; 3×3 separat sowie 5×5 im abschließenden Gesamtlauf |
+| 5×5 nach Zusammenführung | **27.934 Knoten, 56.305 Kanten, 216 POIs**; innerhalb der bestehenden App-Grenzen |
+| Aktualisieren | `refresh=true` HTTP 200, identisches geprüftes Paket; ursprünglicher OSM-Zeitpunkt bleibt erhalten |
+| Betrieb | Backend/Datenbank gesund; keine neuen Backendfehler bei diesen Live-Abrufen |
+
+Die Zeitangaben umfassen den tatsächlichen Mac–Pi-HTTPS-Zugang und jeweils alle Kacheln plus einen zweiten Cacheabruf, keine geschätzten Geräteleistungen. Kacheln mit reinem Wassergebiet enthalten nach geprüfter Landesabdeckung berechtigt keine Straßen. Keine Tour/Fahrt für diese Prüfungen angelegt. **Kroatien ist installiert; andere Länder bleiben ohne eigenen Auszug von Overpass abhängig.** Datenstand höchstens 30 Tage verwenden; Betreiberaktualisierung in der Bedienungsdokumentation. Die vorhandene iPhone-App bleibt kompatibel; echte iPhone-/Flugmodus-/Fahrabnahme weiterhin offen.
+
+Lokale, ignorierte Nachweise: `build/region-fix-backup.log`, `region-fix-backend-final.log`, `region-fix-pi-tests.log`, `region-fix-deploy-verified.log`, `region-fix-pi-index.log`, `region-fix-live-3x3.log`, `region-fix-live-5x5.log`, `region-fix-swift-pi-3x3.log`, `region-fix-swift-final.log`, `region-fix-refresh.log` und `region-fix-sources-final.log`, jeweils unter `build/`. Große OSM-/SQLite-Dateien, API-Pakete und Sicherungen werden nicht versioniert.
+
+Version bleibt **0.5.0-rc.1 / App 0.5.0 (5), Korrektur unter Unveröffentlicht**; der veröffentlichte Tag `v0.5.0-rc.1` wird nicht verschoben. Reine Server-/Betreiberkorrektur; keine Änderung an App-Oberfläche oder iPhone-Installation nötig.
+
+
 ## Vorabversion 0.5.0-rc.1 — 21. Oktober 2026
 
 Nach dem Audit zunächst P1 und anschließend auf ausdrücklichen Auftrag P2–P6 autonom umgesetzt. Stand zur Veröffentlichung: App/Live-Aktivität **0.5.0 (5)**, Backend/API **0.5.0-rc.1**, Python-Paket **0.5.0rc1**. Die vorhandenen lokalen Auto-Änderungen wurden erhalten und mitgeprüft. Tag/Release werden getrennt vom anschließenden Geräte-/Pi-Deployment behandelt.

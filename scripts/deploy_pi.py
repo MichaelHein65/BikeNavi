@@ -23,6 +23,7 @@ for host, web in config.get("Web", {}).items():
         raise SystemExit("Tailscale-Port 10443 ist bereits anderweitig belegt.")
 ssh("if test -e /srv/bikenavi; then test -f /srv/bikenavi/.bikenavi-owned; else sudo -n install -d -m 700 -o pi -g pi /srv/bikenavi; fi")
 ssh("touch /srv/bikenavi/.bikenavi-owned")
+ssh("mkdir -p /srv/bikenavi/server/data/osm")
 archive = ROOT / "build/bikenavi-deploy.tar.gz"
 archive.parent.mkdir(exist_ok=True)
 with tarfile.open(archive, "w:gz") as tar:

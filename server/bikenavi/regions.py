@@ -12,6 +12,7 @@ def tile_package(tile):
 
 def extract_pois(elements):
     result = []
+    seen = set()
     for item in elements:
         tags = item.get("tags", {})
         category = ("water" if tags.get("amenity") == "drinking_water" else
@@ -25,6 +26,10 @@ def extract_pois(elements):
             continue
         if category == "water" and tags.get("drinking_water") == "no":
             continue
+        identity = (item['type'], item['id'])
+        if identity in seen:
+            continue
+        seen.add(identity)
         result.append({"id": f'{item["type"]}/{item["id"]}', "name": str(tags.get("name", ""))[:300],
                        "category": category, "coordinate": {"latitude": lat, "longitude": lon},
                        "source": "OpenStreetMap", "openingHours": str(tags.get("opening_hours", ""))[:500] or None})

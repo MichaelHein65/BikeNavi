@@ -10,6 +10,8 @@
 
 [Release-Notizen](docs/releases/0.5.0-rc.1.md) · Stabile Version weiterhin [v0.4.0](https://github.com/MichaelHein65/BikeNavi/releases/tag/v0.4.0).
 
+Serverkorrektur nach RC1: **Offline-Regionsdownloads für Kroatien über den Pi wieder funktionsfähig**, mit lokalem geprüftem OSM-Länderindex. Bestehende App 0.5.0 (5) bleibt kompatibel; Korrektur unter Unveröffentlicht. [Quellenstand, Abdeckung und Aktualisierung](docs/RAD_OFFLINE.md#lokale-osm-quelle-auf-dem-pi).
+
 [Änderungen](CHANGELOG.md) · [GitHub-Releases](https://github.com/MichaelHein65/BikeNavi/releases) · [Alle Bildschirme](docs/BILDSCHIRME.md) · [Versionierung](docs/VERSIONIERUNG.md)
 
 Native iPhone-App für Fahrradtouren mit einem privaten Raspberry-Pi-Backend. Produktentscheidungen stehen in [docs/KONZEPT.md](docs/KONZEPT.md), die technische Struktur in [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) und der tatsächliche Entwicklungsstand in [docs/UMSETZUNG.md](docs/UMSETZUNG.md).

@@ -2,7 +2,7 @@
 
 Vorabversion 0.5.0-rc.1, App 0.5.0 (5), 21. Oktober 2026. Reale Fahrtests stehen aus. GPX-Originalspuren bleiben wie in [GPX.md](GPX.md) beschrieben unverändert. Die folgenden Routenvarianten und die automatische Rückführung gelten für normale Fahrradplanungen.
 
-**Bereitstellungsprüfung vom 21. Oktober:** Der neue Regionsdownload auf dem aktualisierten Pi scheiterte in zwei Versuchen an nicht erreichbaren öffentlichen OSM-Datenquellen (HTTP 503). Daher ist der erste Download derzeit nur bei wieder erreichbarem Anbieter möglich. Gespeicherte Daten und die übrige Navigation bleiben davon getrennt. [Live-Prüfstand](UMSETZUNG.md#pi-bereitstellung-und-live-abnahme).
+**Korrektur vom 21. Oktober:** Der Regionsdownload für Kroatien funktioniert über den Pi wieder. Ein lokaler, geprüfter OSM-Länderindex ersetzt für abgedeckte Bereiche die ausgefallenen öffentlichen Abfragedienste. Tisno-Regionen mit 3×3 und 5×5 Kacheln wurden vollständig über HTTPS heruntergeladen und im Swift-Code geprüft. [Live-Prüfstand](UMSETZUNG.md#offline-regionsdownloads-korrigieren--21-oktober-2026) · [Quellenstand und Aktualisierung](#lokale-osm-quelle-auf-dem-pi).
 
 ## Routenwunsch und Wegequalität
 
@@ -35,6 +35,29 @@ Die lokale **Wegenetzkarte** zeigt die im Fahrradgraph enthaltenen Wege, die Rou
 Innerhalb einer passenden Region können normale Radtouren neu geplant und über den bisherigen 3-km-Bereich hinaus zurückgeführt werden. Verbindliche Zwischenziele und Belagsgrenzen bleiben erhalten. Außerhalb des gespeicherten Gebiets gibt es keine Zusage einer Neuberechnung; die gespeicherte Route bleibt sichtbar. GPX bleibt absichtlich ohne automatische Rückführung. Rad&Wandern/Wandern, Auto und Seewege erhalten dadurch keinen neuen Offline-Router.
 
 Paketlimits: maximal 25 Bereiche, insgesamt 250 MiB für Regionsdateien einschließlich Arbeitsständen/Karte, mindestens 50 MiB freie Reserve, maximal 32 MiB je Graphdatei, 50.000 Knoten/100.000 Kanten im regionalen Graph (vor Zusammenführung höchstens 100.000 Knoten/200.000 Kanten inklusive Kachelüberlappungen). Dichte Stadtgebiete können das Limit schon bei kleiner Auswahl erreichen. Das Budget der bisherigen Routenkacheln ist separat 250 MiB. Öffentliche Overpass-Server können langsam oder nicht erreichbar sein. Download im Vordergrund; kein versprochener Hintergrunddownload nach Beendigung der App. Fortschritt wird an vollständigen geprüften Bereichen fortgesetzt, nicht innerhalb einer einzelnen HTTP-Antwort.
+
+## Lokale OSM-Quelle auf dem Pi
+
+Seit der Serverkorrektur vom 21. Oktober kann der Pi Regionspakete aus einem lokal installierten Geofabrik-Länderauszug erstellen. Ein solcher Auszug enthält echte OpenStreetMap-Daten und verwendet denselben Fahrradcompiler. Der erste iPhone-Download benötigt weiterhin die Verbindung zum Pi. Der Pi benötigt für abgedeckte Bereiche keine funktionierende Overpass-Instanz.
+
+Installiert ist **Kroatien**, OSM-Stand **20. Oktober 2026, 20:23:47 UTC**. Außerhalb der tatsächlichen Abdeckung und an abgeschnittenen Landesrändern greift der bisherige Onlinepfad; eine leere Teilabdeckung wird nicht als vollständige Region ausgegeben. Die Daten dürfen höchstens 30 Tage alt sein. **Aktualisieren** in der App verwendet den aktuell auf dem Pi installierten Quellenstand; es lädt nicht selbst einen neuen Länderauszug. Ein Betreiber muss neue Auszüge installieren, bevor der bisherige Stand abläuft. Der Katalog enthält Nodes, Ways und vollständig auflösbare einfache POI-Relations; verschachtelte POI-Relations werden ausgelassen. Die Quelle bleibt eine OSM-Momentaufnahme ohne Zusicherung aktueller Sperrungen.
+
+Für weitere Länder beziehungsweise Aktualisierungen:
+
+1. Einen aktuellen `.osm.pbf`-Auszug und die zugehörige `.poly`-Abdeckung vom [Geofabrik-Downloadserver](https://download.geofabrik.de/) herunterladen. Dateien nur unter ignoriertem `build/` oder `server/data/` ablegen.
+2. Mit Python und `osmium==4.3.2` einen **neuen, datierten** Index erstellen:
+   ```sh
+   .venv/bin/python scripts/prepare_offline_extract.py \
+     build/country.osm.pbf build/country.poly build/country-YYYYMMDD.sqlite
+   ```
+3. Die erzeugte SQLite-Datei und das zugehörige JSON-Manifest zusammen nach `/srv/bikenavi/server/data/osm/` übertragen, große Datei zuerst und JSON zuletzt. Sie müssen für Containerbenutzer 10001 lesbar sein. Compose bindet diesen Ordner lesbar ein. Laufende Indizes nicht überschreiben; neue Dateinamen nutzen. Das Manifest aktiviert den fertigen Index ohne Neustart.
+4. Echten Regionsdownload über den App-Zugang prüfen:
+   ```sh
+   .venv/bin/python scripts/check_region_download.py --latitude 43.775 --longitude 15.625
+   ```
+   `--radius 2` prüft 5×5 Kacheln. Das Skript prüft Anmeldung, Pakete, SHA-256, Quellalter und identische Wiederholung aus dem Cache. Es erzeugt keine Fahrt. Öffentliche OSM-Pakete bleiben unter ignoriertem `build/region-live/`.
+
+Für die Indexerzeugung direkt auf dem Pi kann das Backend-Image als einmaliger Container mit Schreibzugriff auf den Datenordner verwendet werden; der laufende API-Container bleibt lesend. Die benötigte XML-Bibliothek `libexpat1` und Pyosmium sind im Image enthalten. Keine zusätzliche öffentliche Schnittstelle, kein automatischer Download ganzer Länder und keine Änderung der Fahrten-Datenbank.
 
 ## Drei Fahransichten
 

@@ -1,5 +1,9 @@
 # Versionierung und Releases
 
+## Regionsdownload-Korrektur nach RC1 — 21. Oktober 2026
+
+Zusätzliche Server-/Betreiberkorrektur auf `main`, **Unveröffentlicht**: lokale OSM-Länderquelle und Anbieterpausen. API-Version bleibt 0.5.0-rc.1; App/Build bleiben 0.5.0 (5). Keine Änderung des veröffentlichten Tags `v0.5.0-rc.1`, kein neuer Release und kein erneutes iPhone-Deployment. Der Pi enthält nun diese Korrektur zusätzlich zum RC1-Quellstand. [Korrektur und Live-Prüfung](UMSETZUNG.md#offline-regionsdownloads-korrigieren--21-oktober-2026). Die nachfolgenden Angaben zu HTTP 503 dokumentieren die ursprüngliche RC1-Abnahme.
+
 ## Vorabversion 0.5.0-rc.1 — 21. Oktober 2026
 
 Auf ausdrücklichen Nutzerwunsch ein eigener GitHub-Versionsstand, weil die Änderungen noch keine reale Fahrabnahme haben. `VERSION` enthält **0.5.0-rc.1**. Der Generator übernimmt den numerischen Anteil **0.5.0** als Apple-Marketingversion und die fortlaufende Buildnummer **5** für App und Live-Aktivität. `BikeNaviReleaseVersion` zeigt in den App-Einstellungen den vollständigen Vorabversionshinweis. Backend/API: **0.5.0-rc.1**, Python-Paketversion nach PEP 440 **0.5.0rc1**.

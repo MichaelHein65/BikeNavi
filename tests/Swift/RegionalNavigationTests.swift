@@ -2,6 +2,45 @@ import XCTest
 @testable import BikeNaviCore
 
 final class RegionalNavigationTests: XCTestCase {
+    /// Explicit opt-in: consumes public packages previously downloaded by check_region_download.py.
+    func testPiRegionPackagesWhenProvided() async throws {
+        guard let path = ProcessInfo.processInfo.environment["BIKENAVI_TEST_REGION_PACKAGES"] else {
+            throw XCTSkip("Requires packages from a real Pi download")
+        }
+        let source = URL(fileURLWithPath: path)
+        let ids = try JSONDecoder().decode([OfflineTileID].self, from: Data(contentsOf: source.appendingPathComponent("tiles.json"))).sorted()
+        XCTAssertTrue([9, 25].contains(ids.count))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = OfflineRegionStore(directory: directory)
+        let fourth = ids[3]
+        do {
+            _ = try await store.download(name: "Öffentliches Tisno-Prüfgebiet", tiles: ids, fetch: { id, _ in
+                if id == fourth { throw URLError(.networkConnectionLost) }
+                return try JSONDecoder().decode(RegionTilePackage.self, from: Data(contentsOf: source.appendingPathComponent("\(id.x)-\(id.y).json")))
+            }, progress: { _, _ in })
+            XCTFail("Expected simulated interruption")
+        } catch let error as URLError { XCTAssertEqual(error.code, .networkConnectionLost) }
+        let pending = try await store.pendingDownloads(); XCTAssertEqual(pending, 1)
+        let restarted = OfflineRegionStore(directory: directory)
+        let completed = Set(ids.prefix(3))
+        let region = try await restarted.download(name: "Öffentliches Tisno-Prüfgebiet", tiles: ids, fetch: { id, _ in
+            XCTAssertFalse(completed.contains(id), "Verified chunk must survive restart")
+            return try JSONDecoder().decode(RegionTilePackage.self, from: Data(contentsOf: source.appendingPathComponent("\(id.x)-\(id.y).json")))
+        }, progress: { _, _ in })
+        let graph = try await restarted.graph(region)
+        XCTAssertFalse(graph.nodes.isEmpty); XCTAssertFalse(graph.edges.isEmpty)
+        let pois = try await restarted.pois(region); XCTAssertFalse(pois.isEmpty)
+        let style = try await restarted.styleURL(region)
+        XCTAssertTrue(try String(contentsOf: style).contains("FeatureCollection"))
+        let a = try XCTUnwrap(graph.nodes[272268068]), b = try XCTUnwrap(graph.nodes[275001050])
+        var tour = TourDocument()
+        tour.waypoints = [Waypoint(name: "Öffentlicher Brückenanfang", coordinate: a), Waypoint(name: "Öffentliches Brückenende", coordinate: b)]
+        let route = try LocalRouter.plan(graph: graph, document: tour)
+        XCTAssertGreaterThan(route.distance, 0)
+        print("PI REGION VERIFIED: \(region.files.count) tiles, \(graph.nodes.count) nodes, \(graph.edges.count) edges, \(pois.count) POIs, bridge route \(route.distance)m")
+    }
+
     func point(_ x: Double, _ y: Double = 0) -> Coordinate {
         Coordinate(latitude: 49+y/111320, longitude: 8+x/(111320*cos(49 * .pi/180)))
     }
