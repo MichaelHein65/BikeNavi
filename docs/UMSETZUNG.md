@@ -1,4 +1,4 @@
-# Umsetzungsstand – Version 0.4.0
+# Umsetzungsstand – Vorabversion 0.5.0-rc.1
 
 ## Vorabversion 0.5.0-rc.1 — 21. Oktober 2026
 
@@ -20,6 +20,24 @@ Nach dem Audit zunächst P1 und anschließend auf ausdrücklichen Auftrag P2–P
 Native/GPX/Regions-Testlauf: `build/GPXDerived/Logs/Test/Test-BikeNavi-2026.10.21_08-34-09-+0200.xcresult`. Größte Schrift: Lauf 08:37; Versionstest nach korrigierter Abfrage des zusammengefassten SwiftUI-Bedienungselements: Lauf 10:41. Zunächst fehlgeschlagene Testabfrage wurde nicht als Produktfehler oder bestandener Test ausgegeben; abschließender gezielter Lauf erfolgreich. Die sichtbare Version und signierten Plist-Werte waren bereits korrekt. Diagnoseartefakte und Buildprodukte bleiben ignoriert. Xcode bereinigt ältere xcresult-Bundles automatisch; das vollständige erfolgreiche Protokoll bleibt unter `build/stages-ios-verified.log`, exportierte Bilder in der Galerie.
 
 Während der Umsetzung gefundene Fehler behoben und nachgeprüft: mehrere SwiftUI-List-Buttons lösten zuvor gemeinsam aus (Favorit/Planung jetzt getrennt); regionale Graphen erhalten eigene kleinere RAM-Grenzen; unvollständige Downloads sind gezielt löschbar; unveränderliche aktive Pakete bleiben bei defekten Updates erhalten. Der native MapLibre-Test lädt den lokalen Kartenstil ohne externe Ressourcen. Neue Swift-Dateien über den Projektgenerator aufgenommen.
+
+### GitHub und iPhone
+
+Commit `3765b1f` und annotierter Tag `v0.5.0-rc.1` auf GitHub übertragen. Release als Prerelease veröffentlicht und per GitHub-API geprüft; stabiler Latest-Release weiterhin v0.4.0. Nur überprüfte Quellen, Tests und Dokumentation übernommen; konfigurierte Zugangsschlüssel in den vorgesehenen Dateien ausgeschlossen. Private Rohdaten, Backups, Logs und Buildprodukte bleiben unversioniert.
+
+Signierte Release-App am 21. Oktober um 10:47 Uhr MESZ auf dem gesperrten iPhone 15 Pro installiert; Geräteabfrage bestätigt **0.5.0 (5)**. Automatischer Start wegen iOS-Gerätesperre abgelehnt; nach Entsperren manuell öffnen. Keine behauptete Fahrabnahme. [Installationsprotokoll](APP_IPHONE_UPDATE.md).
+
+### Pi-Bereitstellung und Live-Abnahme
+
+Nach Veröffentlichung am 21. Oktober 2026 mit `scripts/backup_pi.py` eine **211.397.027 Byte** große private Sicherung auf dem Mac erstellt (0600, ignoriert). Dieselbe Sicherung über den langsamen Rückkanal in einer separaten temporären Datenbank vollständig wiederhergestellt: **307 Archivdatensätze**, erfolgreicher Prozessabschluss, Prüfdatenbank danach entfernt. Anschließend `scripts/deploy_pi.py` erfolgreich ausgeführt. Backend und PostgreSQL laut Compose **healthy**; die bestehenden Pi-Zugangsdaten erhalten. Die bereits bekannte Kernelwarnung bedeutet, dass die Compose-Speicherbegrenzung auf diesem Pi nicht durchgesetzt wird.
+
+Alle **20 laufenden Python-Backendmodule** per SHA-256 mit dem veröffentlichten Commit `3765b1f` abgeglichen. Über den tatsächlichen HTTPS-App-Zugang Version **0.5.0-rc.1** und GPX-/Radplanungs-/Regions-Fähigkeiten bestätigt. `scripts/check_pi.py` erfolgreich: HTTPS, 401 ohne Anmeldung, Routing-Konfiguration, öffentlicher Ortsname, **852-m-Heidelberg-Radroute mit OSM-Kreuzungen**, PostgreSQL-Speicherung, Änderungsabgleich und wiederholter Upload ohne Dublette. Technischen Eintrag anschließend gelöscht.
+
+Zusätzlicher synthetischer GPX-Upload bestätigt Geometrie, Punktnamen/-zeit und separate Wegpunkte sowie idempotente Wiederholung; danach gelöscht. Die erste zusätzliche Vergleichsabfrage berücksichtigte explizite JSON-null-Werte gegenüber ausgelassenen optionalen Feldern nicht; nach semantischer Normalisierung erfolgreich, ohne Produktcodeänderung. Auch dieser erste technische Eintrag wurde im finally-Pfad gelöscht.
+
+**Verbleibende Live-Einschränkung:** neuer Regionsabruf `/v1/region-tiles/3912/2675` für den öffentlichen Tisno-Bereich in zwei gezielten Versuchen **HTTP 503**. Backend protokolliert HTTPStatusError und ReadTimeout beim OSM-Anbieter; direkte Diagnose vom Pi zusätzlich ConnectError. Daher ist ein neuer Regionsdownload über die öffentlichen Dienste bei dieser Abnahme **nicht erfolgreich belegt**. Keine künstlichen Daten in den Produktivcache eingespeist und keine Integritätsprüfung als live bestanden ausgegeben. Lokale Paket-/Prüfsummen-/Routingtests sind erfolgreich; der echte Download bleibt bis zur Erreichbarkeit der Datenquelle eingeschränkt. Die verwendete `out center tags`-Ausgabe wurde gegen die [Overpass-Referenzimplementierung](https://github.com/drolbr/Overpass-API/blob/master/src/overpass_api/output_formats/output_json.cc) geprüft: CENTER liefert auch bei Nodes Koordinaten; daraus ergibt sich keine erforderliche Änderung am Paketparser.
+
+Nach Pi-Abnahme um **11:18 Uhr MESZ** erneuter iPhone-Startversuch ohne Beenden einer laufenden App: weiterhin **Locked**. Installation **0.5.0 (5)** bleibt bestätigt, Start nach Entsperren manuell erforderlich. Kein Geräte-/Feldtesterfolg behauptet. Lokale Nachweise: `build/rc1-pi-backup.log`, `rc1-pi-deploy.log`, `rc1-pi-sources.log`, `rc1-pi-smoke.log`, `rc1-pi-live-final.log`, `rc1-pi-region-retry.log` sowie `rc1-iphone-final-launch.log`; diese Logs bleiben unversioniert.
 
 ### Umfang und verbleibende Grenzen
 

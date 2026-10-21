@@ -1,6 +1,6 @@
 # GPX importieren und einer Originalspur folgen
 
-Unveröffentlichte Erweiterung vom 21.10.2026, App 0.4.0 (4). Der Import erfolgt vollständig auf dem iPhone. Er benötigt weder Internet noch einen erreichbaren Pi. Eine Hintergrundkarte ist davon unabhängig: Für eine vollständig sichtbare Karte ohne Netzwerk muss zuvor ein unterstütztes Offline-Kartenpaket eingerichtet und geladen sein.
+Vorabversion 0.5.0-rc.1 vom 21.10.2026, App 0.5.0 (5); reale Datei-Anbieter- und Fahrabnahme ausstehend. Der Import erfolgt vollständig auf dem iPhone. Er benötigt weder Internet noch einen erreichbaren Pi. Eine Hintergrundkarte ist davon unabhängig: Für eine vollständig sichtbare Karte ohne Netzwerk muss zuvor ein unterstütztes Offline-Kartenpaket eingerichtet und geladen sein.
 
 ## Bedienung
 

@@ -6,13 +6,15 @@
 
 **[BikeNavi entdecken →](docs/praesentation/README.md)** · **[Werbetafel als PDF](docs/praesentation/BikeNavi-Werbetafel-Clay-Tribunj-Skradin-A2.pdf)** · **[Alle Funktionen auf einer Schautafel](docs/praesentation/BikeNavi-Schautafel-Tribunj-Skradin-A2.pdf)** · **[Tourleitfaden lesen](docs/praesentation/BikeNavi-Tourleitfaden-Tribunj-Skradin-A4.pdf)**
 
-**Version 0.4.0 · iOS-Build 4 · Entwicklungsfassung vor 1.0**
+**Vorabversion 0.5.0-rc.1 · App 0.5.0 · iOS-Build 5 · Fahrabnahme ausstehend**
+
+[Release-Notizen](docs/releases/0.5.0-rc.1.md) · Stabile Version weiterhin [v0.4.0](https://github.com/MichaelHein65/BikeNavi/releases/tag/v0.4.0).
 
 [Änderungen](CHANGELOG.md) · [GitHub-Releases](https://github.com/MichaelHein65/BikeNavi/releases) · [Alle Bildschirme](docs/BILDSCHIRME.md) · [Versionierung](docs/VERSIONIERUNG.md)
 
 Native iPhone-App für Fahrradtouren mit einem privaten Raspberry-Pi-Backend. Produktentscheidungen stehen in [docs/KONZEPT.md](docs/KONZEPT.md), die technische Struktur in [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) und der tatsächliche Entwicklungsstand in [docs/UMSETZUNG.md](docs/UMSETZUNG.md).
 
-Aktueller Entwicklungsstand vom **17. Oktober 2026**: fünf Anwendungen für Fahrrad, Auto, Wandern, Fahrrad & Wandern und Segeln. Im Auto-Modus kommen TomTom-Spurführung, Tempolimits, Verkehr im Fünf-Minuten-Intervall sowie ein geheimer Pi-/OpenAI-Beifahrer mit kurzen Kommentaren, Tempobegleitung und Reaktionen auf Routenabweichungen hinzu. Premium-/Siri-Stimmenauswahl, Freisprechkanal, GPS im Stand und Ortesuche sind überarbeitet. Auf Pi und Michaels iPhone 15 Pro installiert und gestartet; echte KI-Generierung und eine synthetische Mac-Hörsimulation geprüft. Weiterhin **0.4.0 (4), Unveröffentlicht**. [Auto-Bedienung](docs/AUTO.md) · [Prüfungen, Installation und Git-Abgleich](docs/UMSETZUNG.md#dokumentation-und-git-abgleich-17-oktober-2026).
+Aktueller Entwicklungsstand vom **21. Oktober 2026**: GPX-Originalspuren, lokale Rad-Routenvarianten, begrenzte Offline-Regionen mit einfacher Wegenetzkarte, drei Fahransichten und Offline-Orte. Die bisherigen Auto-, Wander-, See-, Bosch- und Blogfunktionen bleiben erhalten. Automatisierte Tests und signierter Gerätebuild sind geprüft; reale Fahrabnahme steht aus. Der Energie-Datenaudit reicht nicht für eine numerische Akku-Prognose. [Rad-Bedienung und Grenzen](docs/RAD_OFFLINE.md) · [GPX](docs/GPX.md) · [Prüfung und Bereitstellung](docs/UMSETZUNG.md#vorabversion-050-rc1--21-oktober-2026).
 
 ## Von Tribunj nach Skradin: BikeNavi erleben
 
@@ -43,7 +45,7 @@ Die [vollständige Galerie](docs/BILDSCHIRME.md) zeigt außerdem Karte, Wegpunkt
 4. In der App unter **Einstellungen** die eigene Tailscale-HTTPS-Adresse und den BikeNavi-Zugangsschlüssel aus der lokalen `.env` eintragen.
 5. **Speichern und Verbindung prüfen** antippen. Danach Start und Ziel auf der Karte setzen oder über die Suche auswählen.
 
-Die Streckenplanung erfolgt mit eingerichtetem Pi über openrouteservice und benötigt einen ORS-Schlüssel auf dem Pi. Dabei wird kein Wegenetz entlang der gesamten Tour heruntergeladen. Die lokale Rückführung lädt unabhängig davon das Umfeld um den Standort und hält während der Fahrt einen Suchradius von drei Kilometern bereit, soweit die Daten rechtzeitig verfügbar sind. Ohne eingerichteten API-Client bleibt die lokale Planung aus vorhandenen Gebietsdaten möglich.
+Die bisherige Fahrrad-Streckenplanung erfolgt mit eingerichtetem Pi über openrouteservice und benötigt einen ORS-Schlüssel auf dem Pi. Die neuen Rad-Routenvarianten nutzen den lokalen Graph; eine passende vollständig gespeicherte Region ermöglicht die Planung ohne Pi. Dabei wird kein Wegenetz entlang der gesamten Tour heruntergeladen. Die lokale Rückführung lädt unabhängig davon das Umfeld um den Standort und hält während der Fahrt einen Suchradius von drei Kilometern bereit, soweit die Daten rechtzeitig verfügbar sind. Ohne eingerichteten API-Client bleibt die lokale Planung aus vorhandenen Gebietsdaten möglich.
 
 ## Universeller Einstieg
 

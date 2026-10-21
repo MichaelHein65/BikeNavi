@@ -2,6 +2,8 @@
 
 Vorabversion 0.5.0-rc.1, App 0.5.0 (5), 21. Oktober 2026. Reale Fahrtests stehen aus. GPX-Originalspuren bleiben wie in [GPX.md](GPX.md) beschrieben unverändert. Die folgenden Routenvarianten und die automatische Rückführung gelten für normale Fahrradplanungen.
 
+**Bereitstellungsprüfung vom 21. Oktober:** Der neue Regionsdownload auf dem aktualisierten Pi scheiterte in zwei Versuchen an nicht erreichbaren öffentlichen OSM-Datenquellen (HTTP 503). Daher ist der erste Download derzeit nur bei wieder erreichbarem Anbieter möglich. Gespeicherte Daten und die übrige Navigation bleiben davon getrennt. [Live-Prüfstand](UMSETZUNG.md#pi-bereitstellung-und-live-abnahme).
+
 ## Routenwunsch und Wegequalität
 
 In den Planungseinstellungen unter **Routenvariante** wählen: bisherige Planung, Schnell, Komfortabel oder Verkehrsarm. Danach wird die Route neu berechnet. Die drei neuen Varianten nutzen den lokalen Fahrradgraph; fehlt er, lädt der Pi die benötigten OSM-Bereiche. Bei einer passenden gespeicherten Region ist auch die Neuplanung vollständig auf dem iPhone möglich. Andere Anwendungen behalten ihren bisherigen Router.

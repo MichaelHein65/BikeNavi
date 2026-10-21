@@ -1,6 +1,20 @@
 # BikeNavi: Änderungen bauen und auf dem iPhone installieren
 
+## Vorabversion auf dem iPhone — 21. Oktober 2026
+
+Signierter Release-Build **0.5.0 (5)** aus dem veröffentlichten Commit `3765b1f` / Tag `v0.5.0-rc.1` am **21. Oktober 2026 um 10:47 Uhr MESZ** auf Michaels iPhone 15 Pro installiert. Die Installation funktionierte trotz Gerätesperre; die anschließende Geräte-App-Abfrage bestätigt Version 0.5.0 und Build 5. App und Live-Aktivität waren vorher per Plist und strenger Signaturprüfung geprüft.
+
+Der automatische Start wurde anschließend ausdrücklich mit **Locked / FBSOpenApplicationErrorDomain 7** abgelehnt. Dies ist kein fehlgeschlagener Installationsvorgang: App nach Entsperren manuell öffnen. Nach dem Pi-Update um 11:18 Uhr MESZ erneut versucht, ohne eine laufende App zu beenden: weiterhin Locked. Keine Umgehung der iOS-Sperre. Vorhandene Konfiguration und App-Daten wurden durch ein Update erhalten, nicht durch Deinstallation ersetzt. Echte Bedienungs-/GPS-/Bosch-/Flugmodus- und Langzeittests bleiben offen.
+
+[GitHub-Vorabversion](https://github.com/MichaelHein65/BikeNavi/releases/tag/v0.5.0-rc.1) · [Automatisierter Prüfstand](UMSETZUNG.md#vorabversion-050-rc1--21-oktober-2026) · [Neue Radfunktionen](RAD_OFFLINE.md).
+
 Diese Anleitung ist für einen Arbeits-Thread, der Änderungen an der iPhone-App umsetzt und sie auf Michaels iPhone testet. Arbeitsverzeichnis ist das Projektwurzelverzeichnis `20260918_BikeNavi`.
+
+## Pi-Stand dieser Vorabversion
+
+Am 21. Oktober 2026 nach erfolgreicher Sicherungs-/Wiederherstellungsprüfung von 307 Archivdatensätzen auf **0.5.0-rc.1** aktualisiert. Backend und Datenbank gesund; 20 laufende Quellmodule stimmen per SHA-256 mit Commit `3765b1f` überein. HTTPS, Anmeldung, Beispielrouting, Speicherung/Abgleich und GPX-Metadatenerhalt live erfolgreich. Technische Testtouren wieder gelöscht.
+
+Neue regionale OSM-Pakete konnten in zwei Live-Versuchen wegen Anbieter-/Verbindungsfehlern nicht geladen werden (HTTP 503). Diese verbleibende Einschränkung wird nicht als bestandener Downloadtest ausgegeben. [Details](UMSETZUNG.md#pi-bereitstellung-und-live-abnahme).
 
 ## Vor dem ersten Gerätetest
 
@@ -80,7 +94,10 @@ xcrun devicectl device process launch \
 
 Änderungen unter `server/`, `compose.yaml` oder an serverseitigen Umgebungsvariablen erfordern zusätzlich ein Pi-Deployment:
 
+Vorher die aktuelle Datenbank auf den Mac sichern und in einer separaten temporären Datenbank wiederherstellen. Erst nach erfolgreicher Prüfung deployen:
+
 ```sh
+python3 scripts/backup_pi.py
 .venv/bin/python scripts/deploy_pi.py
 .venv/bin/python scripts/check_pi.py
 ```

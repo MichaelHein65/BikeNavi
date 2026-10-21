@@ -4,7 +4,11 @@ Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release
 
 ## Unveröffentlicht
 
-Weitere Änderungen werden nach der Vorabversion hier gesammelt.
+### Bereitstellungsnachweis und Versionsdokumentation — 21. Oktober 2026
+
+- Veröffentlichten Quellstand `3765b1f` / **v0.5.0-rc.1** auf Pi und iPhone übertragen. Pi-Sicherung mit 307 Archivdatensätzen erfolgreich wiederhergestellt; Backend gesund und Quellhashes bestätigt, HTTPS-/Routing-/Sync-/GPX-Prüfungen erfolgreich. Neuer OSM-Regionsabruf in zwei Versuchen mit HTTP 503 gescheitert; Einschränkung dokumentiert.
+- Signierte **0.5.0 (5)** auf gesperrtem iPhone installiert, Start weiterhin durch iOS-Sperre abgewiesen. Nach Entsperren manuell öffnen; keine Feldabnahme behauptet.
+- README-/GPX-Versionshinweise und Installationsanleitung abgeglichen. Reiner Dokumentationsnachtrag, keine Änderung der veröffentlichten App-/Serverquellen und kein Verschieben des Release-Tags. [Bereitstellungsnachweis](docs/APP_IPHONE_UPDATE.md).
 
 ## 0.5.0-rc.1 — 21. Oktober 2026 (Vorabversion)
 
