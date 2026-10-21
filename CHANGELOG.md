@@ -4,6 +4,11 @@ Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release
 
 ## Unveröffentlicht
 
+### OSM-Prüfung auf wöchentlich umgestellt — 21. Oktober 2026
+
+- Auf Nutzerwunsch den regulären Pi-Termin auf **sonntags 05:15–05:45 Uhr Ortszeit** begrenzt. Vor dem großen Länderdownload wird weiterhin nur die kleine Prüfsummendatei abgefragt; PBF-Download und Neuimport erfolgen ausschließlich bei geänderter Prüfsumme. Wiederholungen nach Fehlern bleiben stündlich.
+- Zeitplan und Speicherhinweise in der Betriebsdokumentation angepasst; kein neuer App-Build, Release oder Backend-Neustart erforderlich.
+
 ### Automatische OSM-Länderpflege auf dem Pi — 21. Oktober 2026
 
 - Kroatien täglich direkt auf dem Pi aktualisieren, bei Fehlern stündlich erneut versuchen und verpasste Läufe nachholen. Unveränderte Quellen benötigen nur eine Prüfsummenabfrage und lokale Prüfung.

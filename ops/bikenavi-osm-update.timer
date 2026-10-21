@@ -1,8 +1,8 @@
 [Unit]
-Description=Daily BikeNavi Croatia OSM maintenance
+Description=Weekly BikeNavi Croatia OSM maintenance
 
 [Timer]
-OnCalendar=*-*-* 05:15:00
+OnCalendar=Sun *-*-* 05:15:00
 RandomizedDelaySec=30m
 Persistent=true
 Unit=bikenavi-osm-update.service

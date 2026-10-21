@@ -1,5 +1,11 @@
 # Umsetzungsstand – Vorabversion 0.5.0-rc.1
 
+## Wöchentliche OSM-Prüfung — 21. Oktober 2026
+
+Auf Nutzerwunsch den regulären Zeitplan von täglich auf **sonntags 05:15–05:45 Uhr Pi-Ortszeit** umgestellt. Die tägliche Erstabnahme im folgenden Abschnitt bleibt historischer Nachweis. Die kleine Prüfsummenabfrage und die lokale Prüfung lösen bei unveränderter Quelle weiterhin weder einen PBF-Download noch einen Neuimport aus. Fehlerwiederholungen bleiben stündlich; verpasste Termine werden weiterhin nachgeholt.
+
+Den Wochenkalender auf dem Pi für den 25. Oktober und 1. November einschließlich der Winterzeit geprüft, systemd-Unit erfolgreich validiert, Timer installiert und neu geladen. Keine Ausführung des Importdienstes durch die Umstellung und kein Backend-Neustart. Den bestehenden Regressionstest für unveränderte Quellen erneut erfolgreich ausgeführt (zwei bekannte Deprecation-Warnungen). Betriebs-/Architekturdokumentation, Changelog und Git/GitHub mitführen; keine neue App-/Release-Version.
+
 ## Automatische OSM-Aktualisierung — 21. Oktober 2026
 
 Auf dem Pi eigener täglicher systemd-Timer für den Kroatien-Auszug, unabhängig vom Mac oder iPhone. Der Import läuft getrennt vom lesenden Backend, mit exklusiver Prozesssperre, Prüfsummen, höchstens sieben Tage altem Quellstand, Freiraumprüfung, Integritäts-/Referenzgraphprüfung und atomarer Aktivierung. Mindestens zwei automatische Generationen sowie eine Woche jüngerer Dateien bleiben erhalten. Neue Quellen erneuern ältere Server-Cachekacheln. [Bedienung und Betrieb](OSM_AKTUALISIERUNG.md).

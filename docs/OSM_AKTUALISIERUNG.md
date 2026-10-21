@@ -4,7 +4,7 @@ Der Pi hält den **Kroatien-Auszug** selbst aktuell. Dafür laufen `bikenavi-osm
 
 ## Zeitplan und Fehlerverhalten
 
-- Täglich **05:15 Uhr plus bis zu 30 Minuten Zufallsverzögerung**, in der auf dem Pi eingestellten Ortszeit. `Persistent=true` holt eine während einer Abschaltung verpasste Ausführung beim nächsten Aktivieren nach.
+- Einmal pro Woche **sonntags um 05:15 Uhr plus bis zu 30 Minuten Zufallsverzögerung**, in der auf dem Pi eingestellten Ortszeit. `Persistent=true` holt eine während einer Abschaltung verpasste Ausführung beim nächsten Aktivieren nach.
 - Bei Fehlern versucht systemd den Lauf nach **einer Stunde** erneut. Ein Lauf darf höchstens zwei Stunden dauern; anschließend wird auch sein Importcontainer entfernt. Der Job verwendet höchstens einen CPU-Kern. Die bestehende Einschränkung der Pi-Kernel-Speicherlimits bleibt bestehen.
 - Eine Prozesssperre verhindert parallele Importe. Der laufende API-Container bindet die Karten weiterhin nur lesend ein. Der separate Importcontainer nutzt für Geofabrik das Hostnetz des Pi, ohne einen Dienstport zu öffnen. Er kann ausschließlich den Kartenordner beschreiben; Anwendungsskripte und Container-Dateisystem bleiben lesend.
 - Zunächst wird nur die kleine Prüfsummendatei abgefragt. Bei unveränderter Quelle werden Alter und vorhandener Index geprüft, ohne das PBF erneut zu laden oder zu importieren.
@@ -18,13 +18,13 @@ Der vorhandene Importer prüft vollständige Wegreferenzen und SQLite-Integritä
 
 Erst danach wird der neue Index mit einem eigenen Dateinamen installiert und sein JSON-Manifest atomar freigegeben. Dateien und Verzeichniseinträge werden vor beziehungsweise nach der Freigabe synchronisiert. Ein abgebrochener Import ersetzt keinen aktiven Index; beim nächsten Lauf wird sein separater Arbeitsordner aufgeräumt.
 
-Mindestens die **zwei jüngsten automatischen Generationen** und alle weniger als sieben Tage alten Dateien bleiben erhalten. Bei täglichen Änderungen bedeutet das ungefähr eine Woche Rückfallstände, aktuell etwa 12–16 GiB zuzüglich manueller Bestände und Arbeitsraum. Nur Dateien mit dem vom Updater erzeugten Präfix `croatia-auto-` werden bereinigt. Manuell installierte Quellen, darunter der erste Kroatien-Index, bleiben erhalten. Die Woche Abstand schützt auch laufende Leser vor der Entfernung gerade abgelöster Dateien.
+Mindestens die **zwei jüngsten automatischen Generationen** und alle weniger als sieben Tage alten Dateien bleiben erhalten. Bei ausschließlich wöchentlichen Aktualisierungen sind das normalerweise zwei automatische Indizes, derzeit zusammen etwa 3,4 GiB zuzüglich manueller Bestände und Arbeitsraum. Zusätzliche manuelle Läufe können vorübergehend weitere Generationen erzeugen. Nur Dateien mit dem vom Updater erzeugten Präfix `croatia-auto-` werden bereinigt. Manuell installierte Quellen, darunter der erste Kroatien-Index, bleiben erhalten. Die Woche Abstand schützt auch laufende Leser vor der Entfernung gerade abgelöster Dateien.
 
 Neue Quellzeitpunkte verdrängen ältere Server-Cachekacheln beim nächsten Abruf. Kann die neue Quelle nicht geprüft werden, bleibt eine noch gültige Cachekachel verfügbar. Bereits auf dem iPhone gespeicherte Regionen ändern sich erst über **Aktualisieren**; dabei bleibt die bisherige Region bis zum vollständigen Download erhalten.
 
 ## Betrieb und Diagnose
 
-`scripts/deploy_pi.py` überträgt Importer, Updater und Dienstdateien, baut das passende Backend-Image und installiert beziehungsweise aktiviert den Timer und stößt eine erste Prüfung ohne Warten auf den nächsten Morgen an. Bestehende Kartendaten bleiben erhalten. Es werden weder Zugangsdaten für den Updater noch eine zusätzliche öffentliche Schnittstelle benötigt.
+`scripts/deploy_pi.py` überträgt Importer, Updater und Dienstdateien, baut das passende Backend-Image und installiert beziehungsweise aktiviert den Timer und stößt eine erste Prüfung ohne Warten auf den nächsten regulären Termin an. Bestehende Kartendaten bleiben erhalten. Es werden weder Zugangsdaten für den Updater noch eine zusätzliche öffentliche Schnittstelle benötigt.
 
 ```sh
 ssh pi5 'systemctl list-timers bikenavi-osm-update.timer --no-pager'

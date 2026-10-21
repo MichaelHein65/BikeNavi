@@ -1,4 +1,4 @@
-"""Daily Croatia extract maintenance; run in the dedicated Pi updater container."""
+"""Weekly Croatia extract maintenance; run in the dedicated Pi updater container."""
 import argparse
 from datetime import datetime, timezone
 import fcntl
@@ -183,5 +183,5 @@ if __name__ == '__main__':
     parser.add_argument('directory', type=Path)
     args = parser.parse_args()
     with httpx.Client(follow_redirects=True, timeout=60,
-                      headers={'User-Agent': 'BikeNavi country extract updater (daily)'}) as client:
+                      headers={'User-Agent': 'BikeNavi country extract updater (weekly)'}) as client:
         update(args.directory, client)
