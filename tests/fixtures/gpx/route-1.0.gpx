@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<g:gpx xmlns:g="http://www.topografix.com/GPX/1/0" version="1.0" creator="BikeNavi synthetic test">
+<g:name>GPX 1.0 · Beispiel</g:name>
+<g:wpt lat="49.4" lon="8.7"><g:name>Beispielort</g:name></g:wpt>
+<g:rte><g:name>Beispielroute 1.0</g:name><g:rtept lat="49.4" lon="8.7"><g:ele>100</g:ele><g:name>Start</g:name></g:rtept><g:rtept lat="49.401" lon="8.701"><g:ele>105</g:ele><g:time>2026-10-21T06:00:00Z</g:time></g:rtept></g:rte>
+</g:gpx>

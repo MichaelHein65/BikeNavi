@@ -1,7 +1,7 @@
 import Foundation
 
 enum CarSpeechEvent: String, Codable {
-    case navigation, slower, overspeed, faster, compliant, offRoute, rerouted, rerouteFailed, arrived
+    case offRoad, navigation, slower, overspeed, faster, compliant, offRoute, rerouted, rerouteFailed, arrived
 }
 
 struct CarCharacterPack: Codable {
@@ -30,6 +30,7 @@ struct CarCharacterSpeechHistory: Codable {
         guard now.isFinite else { return instruction }
         // A clock moving backwards must not immediately unlock repeated comments.
         spoken = spoken.filter { now - $0.value < 30 * 60 }
+        guard spoken.values.allSatisfy({ now - $0 >= 180 }) else { return instruction }
         for (index, aside) in (pack.phrases[event.rawValue] ?? []).enumerated() {
             let key = aside.lowercased().filter { $0.isLetter || $0.isNumber }
             guard !key.isEmpty, spoken[key] == nil else { continue }
@@ -47,100 +48,146 @@ struct CarSpeechNotice: Equatable {
     var text: String
 }
 
-/// Time-based observations use only fresh, accurately matched car fixes.
-/// Character generation is never in the real-time path.
+/// Independent one-shot phases; commentary throttling is handled by the speech history.
 struct CarSpeedGuidance {
     private var limit: Double?
     private var lastTime: Double?
+    private var lastTraveled: Double?
     private var overSince: Double?
-    private var overStartSpeed = 0.0
-    private var lastWarning = -Double.infinity
+    private var limitStart = 0.0
+    private var warningDistance = 200.0
     private var warned = false
-    private var previewKey: String?
-    private var lastSpoken = -Double.infinity
+    private var previews: Set<String> = []
+    private var offRoad = false
+    private var offRoadPending = false
     private var transition: (notice: CarSpeechNotice, expires: Double)?
+
+    /// A traffic refresh starts its geometry at the current position. Keep distance
+    /// since the existing limit and the already spoken phases across that refresh.
+    mutating func rebase(oldProgress: Double, newProgress: Double) {
+        limitStart += newProgress - oldProgress
+        lastTraveled = newProgress
+    }
 
     mutating func update(route: CalculatedRoute, progress: RouteProgress?, speed: Double,
                          timestamp: Double, now: Double, active: Bool, canSpeak: Bool = true,
                          lastAnnouncement: Double = -.infinity) -> CarSpeechNotice? {
         guard active, timestamp.isFinite, now.isFinite, abs(now - timestamp) < 5,
-              speed.isFinite, speed >= 0,
-              let current = CarNavigation.speedLimit(route: route, progress: progress, active: active), let progress else {
-            let speechTime = lastSpoken
-            self = CarSpeedGuidance(); lastSpoken = speechTime
+              speed.isFinite, speed >= 0, let progress, progress.traveled.isFinite,
+              progress.snappedPosition != nil, progress.distanceFromRoute <= 25 else {
+            lastTime = nil; overSince = nil; transition = nil
             return nil
         }
         guard lastTime.map({ timestamp > $0 }) ?? true else { return nil }
-        if let lastTime, timestamp - lastTime >= 5 {
-            overSince = nil; limit = nil; transition = nil; warned = false
-        }
+        let continuous = lastTime.map { timestamp - $0 < 5 } ?? false
+        if !continuous { overSince = nil; transition = nil }
         lastTime = timestamp
-        let kph = speed * 3.6
-        if limit != current {
-            if let previous = limit {
-                if current > previous {
-                    transition = (.init(event: .faster, text: "Hier sind bis zu \(Int(current)) Kilometer pro Stunde erlaubt, sofern die Bedingungen passen."), now + 15)
-                } else {
-                    transition = (.init(event: .slower, text: "Ab hier gilt Tempo \(Int(current))."), now + 15)
-                }
+        defer { lastTraveled = progress.traveled }
+        let environment = CarNavigation.environment(route: route, progress: progress)
+        if environment == .offRoad {
+            if !offRoad { offRoadPending = true }
+            offRoad = true; limit = nil; overSince = nil; transition = nil
+            if canSpeak && offRoadPending {
+                offRoadPending = false
+                return .init(event: .offRoad, text: "Wir sind jetzt Off-Road unterwegs.")
             }
-            limit = current; overSince = nil; warned = false; lastWarning = -.infinity
+            return nil
         }
-        if transition.map({ now > $0.expires }) == true { transition = nil }
-        if kph > current, transition?.notice.event == .compliant { transition = nil }
-        // A measurement margin avoids GPS chatter; it is not a legal allowance.
-        if kph > current + 3 {
-            if overSince == nil { overSince = timestamp; overStartSpeed = kph }
-        } else {
-            if warned && kph <= current {
-                transition = (.init(event: .compliant, text: "Tempo angepasst, danke."), now + 10)
-                warned = false
+        offRoad = false; offRoadPending = false
+        guard let environment else { limit = nil; overSince = nil; transition = nil; return nil }
+        guard let current = CarNavigation.speedLimit(route: route, progress: progress, active: active) else {
+            limit = nil; overSince = nil; transition = nil
+            // On divided roads a known upcoming restriction also matters when
+            // the current limit is absent (e.g. an unrestricted motorway).
+            // Do not claim that the current road is legally unrestricted.
+            guard environment == .divided, canSpeak else { return nil }
+            let distances = LocalRouteMetrics.distances(route)
+            if let next = (route.carSpeedLimits ?? []).sorted(by: { $0.startIndex < $1.startIndex }).first(where: {
+                $0.startIndex >= 0 && $0.endIndex < distances.count && $0.endIndex > $0.startIndex
+                    && distances[$0.startIndex] > progress.traveled
+            }), next.kilometersPerHour < speed * 3.6 {
+                return preview(next, route: route, progress: progress, environment: environment, speed: speed)
             }
-            overSince = nil
+            return nil
         }
-        guard canSpeak, now - lastSpoken >= 8 else { return nil }
-        // A clear deceleration grants a few seconds, never indefinite suppression.
-        if let since = overSince, timestamp - since >= 6,
-           (overStartSpeed - kph < 4 || timestamp - since >= 12), now - lastWarning >= 25 {
-            lastWarning = now; lastSpoken = now; warned = true; transition = nil
-            return .init(event: .overspeed, text: "Du fährst weiterhin zu schnell, bitte auf höchstens \(Int(current)) Kilometer pro Stunde reduzieren!")
-        }
-        let quiet = now - max(lastSpoken, lastAnnouncement) >= 180
-        if let pending = transition {
-            transition = nil
-            if pending.notice.event == .compliant || quiet {
-                lastSpoken = now
-                return pending.notice
-            }
-        }
-        // Suppressed changes are not queued for later playback in another section.
-        guard quiet else { return nil }
         let distances = LocalRouteMetrics.distances(route)
         let sections = (route.carSpeedLimits ?? []).sorted { $0.startIndex < $1.startIndex }
-        // Follow only a continuous run of known limits. Never bridge unknown stretches.
-        if let currentIndex = sections.firstIndex(where: {
+        guard let index = sections.firstIndex(where: {
             $0.startIndex >= 0 && $0.endIndex < distances.count && $0.endIndex > $0.startIndex
                 && progress.traveled >= distances[$0.startIndex] && progress.traveled < distances[$0.endIndex]
-        }) {
-            var end = sections[currentIndex].endIndex
-            for section in sections.dropFirst(currentIndex + 1) {
-                guard section.startIndex == end, section.endIndex > end, section.endIndex < distances.count,
-                      section.kilometersPerHour.isFinite, section.kilometersPerHour > 0, section.kilometersPerHour <= 300 else { break }
-                end = section.endIndex
-                if section.kilometersPerHour == current { continue }
-                let gap = distances[section.startIndex] - progress.traveled
-                let target = section.kilometersPerHour
-                let point = route.coordinates[section.startIndex]
-                let key = "\(point.latitude),\(point.longitude),\(target)"
-                if target < current, gap > 0, gap <= min(600, max(120, speed * 15)), key != previewKey {
-                    previewKey = key; lastSpoken = now
-                    return .init(event: .slower, text: "In \(max(10, Int((gap / 10).rounded()) * 10)) Metern gilt Tempo \(Int(target)), bitte rechtzeitig langsamer werden.")
-                }
-                break
+        }) else { return nil }
+        if limit != current {
+            let crossed = lastTraveled.map { $0 < distances[sections[index].startIndex] } ?? false
+            if continuous, limit != nil || crossed {
+                let higher = limit.map { current > $0 } ?? false
+                transition = (.init(event: higher ? .faster : .slower,
+                    text: higher ? "Ab hier sind bis zu \(Int(current)) Kilometer pro Stunde erlaubt." : "Ab hier gilt Tempo \(Int(current))."), now + 15)
             }
+            // Equal adjacent sections belong to the same limit, including provider splits.
+            var first = index
+            while first > 0, sections[first - 1].endIndex == sections[first].startIndex,
+                  sections[first - 1].kilometersPerHour == current { first -= 1 }
+            limitStart = distances[sections[first].startIndex]
+            warningDistance = environment.overspeedDistance
+            limit = current; overSince = nil; warned = false
+        }
+        if transition.map({ now > $0.expires }) == true { transition = nil }
+        let kph = speed * 3.6
+        // Measurement margin and two fresh seconds reject isolated GPS spikes.
+        if kph > current + 3 {
+            if overSince == nil { overSince = timestamp }
+        } else { overSince = nil }
+        guard canSpeak else { return nil }
+        if let pending = transition {
+            transition = nil
+            return pending.notice
+        }
+        if !warned, progress.traveled - limitStart >= warningDistance,
+           let since = overSince, timestamp - since >= 2 {
+            warned = true
+            return .init(event: .overspeed, text: "Du fährst zu schnell, bitte auf höchstens \(Int(current)) Kilometer pro Stunde reduzieren!")
+        }
+        // Preview only the next different, contiguous known limit. Never look
+        // through missing limits or into an off-road/unknown road environment.
+        var end = sections[index].endIndex
+        for section in sections.dropFirst(index + 1) {
+            guard section.startIndex == end, section.endIndex > end, section.endIndex < distances.count,
+                  section.kilometersPerHour.isFinite, section.kilometersPerHour > 0, section.kilometersPerHour <= 300 else { break }
+            end = section.endIndex
+            if section.kilometersPerHour == current { continue }
+            if section.kilometersPerHour < current {
+                return preview(section, route: route, progress: progress, environment: environment, speed: speed)
+            }
+            break
         }
         return nil
     }
+
+    private mutating func preview(_ section: CarSpeedLimit, route: CalculatedRoute, progress: RouteProgress,
+                                  environment: CarRoadEnvironment, speed: Double) -> CarSpeechNotice? {
+        let distances = LocalRouteMetrics.distances(route)
+        let target = section.kilometersPerHour
+        guard target.isFinite, target > 0, target <= 300 else { return nil }
+        let boundary = distances[section.startIndex]
+        let gap = boundary - progress.traveled
+        // Every metre to the restriction must have known road context, with no off-road detour.
+        var covered = progress.traveled
+        for road in route.carRoadSections ?? [] {
+            guard road.startIndex >= 0, road.endIndex > road.startIndex, road.endIndex < distances.count else { return nil }
+            let start = distances[road.startIndex], end = distances[road.endIndex]
+            if end <= covered { continue }
+            guard start <= covered, road.environment != .offRoad else { return nil }
+            covered = end
+            if covered > boundary { break }
+        }
+        guard covered > boundary, gap > 0, gap <= environment.previewDistance(speed: speed, targetKPH: target) else { return nil }
+        let point = route.coordinates[section.startIndex]
+        let key = "\(point.latitude),\(point.longitude),\(target)"
+        guard !previews.contains(key) else { return nil }
+        previews.insert(key)
+        return .init(event: .slower, text: "In \(max(10, Int((gap / 10).rounded()) * 10)) Metern gilt Tempo \(Int(target)), bitte rechtzeitig langsamer werden.")
+    }
+
 }
 
 struct CarDeviationGuidance {

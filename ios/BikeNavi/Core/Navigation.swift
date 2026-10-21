@@ -28,7 +28,7 @@ struct RouteTracker {
         let maximumForward = lastTimestamp == nil ? Double.infinity : min(carNavigation ? 6000 : 400, max(200, elapsed * (carNavigation ? 70 : 20)))
         var best: (distance: Double, progress: Double, point: Coordinate, directionMatches: Bool)?
         for i in 0..<(route.coordinates.count - 1) {
-            guard cumulative[i + 1] >= max(0, lastProgress - 150),
+            guard cumulative[i + 1] >= max(0, lastProgress - (route.isGPXTrack ? 20 : 150)),
                   cumulative[i] <= lastProgress + maximumForward else { continue }
             let a = route.coordinates[i], b = route.coordinates[i + 1]
             let ax = (a.longitude - position.longitude) * scaleX
@@ -41,9 +41,12 @@ struct RouteTracker {
             let progress = cumulative[i] + t * (cumulative[i + 1] - cumulative[i])
             let directionMatches = heading.map { LocalGeometry.angle($0, LocalGeometry.bearing(a, b)) <= 65 } ?? true
             let projected = Coordinate(latitude: a.latitude + t * (b.latitude-a.latitude), longitude: a.longitude + t * (b.longitude-a.longitude))
-            let score = distance + (carNavigation && !directionMatches ? 60 : 0)
-            let bestScore = best.map { $0.distance + (carNavigation && !$0.directionMatches ? 60 : 0) } ?? .infinity
-            if best == nil || score < bestScore - 1 { best = (distance, progress, projected, directionMatches) }
+            let useHeading = carNavigation || route.isGPXTrack
+            let score = distance + (useHeading && !directionMatches ? 60 : 0)
+            let bestScore = best.map { $0.distance + (useHeading && !$0.directionMatches ? 60 : 0) } ?? .infinity
+            let closerProgress = route.isGPXTrack && abs(score - bestScore) < 1
+                && abs(progress - lastProgress) < abs((best?.progress ?? .infinity) - lastProgress)
+            if best == nil || score < bestScore - 1 || closerProgress { best = (distance, progress, projected, directionMatches) }
         }
         guard let best else { return nil }
         let magnet = best.distance <= 25 && accuracy >= 0 && accuracy <= 25 && best.directionMatches

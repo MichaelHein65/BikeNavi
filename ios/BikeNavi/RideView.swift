@@ -6,6 +6,9 @@ struct RideView: View {
     @State private var showBlogPoint = false
     @State private var showElevation = false
     @State private var showPOIs = false
+    @State private var showRegions = false
+    @AppStorage("ridePresentation") private var presentation = "navigation"
+    private var presentationTitle: String { presentation == "bike" ? "E-Bike-Technik" : presentation == "tourism" ? "Touristik" : "Navigation" }
     @State private var mapError: String?
     @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
@@ -31,7 +34,7 @@ struct RideView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             if ride.recordingState == .paused {
                                 Text("Deine Pause").font(.headline)
-                                Text("Fortsetzen, wenn du bereit bist").font(.subheadline)
+                                Text(ride.title).font(.subheadline).lineLimit(2)
                             } else if ride.route == nil {
                                 Text(ride.profile.mode == .hiking ? "Freie Wanderung" : "Freie Fahrt").font(.headline)
                                 Text("Dein Weg wird aufgezeichnet").font(.subheadline)
@@ -72,7 +75,24 @@ struct RideView: View {
                             }
                         }
                         .onChange(of: state.mapStyleURL) { _, _ in mapError = nil }
+                    ScrollView {
                     VStack(spacing: 8) {
+                        HStack {
+                            Menu {
+                                Picker("Fahransicht", selection: $presentation) {
+                                    Text("Navigation").tag("navigation")
+                                    Text("E-Bike-Technik").tag("bike")
+                                    Text("Touristik").tag("tourism")
+                                }
+                            } label: { Label(presentationTitle, systemImage: "rectangle.3.group").font(.subheadline.bold()).frame(minHeight: 44) }
+                                .accessibilityIdentifier("ridePresentation")
+                            Spacer()
+                        }
+                        if presentation == "tourism" {
+                            Text(ride.title).font(.headline).frame(maxWidth: .infinity, alignment: .leading)
+                            Button("Offline-Orte der Region", systemImage: "map") { showRegions = true }
+                                .frame(minHeight: 44).accessibilityIdentifier("rideOfflinePlaces")
+                        }
                         if let status = state.localRideStatus, state.progress?.distanceFromRoute ?? 0 <= 35 {
                             Text(status).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
                         }
@@ -94,23 +114,13 @@ struct RideView: View {
                                 .frame(maxWidth: .infinity, minHeight: 44)
                         }.accessibilityIdentifier("captureBlogPoint")
                         Divider()
-                        if ride.profile.mode.supportsBike && !state.isWalkingSection { BikeTelemetryView(compact: true) }
-                        HStack(spacing: 8) {
-                            Button { state.togglePause() } label: {
-                                Label(ride.recordingState == .paused ? "Fortsetzen" : "Pause", systemImage: ride.recordingState == .paused ? "play.fill" : "pause.fill")
-                                    .font(.subheadline.bold()).frame(maxWidth: .infinity, minHeight: 44)
-                                    .background(Theme.forest, in: RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
-                            }.buttonStyle(.plain)
-                            if ride.route != nil {
-                                Button { showElevation = true } label: { controlIcon("chart.xyaxis.line") }
-                                    .accessibilityLabel("Höhenprofil")
-                                Button { state.voice.toggle() } label: { controlIcon(state.voice ? "speaker.wave.2" : "speaker.slash") }
-                                    .accessibilityLabel(state.voice ? "Sprachausgabe ausschalten" : "Sprachausgabe einschalten")
-                            }
-                            Button { confirmFinish = true } label: { controlIcon("stop.fill") }
-                                .accessibilityLabel("Tour beenden")
-                        }.buttonStyle(.plain)
-                    }.padding(.horizontal, 14).padding(.vertical, 8).background(Theme.paper)
+                        if ride.profile.mode.supportsBike && !state.isWalkingSection {
+                            BikeTelemetryView(compact: presentation != "bike")
+                            if presentation == "bike" { EnergyEstimateView() }
+                        }
+                    }.padding(.horizontal, 14).padding(.vertical, 8)
+                    }.frame(maxHeight: presentation == "bike" || typeSize.isAccessibilitySize ? 330 : 230).background(Theme.paper).accessibilityIdentifier("rideInformation")
+                    rideControls(ride).padding(.horizontal, 14).padding(.vertical, 8).background(Theme.paper)
                 }
                 .overlay {
                     if !state.waypointSkipProposal.isEmpty {
@@ -195,7 +205,27 @@ struct RideView: View {
                 }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Theme.paper)
                     .navigationTitle("Fahren")
             }
+        }.sheet(isPresented: $showRegions) {
+            NavigationStack { OfflineRegionsView(center: state.location.coordinate ?? state.activeRide?.route?.coordinates.first) }
         }.sheet(isPresented: $showPOIs) { POIView(duringRide: state.activeRide != nil) }
+    }
+
+    private func rideControls(_ ride: TourDocument) -> some View {
+                        HStack(spacing: 8) {
+                            Button { state.togglePause() } label: {
+                                Label(ride.recordingState == .paused ? "Fortsetzen" : "Pause", systemImage: ride.recordingState == .paused ? "play.fill" : "pause.fill")
+                                    .font(.subheadline.bold()).frame(maxWidth: .infinity, minHeight: 44)
+                                    .background(Theme.forest, in: RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+                            }.buttonStyle(.plain)
+                            if ride.route != nil {
+                                Button { showElevation = true } label: { controlIcon("chart.xyaxis.line") }
+                                    .accessibilityLabel("Höhenprofil")
+                                Button { state.voice.toggle() } label: { controlIcon(state.voice ? "speaker.wave.2" : "speaker.slash") }
+                                    .accessibilityLabel(state.voice ? "Sprachausgabe ausschalten" : "Sprachausgabe einschalten")
+                            }
+                            Button { confirmFinish = true } label: { controlIcon("stop.fill") }
+                                .accessibilityLabel("Tour beenden")
+                        }.buttonStyle(.plain)
     }
 
     private var poiButton: some View {

@@ -4,6 +4,36 @@ Alle veröffentlichten Fassungen erhalten einen Git-Tag und einen GitHub-Release
 
 ## Unveröffentlicht
 
+Weitere Änderungen werden nach der Vorabversion hier gesammelt.
+
+## 0.5.0-rc.1 — 21. Oktober 2026 (Vorabversion)
+
+Auf Nutzerwunsch eigener Versionsstand für die noch nicht im Fahrbetrieb abgenommenen Änderungen seit 0.4.0. App und Live-Aktivität: **0.5.0 (5)**; Backend/API und GitHub: **0.5.0-rc.1** (Python-Paket normalisiert `0.5.0rc1`). Automatisierte Prüfungen ersetzen weder reale iPhone-/Bike-Fahrten noch Pi-Langzeitbetrieb. P5 bleibt mangels ausreichend geeigneter Fahrdaten ohne numerische Prognose. Der bisherige stabile GitHub-Release 0.4.0 bleibt erhalten; diese Fassung wird als Prerelease veröffentlicht. Die datierten Untereinträge halten den damaligen Arbeits- und Installationsstand fest; frühere Angaben „0.4.0“, „Unveröffentlicht“ oder „kein Release“ sind historische Angaben, nicht die Versionskennung dieses Releases.
+
+### Radplanung, Offline-Regionen, Fahransichten und Energieprüfung (21. Oktober 2026)
+
+- P2: drei lokale Routenwünsche mit nachvollziehbaren Gewichten; OSM-Straßenklasse, eigenständiger Radweg, Belag und bekannte Steigung pro Abschnitt. Unbekannt bleibt unbekannt, keine behaupteten Verkehrsmessungen. Additive Datenfelder und Schutz des Abgleichs mit älteren Backends.
+- P3: [ADR vor Implementierung](docs/architecture/ADR-001-regionale-offline-navigation.md); versionierte regionale Graphpakete mit SHA-256, Speichergrenzen, Fortsetzung, atomarem Update und Löschung. Regionale Rückführung über den bisherigen 3-km-Bereich hinaus, lokale einfache Wegenetzkarte ohne Internetressourcen. Ausführliche topografische Karten bleiben gesondert; kein neuer Router für Auto, See oder Wandern.
+- P4: Navigation, E-Bike-Technik und Touristik als merkbare Fahransichten, scrollbare Bedienung für größere Schriften; Blog/Foto, Bosch und bestehende Navigation erhalten.
+- P5: reale Datenqualität geprüft, lokale Kalibrierung mit Trennung ganzer Trainings-/Prüffahrten und vorsichtiger Prozentbandbreite implementiert. Nur eine von 51 vorhandenen Fahrten qualifiziert: **keine numerische Energieprognose freigegeben**. Keine erfundene Wh-Kapazität oder Energieintegration aus Motorleistung.
+- P6: regionaler Offline-Katalog für Trinkwasser, Rastplätze und Sehenswürdigkeiten mit Quelle/Abrufalter, Suche, Favoriten und Zwischenzielen. Kein Live-Öffnungsstatus; GPX und laufende Fahrten bleiben vor unbeabsichtigtem Umplanen geschützt.
+- [Bedienung und Grenzen](docs/RAD_OFFLINE.md), [Energie-Datenaudit](docs/architecture/energy-data-audit.md), Architektur und Roadmap nachgeführt. Anschließend auf Nutzerwunsch als **0.5.0-rc.1 / App 0.5.0 (5)** versioniert.
+
+### GPX-Originalspuren und OsmAnd-Gap-Audit (21. Oktober 2026)
+
+- Evidenzbasierter [Audit mit Gap-Matrix](docs/architecture/osmand-gap-analysis.md) und [priorisierte Roadmap](docs/roadmap/osmand-inspired-improvements.md) für GPX, Routenqualität, Offline-Regionen, Fahransichten, Energieprognose und POIs. Zunächst P1 umgesetzt; die anschließend autonom beauftragten P2–P6 sind im neueren Eintrag dokumentiert.
+- Lokaler GPX-1.1-/1.0-Import über Dateiauswahl und registrierten Dateiempfang: Abschnitt, Start-/Zielpunktbereich und Richtung auswählen, als eigene Fahrradplanung speichern. Originalkoordinaten, Höhen, Punktzeiten/-namen und separate Wegpunkte bleiben erhalten. Getrennte Tracksegmente werden nicht verbunden; nicht ausgewählte Abschnitte bleiben in der Quelldatei.
+- Originalspur ohne Routingserver verfolgen, umkehren und exportieren. Keine erzwungene Straßenanpassung, automatische Rückführung oder Höhenüberschreibung; fehlende Beläge bleiben unbekannt. Bestehende Aufzeichnung, Bosch-/Blogpfade und Fahrt-GPX-Export bleiben erhalten. Zusätzliche Schutzprüfung für kleine Rundtouren und überlappende Spuren.
+- Additive GPX-Metadaten, Backend-Fähigkeitserkennung und Schutz vor Verlust durch alte Clients. Ein alter Pi lässt GPX-Touren lokal; kompatible Touren synchronisieren weiter. Keine neue Dependency, Datenbankmigration oder Versionsänderung: **0.4.0 (4), Unveröffentlicht**.
+- [Bedienung und Formatgrenzen](docs/GPX.md), [Bildschirme](docs/BILDSCHIRME.md#gpx-import-und-originalspur-21-oktober-2026) sowie [Tests und verbleibende Geräteprüfungen](docs/UMSETZUNG.md#gpx-import-und-originalspur-21-oktober-2026). Kein Geräte-/Pi-Deployment und kein Release durch diese Änderung.
+
+### Vier Auto-Umgebungen und streckenabhängige Tempohinweise (20. Oktober 2026)
+
+- Automatische Einteilung in Innenstadt/Stadtgebiet, Landstraße, Autobahn/baulich getrennte Fahrbahnen und Off-Road anhand von TomTom-Abschnitten und ergänzenden OSM-Straßenmerkmalen. Neue optionale `carRoadSections`, kompatibel mit bestehenden Touren und Sync-Belegen; alte Routen vor Nutzung neu berechnen. Daten-/Erkennungsgrenzen in [AUTO.md](docs/AUTO.md#vier-umgebungen-und-tempohinweise--20-oktober-2026).
+- Niedrigere Limits: 100 m Vorlauf in der Stadt, 500 m auf Landstraßen, geschwindigkeitsabhängiger Reaktions-/Bremsvorlauf auf getrennten Fahrbahnen (200 → 80 km/h etwa 1.030 m). Je ein eigener Hinweis am Limitbeginn und bei Überschreitung nach 100 bzw. 200 m; höhere Limits einmal kurz am Beginn. Off-Road einmal melden, keine Tempoansagen. Drei-Minuten-Sperre betrifft nur noch Charaktersätze; identische Sprüche bleiben 30 Minuten gesperrt. Wiederholte Überschreitungswarnungen und Compliance-Zusatz entfallen.
+- Verkehrsaktualisierung erhält zurückgelegte Strecke seit Limitbeginn und Warnstatus. Keine neue sichtbare UI, keine Änderung von Version/Build (**0.4.0 (4), Unveröffentlicht**). [Tests und Bereitstellungsgrenzen](docs/UMSETZUNG.md#vier-auto-umgebungen-und-streckenabhängige-tempohinweise-20-oktober-2026).
+- Auf Nutzerwunsch Backend auf dem Pi bereitgestellt; Release-Gerätebuild und Signatur geprüft. iPhone-Installation zunächst wegen Gerätesperre abgewiesen; nach Entsperren am 21. Oktober um 06:48 Uhr MESZ auf Michaels iPhone 15 Pro erfolgreich installiert und gestartet. Datenbanksicherung mit 304 Archivdatensätzen erfolgreich wiederhergestellt. Live-Pkw-Beispielroute bestätigt urbanen Kontext und OSM-Fehlerrückfall; explizite BikeNavi-Kennung für Overpass ergänzt und erneut geprüft/bereitgestellt. [Bereitstellungsstand](docs/UMSETZUNG.md#bereitstellung-am-20-oktober).
+
 ### Auto-Ansagen nach Fahrtrückmeldung beruhigen (19. Oktober 2026)
 
 - Vorausschau auf niedrigere Limits und Hinweise direkt am Limitwechsel erst nach mindestens drei Minuten ohne Auto-Ansage; Abbiegehinweise zählen mit. Unterdrückte Übergänge werden nicht später nachgeholt. Warnungen bei anhaltender Überschreitung und die kurze Bestätigung nach Tempoanpassung behalten ihre bisherigen Abstände.

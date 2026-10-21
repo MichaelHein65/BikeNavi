@@ -117,6 +117,10 @@ struct SettingsView: View {
                     Link("Auto-Routing und Verkehr: TomTom", destination: URL(string: "https://www.tomtom.com/")!)
                     Link("Routing: openrouteservice / HeiGIT", destination: URL(string: "https://openrouteservice.org")!)
                     LabeledContent("Version", value: "\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "–"))")
+                    if let release = Bundle.main.infoDictionary?["BikeNaviReleaseVersion"] as? String, release.contains("-") {
+                        Text("Vorabversion \(release) · Fahrtests ausstehend").font(.caption).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("prereleaseVersion")
+                    }
                 }
             }.navigationTitle("Einstellungen")
                 .onAppear { refreshVoices(); state.observeSystemVolume() }

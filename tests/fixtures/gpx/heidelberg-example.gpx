@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="BikeNavi synthetic public test" xmlns="http://www.topografix.com/GPX/1/1" xmlns:x="urn:bikenavi:test">
+  <metadata><name>Heidelberg · synthetisches GPX-Beispiel</name></metadata>
+  <wpt lat="49.4148" lon="8.6820"><ele>115.5</ele><time>2026-10-21T08:00:00.125+02:00</time><name>Beispiel: Pause &amp; Aussicht</name></wpt>
+  <wpt lat="49.4150" lon="8.6830"><name>Beispiel: Treffpunkt</name></wpt>
+  <rte><name>Beispielroute</name><rtept lat="49.4146" lon="8.6815"><name>Routenstart</name></rtept><rtept lat="49.4151" lon="8.6831"><name>Routenziel</name></rtept></rte>
+  <trk><name>Heidelberg · Beispiel-Rundtour</name>
+    <trkseg>
+      <trkpt lat="49.4146" lon="8.6815"><ele>114.25</ele><time>2026-10-21T06:00:00Z</time><name>Beispielstart</name></trkpt>
+      <trkpt lat="49.4148" lon="8.6820"><ele>115.5</ele><time>2026-10-21T06:00:15.125Z</time></trkpt>
+      <trkpt lat="49.4151" lon="8.6831"><time>2026-10-21T06:00:30Z</time><name>Beispielwende</name></trkpt>
+      <trkpt lat="49.4146" lon="8.6815"><ele>114.25</ele><time>2026-10-21T06:00:45Z</time></trkpt>
+    </trkseg>
+    <trkseg><trkpt lat="49.42" lon="8.69"/><trkpt lat="49.421" lon="8.691"/></trkseg>
+    <extensions><x:trkpt lat="0" lon="0"/></extensions>
+  </trk>
+</gpx>

@@ -87,7 +87,7 @@ def create_app(database_url: str | None = None, token: str | None = None,
 
     @app.get("/v1/status", dependencies=[Depends(authenticate)])
     def status():
-        return {"routingAvailable": bool(key or tomtom_key), "version": __version__}
+        return {"routingAvailable": bool(key or tomtom_key), "version": __version__, "gpxImportAvailable": True, "cyclePlanningAvailable": True, "offlineRegionsAvailable": True}
 
     @app.post("/v1/pois/search", dependencies=[Depends(authenticate)])
     async def poi_search(body: POISearch):
@@ -95,7 +95,9 @@ def create_app(database_url: str | None = None, token: str | None = None,
 
     @app.post("/v1/pois/route", dependencies=[Depends(authenticate)])
     async def poi_route(body: POIStopRequest):
-        return await app.state.pois.route_to_stop(body.search, body.stop)
+        result = await app.state.pois.route_to_stop(body.search, body.stop)
+        result["route"] = await car_road_context(result["route"])
+        return result
 
     @app.get("/v1/changes", dependencies=[Depends(authenticate)])
     def changes(after: int = Query(default=0, ge=0)):
@@ -160,13 +162,27 @@ def create_app(database_url: str | None = None, token: str | None = None,
     def read_description(generation_id: UUID):
         return app.state.description_jobs.get(str(generation_id))
 
+    async def car_road_context(result):
+        # Enrich the requested driving route, never every candidate in a POI search.
+        if result.get("carRoadSections"):
+            from .car_environment import enrich_environments
+            return await enrich_environments(result, app.state.ors.client, context_url)
+        return result
+
     @app.post("/v1/route", response_model=Route, dependencies=[Depends(authenticate)])
     async def route(body: RouteRequest, include_context: bool = True):
-        return await app.state.ors.route(body, include_context=include_context)
+        return await car_road_context(await app.state.ors.route(body, include_context=include_context))
 
     @app.post("/v1/elevation", response_model=ElevationResponse, dependencies=[Depends(authenticate)])
     async def elevation(body: ElevationRequest):
         return await elevations(app.state.ors.client, key, body)
+
+    @app.get("/v1/region-tiles/{x}/{y}", dependencies=[Depends(authenticate)])
+    async def region_tile(x: int, y: int, refresh: bool = False):
+        from .regions import tile_package
+        if not 0 <= x < 7200 or not 300 <= y < 3300:
+            raise HTTPException(422, "Ungültiger regionaler Kartenbereich")
+        return tile_package(await app.state.offline.tile(x, y, refresh=refresh))
 
     @app.get("/v1/offline-tiles/{x}/{y}", dependencies=[Depends(authenticate)])
     async def offline_tile(x: int, y: int, refresh: bool = False):

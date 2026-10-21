@@ -1,9 +1,11 @@
 import SwiftUI
 import Charts
+import UniformTypeIdentifiers
 
 struct PlannerView: View {
     @EnvironmentObject var state: AppState
     @State private var showSearch = false
+    @State private var showGPXPicker = false
     @State private var showPOIs = false
     @State private var showProfile = false
     @State private var showDetails = false
@@ -59,10 +61,20 @@ struct PlannerView: View {
                             Image(systemName: "bookmark.fill").frame(width: 48, height: 48)
                         }.background(Theme.paper, in: RoundedRectangle(cornerRadius: 18)).accessibilityLabel("Meine gespeicherten Orte")
                     }
+                    HStack {
                     Button("Orte entdecken", systemImage: "square.grid.2x2.fill") { showPOIs = true }
                         .font(.subheadline.bold()).padding(12)
                         .background(Theme.paper, in: RoundedRectangle(cornerRadius: 16))
                         .accessibilityIdentifier("planningPOIs")
+                    Button { showGPXPicker = true } label: {
+                        if state.readingGPX { ProgressView().accessibilityLabel("GPX wird gelesen") }
+                        else { Label("GPX", systemImage: "square.and.arrow.down") }
+                    }
+                        .font(.subheadline.bold()).padding(12)
+                        .background(Theme.paper, in: RoundedRectangle(cornerRadius: 16))
+                        .accessibilityLabel("GPX importieren").accessibilityIdentifier("gpxImport")
+                        .disabled(state.readingGPX)
+                    }
                     if state.plan.profile.mode == .sea, state.plan.route != nil, !MarineNavigation.current(state.plan.route) {
                         Label(MarineNavigation.outdatedRouteWarning, systemImage: "exclamationmark.triangle")
                             .font(.caption).padding(12).background(Theme.paper, in: RoundedRectangle(cornerRadius: 12))
@@ -84,7 +96,16 @@ struct PlannerView: View {
                     if let mapError { Text(mapError).font(.caption).foregroundStyle(Theme.ink).padding(10).background(Theme.paper, in: RoundedRectangle(cornerRadius: 12)) }
                 }.padding(18)
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { planningCard }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if state.plan.route?.isGPXTrack == true { GPXPlanCard() }
+                else { planningCard }
+            }
+            .fileImporter(isPresented: $showGPXPicker, allowedContentTypes: [UTType(importedAs: "com.topografix.gpx"), .xml], allowsMultipleSelection: false) { result in
+                switch result {
+                case .success(let urls): if let url = urls.first { Task { await state.readGPX(url) } }
+                case .failure(let error): state.errorMessage = error.localizedDescription
+                }
+            }
             .toolbar(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
@@ -579,6 +600,15 @@ struct ProfileView: View {
                     Text("Befestigt umfasst auch Pflaster. „Nur bekannte befestigte Wege“ erlaubt insgesamt bis zu 100 m unbefestigte oder unbekannte Abschnitte. Online werden zusätzlich Belagslücken auf Straßen zwischen bekannten befestigten Abschnitten toleriert: bis zu 250 m je Lücke, insgesamt höchstens 500 m. Der Belag bleibt unbekannt. Die lokale Offline-Berechnung bleibt bei 100 m. Zustand vor Ort prüfen.")
                 }
                 Section { Toggle("Sanfte Steigungen bevorzugen", isOn: $state.plan.profile.gentleHills) }
+                if state.plan.profile.mode == .cycling {
+                    Section("Routenvariante") {
+                        Picker("Gewichtung", selection: $state.plan.profile.cyclePreference) {
+                            Text("Bisherige Planung").tag(CyclePreference?.none)
+                            ForEach(CyclePreference.allCases, id: \.self) { Text($0.title).tag(Optional($0)) }
+                        }
+                        if let preference = state.plan.profile.cyclePreference { Text(preference.explanation).font(.caption) }
+                    }
+                }
                 }
                 if state.plan.profile.mode == .cycling || state.plan.profile.mode == .bikeAndHike {
                 Section("Schnellauswahl") {
@@ -720,7 +750,12 @@ struct RouteDetailsView: View {
                 }
                 }
                 if !route.warnings.isEmpty { Section("Zur Route") { ForEach(route.warnings, id: \.self) { Text($0).font(.subheadline) } } }
-                Section { OfflineDownloadView(route: route) }
+                if !isCar { CycleQualityView(route: route) }
+                Section {
+                    NavigationLink("Offline-Regionen verwalten") { OfflineRegionsView(center: route.coordinates.first ?? state.location.coordinate) }
+                        .accessibilityIdentifier("offlineRegions")
+                    OfflineDownloadView(route: route)
+                }
                 Section("Abbiegehinweise") {
                     ForEach(Array(route.maneuvers.enumerated()), id: \.offset) { _, maneuver in
                         Label(isCar ? maneuver.carInstruction : maneuver.instruction, systemImage: maneuver.symbol).font(.subheadline)

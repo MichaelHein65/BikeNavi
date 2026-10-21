@@ -1,5 +1,57 @@
 # Umsetzungsstand – Version 0.4.0
 
+## Vorabversion 0.5.0-rc.1 — 21. Oktober 2026
+
+Nach dem Audit zunächst P1 und anschließend auf ausdrücklichen Auftrag P2–P6 autonom umgesetzt. Stand zur Veröffentlichung: App/Live-Aktivität **0.5.0 (5)**, Backend/API **0.5.0-rc.1**, Python-Paket **0.5.0rc1**. Die vorhandenen lokalen Auto-Änderungen wurden erhalten und mitgeprüft. Tag/Release werden getrennt vom anschließenden Geräte-/Pi-Deployment behandelt.
+
+### Abschlussprüfung
+
+| Prüfung | Tatsächliches Ergebnis |
+| --- | --- |
+| `swift test --scratch-path build/SwiftTests` | 223 Kerntests erfolgreich, einschließlich GPX, Rechte/Restriktionen, regionalem Routing, atomarem Paketupdate, Prüfsummen, Wiederaufnahme, Löschung und Energie-Freigabe |
+| `.venv/bin/python -m pytest server/tests -q` | 439 Tests erfolgreich; zwei bestehende Deprecation-Warnungen aus Abhängigkeiten |
+| Nach Versionsänderung `server/tests/test_api.py` | 43 Tests erfolgreich, einschließlich API-Version |
+| Xcode native Tests und GPX-/Regions-UI | 44 native iOS-Tests und drei UI-Abläufe gemeinsam erfolgreich |
+| Zusätzliche UI-Prüfungen | Größte Accessibility-Schrift: Fortsetzen/Beenden erreichbar; Vorabversionsanzeige erfolgreich geprüft |
+| Signierter Release-Gerätebuild | Erfolgreich; App und Erweiterung tatsächlich 0.5.0 (5), vollständige Vorabversion in der App, `codesign --verify --deep --strict` erfolgreich |
+| Galerie | Acht neue Screenshots 99–106 visuell geprüft; ausschließlich synthetische Beispieldaten beziehungsweise Versionstext |
+| Graphbenchmark | 10.000 Knoten/39.600 Kanten mit Routenberechnung am Mac etwa 1–2 Sekunden; keine Aussage über iPhone-RAM oder Akku |
+
+Native/GPX/Regions-Testlauf: `build/GPXDerived/Logs/Test/Test-BikeNavi-2026.10.21_08-34-09-+0200.xcresult`. Größte Schrift: Lauf 08:37; Versionstest nach korrigierter Abfrage des zusammengefassten SwiftUI-Bedienungselements: Lauf 10:41. Zunächst fehlgeschlagene Testabfrage wurde nicht als Produktfehler oder bestandener Test ausgegeben; abschließender gezielter Lauf erfolgreich. Die sichtbare Version und signierten Plist-Werte waren bereits korrekt. Diagnoseartefakte und Buildprodukte bleiben ignoriert. Xcode bereinigt ältere xcresult-Bundles automatisch; das vollständige erfolgreiche Protokoll bleibt unter `build/stages-ios-verified.log`, exportierte Bilder in der Galerie.
+
+Während der Umsetzung gefundene Fehler behoben und nachgeprüft: mehrere SwiftUI-List-Buttons lösten zuvor gemeinsam aus (Favorit/Planung jetzt getrennt); regionale Graphen erhalten eigene kleinere RAM-Grenzen; unvollständige Downloads sind gezielt löschbar; unveränderliche aktive Pakete bleiben bei defekten Updates erhalten. Der native MapLibre-Test lädt den lokalen Kartenstil ohne externe Ressourcen. Neue Swift-Dateien über den Projektgenerator aufgenommen.
+
+### Umfang und verbleibende Grenzen
+
+P1: GPX-Import und unverändertes Folgen der Originalspur. P2: nachvollziehbare lokale Varianten und Abschnittsdaten. P3: begrenzte Fahrradregionen mit einfacher lokaler Wegenetzkarte; keine vollständige topografische Karte und kein neuer Offline-Auto-/See-/Wanderrouter. P4: drei Fahransichten mit erreichbaren festen Fahrtbedienelementen. P6: lokaler POI-Katalog mit Quelle/Abrufalter, Favoriten und Zwischenzielen.
+
+P5 wurde evidenzabhängig begrenzt: read-only Audit von 51 Fahrten/274.396 Messpaketen; nur eine geeignete Fahrt, keine validierte Kalibriergruppe. Die implementierte Freigabelogik bleibt auf diesen Daten ohne numerische Prognose. Rohdaten, Namen, Koordinaten und Kennungen verbleiben unter ignorierten privaten Artefakten; öffentlich nur aggregierter [Datenaudit](architecture/energy-data-audit.md).
+
+Noch offen: echte Fahrabnahme mit GPS/Bosch und Flugmodus, iPhone-Speicher-/Akku-Langzeittest, große/dichte Regionen, Dateiübernahme aus iCloud/fremden Apps und vollständige assistive Bedienungsprüfung. Ein erfolgreicher Simulatorlauf oder eine Geräteinstallation ersetzt diese Prüfungen nicht. [Bedienung](RAD_OFFLINE.md), [Architekturentscheidung](architecture/ADR-001-regionale-offline-navigation.md), [Roadmap](roadmap/osmand-inspired-improvements.md), [Release-Notizen](releases/0.5.0-rc.1.md).
+
+## Vier Auto-Umgebungen und streckenabhängige Tempohinweise (20. Oktober 2026)
+
+Auf Nutzerwunsch automatische Umgebungserkennung und getrennte sachliche Tempophasen umgesetzt: Innenstadt 100 m vorher/100 m danach, Landstraße 500/200 m, getrennte Fahrbahnen mit geschwindigkeitsabhängiger Vorwarnung/200 m danach. An niedrigeren Limits zusätzlich genau ein Hinweis beim Eintritt; höhere Limits nur einmal kurz dort. Auf erkannten Off-Road-Abschnitten einmalige Eintrittsmeldung, keine Tempohinweise. Die Warnung nach dem Schild erfolgt nur bei tatsächlicher, durch frische Messungen bestätigter Überschreitung. Keine periodische Wiederholung oder zusätzliche Tempoanpassungsbestätigung. Zusätze höchstens alle drei Minuten, derselbe Spruch weiterhin erst nach 30 Minuten.
+
+TomTom-Umgebungsabschnitte und ergänzende OSM-Merkmale werden im neuen optionalen Routenfeld `carRoadSections` gespeichert. Straßenbezeichnungen/Einbahnstraßen allein belegen keine bauliche Trennung; Feld-/Waldwege und Pfade bilden die hier verwendete Off-Road-Kategorie. OSM-Zuordnung prüft parallele/kreuzende Wege und widersprüchliche Kandidaten, Fehler belassen die TomTom-Grundeinteilung mit Warnung. Die zusätzliche Abfrage findet nur für angeforderte Fahrtrouten statt, nicht für jeden POI-Suchkandidaten. [Bedienung, Formel und Datenlücken](AUTO.md#vier-umgebungen-und-tempohinweise--20-oktober-2026), [Architektur](ARCHITEKTUR.md#auto-charakter-und-tempobegleitung-17-oktober-2026).
+
+**198 Swift-Kerntests und 40 native iOS-Simulatortests erfolgreich; Debug-Simulatorbuild erfolgreich.** Kernprüfungen für alle Entfernungsgrenzen, 200 → 80 km/h, unbekanntes aktuelles Autobahnlimit, separate Ansage am Schild, einmalige Überschreitung, höhere Limits, Off-Road mit/ohne numerisches Limit, GPS-/Kontextlücken, aufgeschobene/verfallende Hinweise, gleiche angrenzende Limits, Verkehrsaktualisierung, Format-Rundreise und persistente Kommentarpausen. Backend-Gesamtlauf mit **425 Tests erfolgreich**, zusätzlich ein neuer Endpunkt-Integrationstest erfolgreich (**426 unterschiedliche Backendtests**). Zwei bestehende Starlette/AnyIO-Deprecation-Warnungen. Geprüft sind Anbieterparameter, Kontextprioritäten, OSM-Zuordnung/Mehrdeutigkeit, begrenzter Fehlerrückfall, Modellvalidierung und alte Sync-Belege; Anbieterantworten werden dafür lokal ersetzt.
+
+Die frisch kompilierte Mac-Kernsimulation mit dem bereits lokal vorhandenen Pi-Repertoire verarbeitet 101 synthetische Sekunden und 899 m: Vorwarnung bei Sekunde 12, Limitbeginn 20, Überschreitung 28, höheres Limit 71, Abweichung 82, Rückkehr 91. **Sechs Ansagen**, kein neuer KI-Aufruf, keine Audioerzeugung/Wiedergabe. Diagnoseprotokolle und Simulation bleiben unter ignoriertem `build/`.
+
+**Auf Nutzerwunsch auf dem Pi bereitgestellt und am 21. Oktober auf Michaels iPhone 15 Pro installiert und gestartet.** Kein Feldtest; OSM-Vollständigkeit, tatsächliche GPS-/Sprechzeitpunkte und Bremskomfort müssen im Fahrzeug geprüft werden. Alte Routen enthalten keine Umgebungseinteilung und benötigen eine Neuberechnung nach Backend-/App-Update. Keine sichtbare Layoutänderung, daher keine neuen Galeriebilder. **0.4.0 (4), Unveröffentlicht**; kein Commit/Push, Tag oder GitHub-Release.
+
+
+### Bereitstellung am 20. Oktober
+
+Der Nutzer hat Pi- und iPhone-Installation ausdrücklich beauftragt. Release-Gerätebuild und `codesign --verify --deep --strict` erfolgreich, weiterhin 0.4.0 (4). Das gekoppelte iPhone 15 Pro ist erreichbar, hat die Installation aber beim Einhängen des Developer Disk Image mit `kAMDMobileImageMounterDeviceLocked` abgewiesen. Nach der Entsperrbestätigung am 21. Oktober um **06:48 Uhr MESZ** denselben geprüften Release-Build erfolgreich installiert und mit `devicectl` gestartet (Bundle `de.michaelhein.BikeNavi`). Die strenge Signaturprüfung war erneut erfolgreich. Bestehender App-Zugang bleibt im Schlüsselbund; keine Neuinitialisierung oder Löschung der App-Daten.
+
+Pi-Backend neu gebaut und gestartet, Backend/Datenbank gesund. 19 Servermodule per SHA-256 mit dem lokalen Stand abgeglichen; HTTPS, Healthcheck und Zugangsschutz bestätigt. Eine echte öffentliche Heidelberger Pkw-Route lieferte 891 m, 14 Geometriepunkte, einen urbanen Umgebungsabschnitt und ein numerisches Limit. Keine Tour/Fahrt gespeichert und keine KI-Generierung ausgelöst.
+
+Die OSM-Ergänzung meldete HTTP 406; mit expliziter BikeNavi-Kennung meldete der Dienst HTTP 502/Überlastung. Die Kennung im Anfragepfad ergänzt, 58 gezielte Backendtests erfolgreich und die Korrektur erneut bereitgestellt. Der Fehlerfall erhält die TomTom-Einteilung mit Routenwarnung. Dieser Live-Lauf bestätigt damit Stadtgebiet und Fehlerrückfall, nicht die tatsächliche Erkennung aller vier Umgebungen. Die übrigen Fälle sind synthetisch geprüft.
+
+Die Datenbanksicherung liegt mit eingeschränkten Dateirechten unter dem ignorierten `artifacts/backups/`. Die getrennte Wiederherstellungsprüfung ist mit **304 Archivdatensätzen erfolgreich abgeschlossen**, der Sicherungslauf endete mit Exitcode 0. Am 21. Oktober zusätzlich bestätigt: Die temporäre Testdatenbank ist entfernt, Pi-Backend und Datenbank melden gesund. Wegen des langsamen Rücktransfers wurde das Backend parallel zur Prüfung aktualisiert. Keine Datenbankmigration. Der vorherige Quellstand liegt Pi-lokal unter `rollback/before-car-environments-20261020.tar.gz`, das vorherige Image ist zusätzlich als `bikenavi-backend:before-car-environments-20261020` erhalten. Kein Git-Commit/Push oder Release.
+
 ## Ruhigere Auto-Ansagen (19. Oktober 2026)
 
 Nach einer echten Fahrt meldete der Nutzer zu häufige Tempohinweise im Innenstadtbereich und wiederholte Charaktersprüche. Vorausschau und Hinweise am Limitwechsel benötigen jetzt drei Minuten ohne Auto-Ansage, einschließlich Navigation und Abweichungsreaktionen. Unterdrückte Übergänge werden verworfen; Warnungen bei anhaltender Überschreitung und Bestätigung nach Tempoanpassung bleiben aktiv.
@@ -437,3 +489,57 @@ Der Nutzer bestätigt nach Installation des Rückfalls hörbaren Kinderreim und 
 **Prüfungen:** Alle **23 nativen Simulator-Tests erfolgreich**. Zusätzlich **ein echter nativer Audiotest auf Michaels iPhone 15 Pro erfolgreich**: Produktionspfad konfiguriert und aktiviert ohne `fallbackReason`, Kategorie/Modus passend zum Ergebnis und anschließende Freigabe geprüft. Der neue Test entdeckt einen Konfigurationsfehler auch dann, wenn normale Wiedergabe anschließend gelingt. Die beiden UI-Tests des vorherigen Laufs gelten weiterhin; diese Folgekorrektur ändert keine Oberfläche. Der Xcode-Hinweis auf ein fehlendes DeviceSupport-Verzeichnis verhinderte den erfolgreichen Geräte-Testlauf nicht. Der automatisierte Geräte-Test allein bestätigt keinen hörbaren HFP-Ton und ist kein Fahrtest; die anschließende Nutzerbestätigung steht unten.
 
 **Bereitstellung:** Signierter Release-Gerätebuild und strenge Signaturprüfung erfolgreich. Aktualisierte Fassung um **17:18 Uhr MESZ** auf Michaels iPhone 15 Pro installiert und gestartet. Version/Build bleiben **0.4.0 (4), Unveröffentlicht**. Kein Pi-Deployment, Commit/Push, Git-Tag oder GitHub-Release. Anschließend bestätigt Michael auf die Aufforderung zum Hörtest über den Telefonkanal: „Funktioniert jetz wie gewünscht“. Damit ist die gewünschte Ausgabe am tatsächlichen Infotainment durch den Nutzer bestätigt. Dies ist ein praktischer Audiofunktionstest, kein Nachweis einer vollständigen Navigationsfahrt oder eines Langzeittests.
+
+## GPX-Import und Originalspur (21. Oktober 2026)
+
+[Gap-Audit](architecture/osmand-gap-analysis.md) und [Roadmap](roadmap/osmand-inspired-improvements.md) wurden vor der Implementierung erstellt. Kein kritisches Gegenargument gegen P1: vorhandener Tracker und lokale Tourstruktur sind nutzbar, wenn GPX ausdrücklich gegen automatische Neuberechnung geschützt und der strikte Pi-Vertrag additiv erweitert wird. **Nur P1 umgesetzt**; P2–P6 bleiben priorisierte Planung. Bestehende lokale Auto-Änderungen wurden erhalten; kein Commit/Push, Git-Tag, GitHub-Release oder Deployment. Version/Build unverändert **0.4.0 (4)**.
+
+### Geänderte Bausteine
+
+- `Core/GPXImport.swift`: begrenzter Parser, GPX-Kernmodell, Abschnitts-/Bereichs-/Richtungsauswahl und Konvertierung zur Originalspur. `Core/GPX.swift`: Planungsexport mit Punktmetadaten/Wegpunkten, unveränderter Aufzeichnungsexport. `Core/Models.swift`: optionales `gpxTrack`.
+- `GPXImportView.swift`, `PlannerView.swift`, `BikeNaviApp.swift`, `Info.plist`: Dateiauswahl/-empfang, Vorschau, Bearbeitung als neue Tour, Umkehr, Teilen und Fahrtstart. `RouteMap.swift`: eigenständige GPX-Orte. `AppState.swift` und `Core/Navigation.swift`: geschützte Originalspur, Abweichungsstatus, Rundtour-Fortschritt und Wiederaufnahme.
+- `Core/APIClient.swift`, `server/bikenavi/{models,main,storage}.py`: GPX-Fähigkeit, optionaler Metadatenvertrag, Erhalt alter Beleg-Hashes und Ablehnung stillen Metadatenverlusts. Altes Backend im nativen Test simuliert: GPX bleibt dirty/lokal, normale Planung wird bestätigt.
+- Neue Core-, native iOS-, UI- und Backendtests sowie gekennzeichnete synthetische GPX-Fixtures. `scripts/generate_project.py` bindet neue Swift-Dateien und die öffentliche Debug-Fixture ein; Projekt neu generiert und Reproduzierbarkeit geprüft.
+- [GPX-Bedienung](GPX.md), Architektur, Changelog, Versionshinweis, README, Roadmap und Galerie nachgeführt; **01** erneuert, **95–98** ergänzt und visuell geprüft.
+
+### Ausgeführte Prüfungen
+
+| Prüfung | Tatsächliches Ergebnis |
+| --- | --- |
+| Ausgangszustand: `swift test --scratch-path build/SwiftTests` | 198 Tests erfolgreich |
+| Ausgangszustand: `.venv/bin/python -m pytest server/tests -q` | 426 Tests erfolgreich |
+| Abschließende Swift-Kerntests, gleicher Befehl | **212 Tests erfolgreich**, darunter 14 GPX-Tests; 100.000 Punkte importiert/exportiert/verfolgt, 100.001 Punkte abgewiesen; kleine Rundtour bis zum Ende verfolgt |
+| Abschließende Backendtests, gleicher Befehl | **435 Tests erfolgreich**, zwei bestehende Deprecation-Warnungen; keine Live-Anbieter-/Pi-Abfragen für GPX |
+| Native iOS-Suite `BikeNaviMapTests` | **43 Tests erfolgreich**: Auto, Segeln, freie Fahrt, Anwendungskontext, Karte, Wachhalteschutz und drei GPX-Integrationsabläufe |
+| GPX-Integration nach letzter Standort-Start-Schutzkorrektur erneut | **3 Tests erfolgreich**; geblocktes Netzwerk, unveränderte Spur bei Abweichung, Umkehr, SQLite-Wiederaufnahme, Erhalt aktiver Fahrt, defekte Datei, alter Server |
+| Zwei gezielte UI-Abläufe | **2 Tests erfolgreich**: `GPXUITests/testPreviewImportReverseEditAndFilePicker` und `RouteDescriptionUITests/testPreTourDescriptionWithoutPiAndPlanningScreenshot`; echter Dateidialog inkl. Abbrechen und normale Planung/Beschreibung geprüft |
+| Simulator-Testbuild | Erfolgreich, iOS 26.1, separater Simulator „BikeNavi Dokumentation“ |
+| Release-Gerätebuild, Signierung ausgeschaltet | **BUILD SUCCEEDED**, arm64/iphoneos, `CODE_SIGNING_ALLOWED=NO`; keine Installation und keine Signaturprüfung |
+| `plutil -lint ios/BikeNavi/Info.plist`, `git diff --check`, Projektgenerator erneut | Erfolgreich; Generator ergibt bytegleiches Projekt |
+
+Simulatorbefehl (Projektwurzel):
+
+```sh
+xcodebuild -project BikeNavi.xcodeproj -scheme BikeNavi -configuration Debug \
+  -destination 'platform=iOS Simulator,id=FD396F28-A04F-4F7F-B777-CBB83229966F' \
+  -derivedDataPath build/GPXDerived -parallel-testing-enabled NO \
+  -only-testing:BikeNaviMapTests \
+  -only-testing:BikeNaviUITests/GPXUITests \
+  -only-testing:BikeNaviUITests/RouteDescriptionUITests/testPreTourDescriptionWithoutPiAndPlanningScreenshot test
+```
+
+Die abschließende GPX-Wiederholung verwendet denselben Befehl mit ausschließlich `-only-testing:BikeNaviMapTests/GPXNavigationTests`. Galerie-Beispieldaten über `python3 scripts/seed_gallery.py --device FD396F28-A04F-4F7F-B777-CBB83229966F --elevation` im separaten Dokumentationssimulator. Build:
+
+```sh
+xcodebuild -project BikeNavi.xcodeproj -scheme BikeNavi -configuration Release \
+  -destination 'generic/platform=iOS' -derivedDataPath build/GPXDevice \
+  CODE_SIGNING_ALLOWED=NO build
+```
+
+Lokale Protokolle unter ignoriertem `build/gpx-checks/`; xcresult unter `build/GPXDerived/Logs/Test/`. Kein separater Linter konfiguriert. Bestehende Compilerwarnung in `BlogJournalView` (ungenutzter Wert) und Simulator-Laufzeitmeldungen sind keine bestätigten Gerätefehler. Erste Prüfläufe korrigierten Testannahmen: `LocalStore.save` aktualisiert `updatedAt`, der Standort-Testmodus ersetzt beim Initialisieren absichtlich die Testfahrt, die Legacy-Beleg-Fixture muss neue optionale Felder auslassen, und der iOS-Dateidialog besitzt einen sprachunabhängigen Accessibility-Identifier statt des angenommenen Titels. Abschließende Prüfungen danach erfolgreich.
+
+### Grenzen und nächster Schritt
+
+Offline-Verfolgung ist automatisiert mit gesperrtem URLSession-Netzwerk und ohne Graphdaten geprüft. Das ist **kein Flugmodus-/GPS-Feldtest** und kein Nachweis vollständig verfügbarer Offline-Karten. Echte Dateiauswahl aus iCloud, Teilen aus anderen iPhone-Apps, Bosch-Bluetooth während der Fahrt, Kamera/Fotostationen, große Schrift/VoiceOver und lange Hintergrundfahrten bleiben Geräteprüfungen. Die Galerie verwendet ausschließlich öffentliche/synthetische Daten; nicht ausgewählte GPX-Abschnitte und Erweiterungen bleiben nur in der ursprünglichen Datei erhalten. Der Test auf 100.000 Punkte ist ein Mac-Kernnachweis, keine Speicher-/Akkumessung auf dem iPhone. Backend-Anfragegrenze bleibt 16 MiB.
+
+**Genau nächster sinnvoller Schritt:** die in [GPX.md](GPX.md#manuell-am-iphone-prüfen) beschriebene Abnahme am iPhone mit lokalem GPX, Flugmodus ohne WLAN/Pi, Abweichung, Pause und Neustart durchführen. Sie schließt die verbleibende Lücke zwischen geprüften Kern-/Simulatorpfaden und tatsächlicher GPS-/Dateianbieter-Nutzung, bevor P2 begonnen wird.

@@ -34,6 +34,7 @@ class Profile(Model):
     gentleHills: bool = False
     boatDraft: float | None = Field(default=None, ge=0.1, le=20)
     boatSpeedKnots: float | None = Field(default=None, ge=0.5, le=50)
+    cyclePreference: Literal["fast", "comfortable", "quiet"] | None = None
     carOptions: CarOptions | None = None
 
 
@@ -56,6 +57,12 @@ class CarSpeedLimit(Model):
     startIndex: int = Field(ge=0)
     endIndex: int = Field(gt=0)
     kilometersPerHour: float = Field(gt=0, le=300)
+
+
+class CarRoadSection(Model):
+    startIndex: int = Field(ge=0)
+    endIndex: int = Field(gt=0)
+    environment: Literal["urban", "rural", "divided", "offRoad"]
 
 
 class CarLane(Model):
@@ -115,7 +122,35 @@ class ElevationSample(Model):
     altitude: float = Field(ge=-500, le=9000)
 
 
+class GPXPointDetails(Model):
+    name: str | None = Field(default=None, max_length=300)
+    time: str | None = Field(default=None, max_length=64)
+
+
+class GPXPoint(Model):
+    coordinate: Coordinate
+    details: GPXPointDetails
+
+
+class GPXTrackMetadata(Model):
+    kind: Literal["trk", "rte"]
+    points: list[GPXPointDetails] = Field(min_length=2, max_length=100_000)
+    waypoints: list[GPXPoint] = Field(default_factory=list, max_length=1000)
+
+
+class CycleQualitySection(Model):
+    startIndex: int = Field(ge=0)
+    endIndex: int = Field(gt=0)
+    roadClass: str | None = Field(default=None, max_length=80)
+    cycleway: bool | None = None
+    surface: int = Field(ge=0, le=100)
+    incline: float | None = Field(default=None, ge=-40, le=40)
+    source: Literal["OpenStreetMap"] = "OpenStreetMap"
+
+
 class Route(Model):
+    cycleQuality: list[CycleQualitySection] | None = Field(default=None, max_length=100000)
+    gpxTrack: GPXTrackMetadata | None = None
     id: UUID
     coordinates: list[Coordinate] = Field(min_length=2, max_length=100_000)
     distance: float = Field(ge=0)
@@ -143,16 +178,27 @@ class Route(Model):
     carTimeSections: list[CarTimeSection] | None = Field(default=None, max_length=100_000)
     carSpeedLimits: list[CarSpeedLimit] | None = Field(default=None, max_length=100000)
     carLaneSections: list[CarLaneSection] | None = Field(default=None, max_length=10000)
+    carRoadSections: list[CarRoadSection] | None = Field(default=None, max_length=100000)
     carTraffic: CarTraffic | None = None
     destinationAccessDistance: float | None = Field(default=None, gt=20, le=500)
 
     @model_validator(mode="after")
     def check_indices(self):
-        for sections in (self.carSpeedLimits or [], self.carLaneSections or [], self.carTraffic.sections if self.carTraffic else []):
+        cursor = 0
+        for section in self.cycleQuality or []:
+            if not cursor <= section.startIndex < section.endIndex < len(self.coordinates):
+                raise ValueError("Ungültige Wegequalitätsabschnitte")
+            cursor = section.endIndex
+        if self.gpxTrack is not None:
+            if len(self.gpxTrack.points) != len(self.coordinates) or self.provider != "GPX · Originalspur":
+                raise ValueError("GPX-Metadaten passen nicht zur Originalspur")
+            if self.maneuvers:
+                raise ValueError("GPX-Originalspuren enthalten keine berechneten Manöver")
+        for sections in (self.carSpeedLimits or [], self.carLaneSections or [], self.carRoadSections or [], self.carTraffic.sections if self.carTraffic else []):
             for section in sections:
                 if not 0 <= section.startIndex < section.endIndex < len(self.coordinates):
                     raise ValueError("Pkw-Zusatzdaten liegen außerhalb der Route")
-        for sections in (self.carSpeedLimits or [], self.carLaneSections or []):
+        for sections in (self.carSpeedLimits or [], self.carLaneSections or [], self.carRoadSections or []):
             if any(a.endIndex > b.startIndex for a, b in zip(sections, sections[1:])):
                 raise ValueError("Überlappende Pkw-Zusatzdaten")
         if self.carTimeSections is not None:

@@ -63,6 +63,8 @@ struct AppRoot: View {
         .sheet(isPresented: $showBikeTest) { NavigationStack { BikeBluetoothTestView() }.environmentObject(bike) }
         #endif
         .tint(Theme.accent)
+        .onOpenURL { url in Task { await state.readGPX(url) } }
+        .sheet(item: $state.gpxImport) { file in GPXImportView(file: file).environmentObject(state) }
         .alert("BikeNavi", isPresented: Binding(get: { state.errorMessage != nil }, set: { if !$0 { state.errorMessage = nil } })) {
             Button("Verstanden", role: .cancel) { state.errorMessage = nil }
         } message: { Text(state.errorMessage ?? "") }

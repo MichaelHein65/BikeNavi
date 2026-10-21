@@ -94,7 +94,7 @@ def test_requests_include_live_traffic_lanes_limits_avoidance_and_heading(tmp_pa
             assert call.url.host == "api.tomtom.com"
             assert call.url.params["traffic"] == "true"
             assert call.url.params["departAt"] == "now"
-            assert set(call.url.params.get_list("sectionType")) == {"lanes", "speedLimit", "traffic", "motorway", "tollRoad", "ferry"}
+            assert set(call.url.params.get_list("sectionType")) == {"lanes", "speedLimit", "traffic", "motorway", "urban", "tollRoad", "ferry"}
             assert set(call.url.params.get_list("avoid")) == {"motorways", "tollRoads", "ferries"}
             assert call.url.params["vehicleHeading"] == "270"
             return httpx.Response(200, json=response())
@@ -244,3 +244,98 @@ def test_roundabout_exit_sentinel_does_not_reject_valid_route(code, value, expec
     assert result["maneuvers"][1].get("exitNumber") == expected
     assert result["distance"] == 445
     Route.model_validate(result)
+
+
+def test_road_context_urban_motorway_priority_and_old_routes():
+    data = response()
+    data["routes"][0]["sections"] += [dict(sectionType="URBAN", startPointIndex=0, endPointIndex=5),
+                                       dict(sectionType="MOTORWAY", startPointIndex=2, endPointIndex=5)]
+    req = request(); req.profile.carOptions.avoidHighways = False
+    route = parse_route(data, req, 1000)
+    assert route["carRoadSections"] == [dict(startIndex=0, endIndex=2, environment="urban"),
+                                        dict(startIndex=2, endIndex=5, environment="divided")]
+    old = dict(route); old.pop("carRoadSections")
+    assert Route.model_validate(old).carRoadSections is None
+    invalid = copy.deepcopy(route); invalid["carRoadSections"][1]["startIndex"] = 1
+    with pytest.raises(ValidationError): Route.model_validate(invalid)
+    invalid = copy.deepcopy(route); invalid["carRoadSections"][1]["environment"] = "guessed"
+    with pytest.raises(ValidationError): Route.model_validate(invalid)
+    data["routes"][0]["sections"][-1]["endPointIndex"] = 100
+    with pytest.raises(ValueError): parse_route(data, req, 1000)
+
+
+def osm_way(kind="primary", offset=0, **tags):
+    return dict(type="way", id=1, tags=dict(highway=kind, **tags),
+                geometry=[dict(lat=49.410 + i * .001, lon=8.68 + offset) for i in range(5)])
+
+
+@pytest.mark.parametrize("tags,expected", [({"dual_carriageway": "yes"}, "divided"),
+    ({"oneway": "yes"}, "rural"), ({"motorroad": "yes"}, "rural"), ({"surface": "gravel"}, "rural")])
+def test_osm_requires_explicit_divided_road_evidence(tags, expected):
+    from bikenavi.car_environment import osm_environments
+    route = parse_route(response(), request(), 1000)
+    sections = osm_environments(route, [osm_way(**tags)])
+    assert sections[0]["environment"] == expected
+
+
+def test_osm_tracks_are_offroad_but_parallel_and_crossing_tracks_do_not_match():
+    from bikenavi.car_environment import osm_environments
+    route = parse_route(response(), request(), 1000)
+    assert osm_environments(route, [osm_way("track")])[0]["environment"] == "offRoad"
+    assert osm_environments(route, [osm_way(), osm_way("track", offset=.00008)])[0]["environment"] == "rural"
+    crossing = osm_way("track"); crossing["geometry"] = [dict(lat=49.4105, lon=8.679), dict(lat=49.4105, lon=8.681)]
+    assert osm_environments(route, [crossing])[0]["environment"] == "rural"
+    # Close, conflicting geometries remain ambiguous.
+    assert osm_environments(route, [osm_way(), osm_way("track")])[0]["environment"] == "rural"
+
+
+def test_osm_dual_carriageway_relation_and_motorway_priority():
+    from bikenavi.car_environment import osm_environments
+    route = parse_route(response(), request(), 1000)
+    relation = dict(type="relation", tags=dict(type="dual_carriageway"), members=[dict(type="way", ref=1)])
+    assert osm_environments(route, [osm_way(), relation])[0]["environment"] == "divided"
+    route["carRoadSections"] = [dict(startIndex=0, endIndex=5, environment="divided")]
+    assert osm_environments(route, [osm_way("track")]) == route["carRoadSections"]
+
+
+@pytest.mark.parametrize("failure", [False, True, "partial"])
+def test_osm_enrichment_uses_configured_service_and_falls_back(failure):
+    from bikenavi.car_environment import enrich_environments
+    async def run():
+        route = parse_route(response(), request(), 1000)
+        def handle(call):
+            assert call.url.host == "osm.example"
+            assert call.method == "POST"
+            assert call.headers["user-agent"] == "BikeNavi/0.4 personal navigation"
+            if failure == "partial":
+                return httpx.Response(200, json=dict(elements=[osm_way("track")], remark="timeout"))
+            if failure:
+                return httpx.Response(503)
+            return httpx.Response(200, json=dict(elements=[osm_way("track")]))
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+            result = await enrich_environments(route, client, "https://osm.example/api/interpreter")
+        assert result["carRoadSections"][0]["environment"] == ("rural" if failure else "offRoad")
+        assert any("OSM" in warning for warning in result["warnings"]) == bool(failure)
+    asyncio.run(run())
+
+
+def test_route_endpoint_enriches_environment_without_exposing_provider_key(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from bikenavi.main import create_app
+    monkeypatch.setenv("TOMTOM_API_KEY", "synthetic-provider-key")
+    calls = []
+    def handle(call):
+        calls.append(call.url.host)
+        if call.url.host == "api.tomtom.com":
+            return httpx.Response(200, json=response())
+        assert call.url.host == "osm.example"
+        assert "synthetic-provider-key" not in str(call.url) + call.content.decode()
+        return httpx.Response(200, json=dict(elements=[osm_way("track")]))
+    app = create_app(database_url="sqlite:///" + str(tmp_path / "environment.sqlite"), token="test-token" * 8,
+                     ors_key="", overpass_url="https://osm.example/api/interpreter", transport=httpx.MockTransport(handle))
+    with TestClient(app) as client:
+        result = client.post("/v1/route", json=request().model_dump(mode="json"),
+                             headers={"Authorization": "Bearer " + "test-token" * 8})
+    assert result.status_code == 200
+    assert result.json()["carRoadSections"][0]["environment"] == "offRoad"
+    assert calls == ["api.tomtom.com", "osm.example"]

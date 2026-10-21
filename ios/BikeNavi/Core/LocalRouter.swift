@@ -68,6 +68,7 @@ enum LocalRouteMetrics {
         guard let connector = state?.connector, let join = state?.rejoinIndex,
               original.coordinates.indices.contains(join), connector.coordinates.count > 1 else { return original }
         var result = connector
+        result.cycleQuality = nil
         let offset = connector.coordinates.count - 1
         result.coordinates += original.coordinates.dropFirst(join + 1)
         // The old instruction at the join assumes the original approach direction.
@@ -154,7 +155,7 @@ enum LocalRouter {
         // Evaluate every covered vertex up to the next mandatory stop. A nearby
         // return leg can be kilometres ahead along a winding original route.
         let indices = planning ? [original.coordinates.count - 1] : original.coordinates.indices.filter {
-            distances[$0] > traveled + 3 && distances[$0] <= upper && original.coordinates[$0].distance(to: position) <= 3_000
+            distances[$0] > traveled + 3 && distances[$0] <= upper && (graph.regional || original.coordinates[$0].distance(to: position) <= 3_000)
         }
         var suffixUnpaved = Array(repeating: 0.0, count: distances.count)
         var suffixCost = suffixUnpaved
@@ -193,7 +194,7 @@ enum LocalRouter {
         func cost(_ edge: OfflineGraphEdge, _ length: Double) -> Double {
             let surfacePenalty = profile.surface == .preferPaved && !LocalRouteMetrics.paved.contains(edge.surface) ? 8.0 : 0
             let roadPenalty = profile.bike == .road && !LocalRouteMetrics.paved.contains(edge.surface) ? 3.0 : 0
-            return length * (1 + surfacePenalty + roadPenalty + (profile.gentleHills ? max(0, edge.incline) / 5 : 0))
+            return length * (1 + surfacePenalty + roadPenalty + (profile.gentleHills ? max(0, edge.incline) / 5 : 0) + CycleQuality.penalty(edge, preference: profile.cyclePreference))
         }
         func legalBudget(_ metres: Double, goal: Goal? = nil) -> Bool {
             profile.surface != .pavedOnly || usedUnpaved + metres + (goal?.suffixUnpaved ?? 0) <= 100.0001
@@ -252,7 +253,7 @@ enum LocalRouter {
             for edgeID in graph.outgoing[label.key.node] ?? [] {
                 let edge = graph.edges[edgeID]
                 guard graph.allows(previous: label.key.previous, incomingWay: label.key.way, edge: edge),
-                      (planning || graph.nodes[edge.to]!.distance(to: position) <= 3_000) else { continue }
+                      (planning || graph.regional || graph.nodes[edge.to]!.distance(to: position) <= 3_000) else { continue }
                 let distance = length(edge)
                 add(Label(key: Key(node: edge.to, previous: edge.from, way: edge.way),
                           cost: label.cost + cost(edge, distance) + (edge.to == label.key.previous ? 25 : 0),
@@ -426,7 +427,9 @@ extension LocalRouter {
             }
             return roads.isEmpty ? nil : IntersectionContext(coordinateIndex: maneuver.coordinateIndex, roads: roads)
         }
+        route.cycleQuality = CycleQuality.sections(route: route, graph: graph)
         route.warnings = accessWarnings + ["Höhenwerte und Fahrzeit sind lokal nur eingeschränkt verfügbar."]
+        if let preference = document.profile.cyclePreference { route.warnings.append(preference.explanation) }
         return route
     }
 }

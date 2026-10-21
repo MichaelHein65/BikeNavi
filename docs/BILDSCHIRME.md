@@ -1,5 +1,37 @@
 # BikeNavi – Bildschirmgalerie
 
+## Offline-Radnavigation und Vorabversion 0.5.0-rc.1 (21. Oktober 2026)
+
+**99–105** zeigen ausschließlich synthetische, ausdrücklich als Beispieldaten dokumentierte Heidelberger Punkte und Wege; keine private Fahrt und keine realen Bosch-Messwerte. Die lokale Wegenetzkarte ist eine einfache Darstellung gespeicherter Fahrradwege ohne Gebäude, Beschriftung oder Gelände. Das Zickzack-Beispiel ist keine reale Wegempfehlung. **100** zeigt deshalb keine erfundene Akku-Prognose. **104/105** gehören zu derselben synthetischen Beispielplanung; ihre OSM-Felder sind Testwerte, keine bestätigte Straßenbeschreibung. **106** zeigt die endgültige Version **0.5.0 (5)** mit Vorabversionshinweis. Die übrigen Bilder dokumentieren ihre jeweils angegebenen früheren Stände.
+
+| Navigation | E-Bike-Technik | Touristik |
+| --- | --- | --- |
+| <img src="images/99-offline-navigation.png" width="250" alt="Synthetische Beispielnavigation auf lokaler Wegenetzkarte"> | <img src="images/100-ebike-technik.png" width="250" alt="Beispielansicht ohne Bosch-Messwerte und ohne belastbare Energieprognose"> | <img src="images/101-touristik.png" width="250" alt="Synthetische Touristikansicht mit Offline-Orten und Blogzugang"> |
+
+| Regionen | Offline-Orte |
+| --- | --- |
+| <img src="images/102-offline-region.png" width="300" alt="Gespeicherte Beispielregion mit ausdrücklichen Grenzen der lokalen Karte"> | <img src="images/103-offline-orte.png" width="300" alt="Synthetischer Trinkbrunnen mit Quelle, Luftlinie und getrennten Speicheraktionen"> |
+
+| Routenwunsch | Wegequalität | Vorabversion |
+| --- | --- | --- |
+| <img src="images/104-routenvarianten.png" width="250" alt="Komfortable Routenwahl für die synthetische Beispielplanung"> | <img src="images/105-wegequalitaet.png" width="250" alt="Synthetische Abschnittsmerkmale zur Demonstration der Datenanzeige"> | <img src="images/106-version-0-5-rc1.png" width="250" alt="Version 0.5.0 Build 5 und Hinweis auf ausstehende Fahrtests"> |
+
+Alle acht Aufnahmen visuell geprüft. Reproduktion: `RegionalUITests` mit Debug-Fixture `BIKENAVI_REGION_PREVIEW=1`; die Fixture ist im Release-Build nicht enthalten. Zusätzlich Erreichbarkeit von Fortsetzen/Beenden bei größter Accessibility-Schrift geprüft. Dies ist keine vollständige VoiceOver-, Geräte- oder Fahrabnahme. [Bedienung](RAD_OFFLINE.md) · [Prüfstand](UMSETZUNG.md#vorabversion-050-rc1--21-oktober-2026).
+
+## GPX-Import und Originalspur (21. Oktober 2026)
+
+**01** zeigt den neuen GPX-Einstieg in der normalen Planung. **95–98** zeigen Abschnitts-/Punktauswahl, Datenerhalt, importierte Originalspur und den echten iOS-Dateidialog. Ausschließlich gekennzeichnete synthetische Heidelberger GPX-Punkte und öffentliche Karten; keine private Fahrt oder Zugangsdaten. Die gerade Beispielroute illustriert das unveränderte Folgen von Quelldaten und ist keine geprüfte Wegverbindung. In **95/96** ist die Hintergrundkarte zum Aufnahmezeitpunkt nicht geladen, die lokal erzeugte Spur und ihre GPX-Orte sind trotzdem sichtbar. Das belegt kein vollständig heruntergeladenes Offline-Kartenpaket. **97** zeigt „Fahrt fortsetzen“, weil eine andere Simulator-Beispielfahrt erhalten bleibt. Alle fünf Bilder visuell geprüft.
+
+| Abschnitt und Punktbereich | Vorschau und Wegpunkte |
+| --- | --- |
+| <img src="images/95-gpx-import.png" width="300" alt="Synthetisches GPX-Beispiel mit getrennten Abschnitten, Punktnummern und Richtungswahl"> | <img src="images/96-gpx-auswahl.png" width="300" alt="Originalgeometrie, GPX-Wegpunkte und ausdrückliche Hinweise zu erhaltenen und ausgelassenen Daten"> |
+
+| Gespeicherte Originalspur | System-Dateiauswahl |
+| --- | --- |
+| <img src="images/97-gpx-originalspur.png" width="300" alt="Importierte Beispielspur mit Umkehr, GPX-Export, Bearbeitung und Erhalt einer offenen Fahrt"> | <img src="images/98-gpx-dateiauswahl.png" width="300" alt="Echter iOS-Dateidialog im Dokumentationssimulator mit leerem Verlauf"> |
+
+Reproduktion: `GPXUITests/testPreviewImportReverseEditAndFilePicker`, Debug-Fixture `BIKENAVI_GPX_PREVIEW=1`. Bild **01** über `RouteDescriptionUITests/testPreTourDescriptionWithoutPiAndPlanningScreenshot` und `scripts/seed_gallery.py --device <Dokumentationssimulator> --elevation`. Der UI-Test prüft Vorschau, Speichern, Umkehr, erneute Bearbeitung, System-Dateidialog und Abbrechen. Tatsächliches Teilen aus fremden iPhone-Apps/iCloud und ein GPS-Feldtest bleiben offen. [Bedienung](GPX.md) · [Prüfstand](UMSETZUNG.md#gpx-import-und-originalspur-21-oktober-2026).
+
 ## Audiofehler direkt an der Hörprobe (18. Oktober 2026)
 
 Die Audiomeldung steht jetzt direkt unter **Kinderreim anhören**, getrennt vom Pi-Verbindungsstatus. **94** zeigt ein ausdrücklich synthetisches Fehlerbeispiel mit dem fehlgeschlagenen Arbeitsschritt. Gerätefehler enthalten zusätzlich den iOS-Fehlercode; der Beispieltext ist kein ausgelesener Fehler vom iPhone. Die Lautstärkehilfe erklärt die getrennte Telefonlautstärke der Freisprechanlage. Die aktuelle Einstellungsansicht in **11** zeigt zusätzlich den realen Simulatorhinweis auf fehlende geeignete Stimmen; dies ist kein Befund vom iPhone. Aufnahmen visuell geprüft, ohne private Daten oder Serverzugang; kein Nachweis hörbarer Ausgabe. Reproduktion: `SettingsVolumeTests`, Debug-Fixture `BIKENAVI_AUDIO_STATUS_PREVIEW=1`.

@@ -76,12 +76,16 @@ struct OfflineGraphNode: Codable {
 struct OfflineGraphEdge: Codable, Hashable {
     var from: Int64; var to: Int64; var way: Int64
     var surface: Int; var name: String; var incline: Double
+    var roadClass: String? = nil
+    var cycleway: Bool? = nil
+    var inclineKnown: Bool? = nil
 }
 struct OfflineTurnRule: Codable, Hashable {
     var via: Int64; var fromWay: Int64; var toWays: [Int64]; var only: Bool; var uTurn: Bool
 }
 struct OfflineGraphTile: Codable {
     var version: Int; var x: Int; var y: Int; var generatedAt: Double
+    var pois: [OfflinePOI]? = nil
     var compilerRevision: Int? = nil
     var hasCurrentAccessRules: Bool { compilerRevision == 3 }
     var excludedWays: [Int64] = []; var blockedNodes: [Int64] = []
@@ -119,6 +123,7 @@ enum LocalRoutingError: LocalizedError {
 
 /// Immutable after construction, safe to share with a detached routing task.
 final class OfflineGraph: @unchecked Sendable {
+    let regional: Bool
     let hasCurrentAccessRules: Bool
     let nodes: [Int64: Coordinate]
     let edges: [OfflineGraphEdge]
@@ -126,7 +131,8 @@ final class OfflineGraph: @unchecked Sendable {
     let turns: [Int64: [OfflineTurnRule]]
     let tiles: Set<OfflineTileID>
     private let cells: [String: [Int]]
-    init(tiles input: [OfflineGraphTile]) throws {
+    init(tiles input: [OfflineGraphTile], regional: Bool = false) throws {
+        self.regional = regional
         var nodes: [Int64: Coordinate] = [:]
         var nodeVersions: [Int64: Int] = [:]
         var byWay: [Int64: Set<OfflineGraphEdge>] = [:]

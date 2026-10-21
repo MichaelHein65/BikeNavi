@@ -121,6 +121,10 @@ Die Fahrzeitschätzung verwendet je Belag 20 km/h (befestigt), 16 km/h (Pflaster
 
 Das [App-Icon und sein Generierungsprompt](design/AppIcon.md) liegen im Projekt; `scripts/prepare_app_icon.py` bereitet das iOS-Asset vor.
 
+## GPX-Originalspuren
+
+Neu im unveröffentlichten Stand vom **21. Oktober 2026**: **Planen → GPX** importiert lokale Tracks/Routen mit bewusster Abschnitts- und Bereichsauswahl. Originalspur umkehren, ohne automatische Neuberechnung verfolgen und mit Punktmetadaten/Wegpunkten exportieren. [Bedienung und Offline-Grenzen](docs/GPX.md) · [Technischer Audit](docs/architecture/osmand-gap-analysis.md) · [Roadmap](docs/roadmap/osmand-inspired-improvements.md). Für GPX-Abgleich benötigt der Pi das passende Update; lokaler Import und Streckenverfolgung funktionieren unabhängig davon.
+
 ## Projektaufbau
 
 - `ios/BikeNavi/`: SwiftUI-App, MapLibre-Karte, GPS und Offline-Downloadverwaltung.
@@ -271,3 +275,7 @@ Im Suchfeld sind neben Ortsnamen auch WGS84-Koordinaten möglich, ohne Pi oder I
 Auch **Plus Codes** werden unterstützt: Ein vollständiger Code wie `9F2C2WF2+8F` funktioniert offline. Ein kurzer Code wie `2WF2+8F Rodgau` benötigt den Ortsnamen und eine Pi-Verbindung für dessen Suche. Bei mehreren gefundenen Bezugsorten werden entsprechend mehrere Treffer angeboten. Ein kurzer Code ohne Ortsangabe wird nicht anhand eines möglicherweise unpassenden GPS-Standorts geraten. UTM/MGRS, andere Koordinatensysteme und beliebige Kartenlinks sind nicht Bestandteil dieser Erkennung.
 
 Die Auto-Sprachausgabe unterstützt einen geheimen, wechselbaren Pi-/OpenAI-Beifahrer und zeitbasierte Tempohinweise. Auf Pi und Michaels iPhone installiert, echte KI-Generierung über den App-Zugang und synthetische Mac-Hörsimulation geprüft; [Bedienung und Konfiguration](docs/AUTO.md#überraschungscharakter-und-tempobegleitung--17-oktober-2026), [Prüfstand](docs/UMSETZUNG.md#auto-charakter-installation-und-mac-hörsimulation-17-oktober-2026). Andere Modi behalten ihre Ansagen.
+
+## Regionale Radnavigation
+
+[Routenvarianten, Offline-Regionen, drei Fahransichten und Offline-Orte](docs/RAD_OFFLINE.md) sind als unveröffentlichte Erweiterung integriert. Lokale Regionen enthalten eine einfache Wegenetzkarte; ausführliche Topografie ist separat. Die Energieanzeige hat eine Datenqualitäts-/Holdout-Sperre: Der reale Bestand reicht derzeit nicht für eine belastbare numerische Prognose. [Audit](docs/architecture/energy-data-audit.md).

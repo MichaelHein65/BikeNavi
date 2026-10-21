@@ -101,6 +101,7 @@ struct RidingProfile: Codable, Equatable {
     var gentleHills = false
     var boatDraft: Double?
     var boatSpeedKnots: Double?
+    var cyclePreference: CyclePreference?
     var carOptions: CarOptions?
     var drivingOptions: CarOptions { carOptions ?? CarOptions() }
     var title: String { mode == .cycling ? (electric ? "E-" : "") + bike.title : mode.title }
@@ -211,9 +212,12 @@ struct CalculatedRoute: Codable, Identifiable, Equatable {
     var cyclingDistance: Double?
     var carTimeSections: [CarTimeSection]?
     var carSpeedLimits: [CarSpeedLimit]?
+    var carRoadSections: [CarRoadSection]?
     var carLaneSections: [CarLaneSection]?
     var carTraffic: CarTraffic?
     var destinationAccessDistance: Double?
+    var gpxTrack: GPXTrackMetadata?
+    var cycleQuality: [CycleQualitySection]?
     var bicycleParking: Coordinate? {
         guard let index = walkingStartIndex, index > 0, index < coordinates.count,
               index < coordinates.count - 1 || (walkingDistance == 0 && (unmappedDestinationDistance ?? 0) > 20) else { return nil }

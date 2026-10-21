@@ -23,7 +23,8 @@ struct SimulateCarTrip {
             maneuvers: [], surfaces: [], warnings: [], provider: "SIMULATION · erfundene Geometrie und Limits", calculatedAt: 0,
             carSpeedLimits: [.init(startIndex: 0, endIndex: 25, kilometersPerHour: 50),
                              .init(startIndex: 25, endIndex: 80, kilometersPerHour: 30),
-                             .init(startIndex: 80, endIndex: 90, kilometersPerHour: 50)])
+                             .init(startIndex: 80, endIndex: 90, kilometersPerHour: 50)],
+            carRoadSections: [.init(startIndex: 0, endIndex: 90, environment: .urban)])
         let distances = LocalRouteMetrics.distances(route)
         var speed = CarSpeedGuidance(), deviation = CarDeviationGuidance(), policy = ReroutePolicy(), tracker = RouteTracker()
         var traveled = 0.0, moments: [Moment] = [], lastSpeech = -Double.infinity
@@ -50,12 +51,13 @@ struct SimulateCarTrip {
         }
         let events = moments.compactMap(\.event)
         print(moments.filter { $0.event != nil }.map { "\($0.second):\($0.event!)" }); fflush(stdout)
-        for required in ["slower", "overspeed", "compliant", "offRoute", "rerouted"] {
+        for required in ["slower", "overspeed", "faster", "offRoute", "rerouted"] {
             guard events.contains(required) else { fatalError("Missing simulation event: \(required)") }
         }
-        guard events.filter({ $0 == "overspeed" }).count >= 2 else { fatalError("No persistent overspeed reminder") }
-        guard !events.contains("faster"), events.filter({ $0 == "slower" }).count == 1 else {
-            fatalError("Frequent limit changes bypassed the quiet period")
+        guard events.filter({ $0 == "overspeed" }).count == 1,
+              events.filter({ $0 == "slower" }).count == 2,
+              events.filter({ $0 == "faster" }).count == 1 else {
+            fatalError("Expected separate preview/boundary and one warning per limit")
         }
         // Immediate instructions must remain factual and suppress secondary speech.
         var turns = CarVoiceGuidance()
@@ -69,6 +71,6 @@ struct SimulateCarTrip {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(moments).write(to: URL(fileURLWithPath: CommandLine.arguments[2]), options: .atomic)
         print("101 simulierte Sekunden, \(Int(traveled)) m, \(events.count) Ansagen; echte Pi-Texte, Rolle bleibt geheim.")
-        print("Geprüft: Vorwarnung, gedrosselte Limitwechsel, wiederholte Überschreitung, Tempo angepasst, Abweichung, Rückkehr, Abbiegepriorität, Pause.")
+        print("Geprüft: Vorwarnung, Limitbeginn, einmalige Überschreitung, höheres Limit, Abweichung, Rückkehr, Abbiegepriorität, Pause.")
     }
 }

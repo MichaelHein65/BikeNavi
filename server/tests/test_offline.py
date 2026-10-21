@@ -107,7 +107,7 @@ def test_failed_mirrors_preserve_existing_tile_on_refresh(tmp_path):
         failing = True
         assert client.get('/v1/offline-tiles/3781/2798?refresh=true', headers=AUTH).status_code == 503
         assert calls == [DEFAULT_OVERPASS, DEFAULT_OVERPASS, FALLBACK_OVERPASS]
-        assert app.state.storage.offline_tile('1/3/3781/2798') == original
+        assert app.state.storage.offline_tile('1/3/q2/3781/2798') == original
 
 
 def test_operable_barriers_use_most_specific_explicit_access():
@@ -129,7 +129,12 @@ def test_tisno_bridge_has_continuous_access_in_both_directions():
     source = json.loads((Path(__file__).parent / 'fixtures/tisno_bridge_osm.json').read_text())
     tile = compile_tile(source['elements'], 3912, 2675)
     expected = json.loads((Path(__file__).parent / 'fixtures/tisno_bridge_graph.json').read_text())
-    assert compile_tile(source['elements'], 3912, 2675, generated_at=1) == expected
+    enriched = compile_tile(source['elements'], 3912, 2675, generated_at=1)
+    assert enriched.pop('pois') == []
+    for edge in enriched['edges']:
+        for field in ('roadClass', 'cycleway', 'inclineKnown'):
+            edge.pop(field)
+    assert enriched == expected
     assert tile['blockedNodes'] == []
     assert tile['excludedWays'] == []
     assert tile['compilerRevision'] == 3

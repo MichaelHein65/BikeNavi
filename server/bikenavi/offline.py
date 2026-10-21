@@ -8,6 +8,8 @@ import math
 import logging
 import time
 
+from .regions import extract_pois
+
 import httpx
 from fastapi import HTTPException
 
@@ -17,6 +19,7 @@ FALLBACK_OVERPASS = "https://overpass.private.coffee/api/interpreter"
 
 VERSION = 1
 COMPILER_REVISION = 3
+QUALITY_REVISION = 2
 TILE_DEGREES = 0.05
 ALLOWED = {"yes", "designated", "official", "permissive"}
 ROAD_DEFAULTS = {"cycleway", "residential", "living_street", "unclassified", "service",
@@ -95,14 +98,17 @@ def compile_tile(elements, x, y, generated_at=None):
             continue
         surface = SURFACE.get(tags.get("surface"), 0)
         try:
-            grade = max(-40, min(40, float(tags.get("incline", "0").rstrip("%"))))
-        except ValueError:
-            grade = 0
+            raw_grade = float(str(tags.get("incline", "")).rstrip("%"))
+            incline_known = math.isfinite(raw_grade)
+            grade = max(-40, min(40, raw_grade)) if incline_known else 0
+        except (ValueError, TypeError):
+            grade, incline_known = 0, False
         for a, b in zip(way["nodes"], way["nodes"][1:]):
             if a == b or a not in nodes or b not in nodes or a in blocked_nodes or b in blocked_nodes:
                 continue
             used.update((a, b))
-            base = {"way": id, "surface": surface, "name": str(tags.get("name", ""))[:120]}
+            base = {"way": id, "surface": surface, "name": str(tags.get("name", ""))[:120],
+                    "roadClass": highway, "cycleway": highway == "cycleway", "inclineKnown": incline_known}
             if one != "-1" and access(tags, "forward"):
                 edges.append({**base, "from": a, "to": b, "incline": grade})
             if one not in {"yes", "1", "true"} and access(tags, "backward"):
@@ -114,7 +120,7 @@ def compile_tile(elements, x, y, generated_at=None):
             "nodes": [{"id": id, "coordinate": {"latitude": nodes[id]["lat"], "longitude": nodes[id]["lon"]},
                        **({"osmVersion": nodes[id]["version"]} if type(nodes[id].get("version")) is int
                           and nodes[id]["version"] > 0 else {})} for id in sorted(used)],
-            "edges": edges, "restrictions": restrictions}
+            "edges": edges, "restrictions": restrictions, "pois": extract_pois(elements)}
 
 
 class OfflineTiles:
@@ -123,7 +129,7 @@ class OfflineTiles:
         self.lock = asyncio.Lock()  # Respect public Overpass resources; one preparation at a time.
 
     async def tile(self, x, y, refresh=False):
-        key = f"{VERSION}/{COMPILER_REVISION}/{x}/{y}"
+        key = f"{VERSION}/{COMPILER_REVISION}/q{QUALITY_REVISION}/{x}/{y}"
         async with self.lock:
             cached = self.storage.offline_tile(key)
             if cached and not refresh and time.time() - cached["generatedAt"] < 30 * 86400:
@@ -134,7 +140,9 @@ class OfflineTiles:
             # Return complete ways and all referencing restrictions, including their via members.
             query = (f'[out:json][timeout:25][maxsize:67108864];'
                      f'way["highway"]({south:.5f},{west:.5f},{south+TILE_DEGREES:.5f},{west+TILE_DEGREES:.5f})->.roads;'
-                     'rel(bw.roads)["type"="restriction"]->.rules;(.roads;node(w.roads);.rules;);out meta;')
+                     'rel(bw.roads)["type"="restriction"]->.rules;(.roads;node(w.roads);.rules;);out meta;'
+                     f'(nwr["amenity"~"^(drinking_water|bench|shelter)$"]({south:.5f},{west:.5f},{south+TILE_DEGREES:.5f},{west+TILE_DEGREES:.5f});'
+                     f'nwr["tourism"~"^(picnic_site|attraction|viewpoint|museum|information)$"]({south:.5f},{west:.5f},{south+TILE_DEGREES:.5f},{west+TILE_DEGREES:.5f}););out center tags;')
             # Keep custom installations on their configured provider. For the public
             # default, a second OSM mirror can serve tiles when the first is down.
             urls = [self.url]

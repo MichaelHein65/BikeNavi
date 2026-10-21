@@ -42,6 +42,9 @@ struct POIView: View {
                             }
                         }
                     } else {
+                        if mode == .cycling || mode == .hiking || mode == .bikeAndHike {
+                            offlinePlacesLink
+                        }
                         Text("Was brauchst du unterwegs?")
                             .font(.system(.title, design: .rounded, weight: .heavy))
                         Text(alongRoute ? "Entlang deiner Route" : mode == .sea ? "Orte für deinen Landgang entdecken." : "Entdecke passende Orte in deiner Nähe.")
@@ -76,6 +79,12 @@ struct POIView: View {
             }
             .onDisappear { cancelSearch() }
         }.preferredColorScheme(.light)
+    }
+
+    private var offlinePlacesLink: some View {
+        NavigationLink(destination: OfflineRegionsView(center: state.location.coordinate ?? state.plan.startPoint?.coordinate)) {
+            Label("Offline-Orte und Regionen", systemImage: "map")
+        }.accessibilityIdentifier("offlinePlaces")
     }
 
     private func color(_ category: POICategory) -> Color {

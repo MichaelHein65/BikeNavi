@@ -131,7 +131,7 @@ class Storage:
             nav.pop("skippedWaypointOrdinals", None)
         if payload["document"]["profile"].get("travelMode") is None:
             payload["document"]["profile"].pop("travelMode", None)
-        for field in ("boatDraft", "boatSpeedKnots"):
+        for field in ("boatDraft", "boatSpeedKnots", "cyclePreference"):
             if payload["document"]["profile"].get(field) is None:
                 payload["document"]["profile"].pop(field, None)
         route = payload["document"].get("route")
@@ -146,7 +146,7 @@ class Storage:
         # New optional fields must not change receipt hashes of existing route payloads.
         for candidate in (route, (nav or {}).get("carRoute"), (nav or {}).get("connector")):
             if candidate:
-                for field in ("carSpeedLimits", "carLaneSections", "carTraffic"):
+                for field in ("carSpeedLimits", "carLaneSections", "carTraffic", "carRoadSections", "gpxTrack", "cycleQuality"):
                     if candidate.get(field) is None:
                         candidate.pop(field, None)
         digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
@@ -163,6 +163,8 @@ class Storage:
                 revision = record.revision if record else 0
                 if revision != mutation.baseRevision:
                     raise HTTPException(409, "Die Planung wurde auf einem anderen Gerät geändert. Beide Fassungen bleiben erhalten.")
+                if record and not mutation.deleted and (record.document.get("route") or {}).get("gpxTrack") and not (route or {}).get("gpxTrack"):
+                    raise HTTPException(422, "Diese GPX-Tour benötigt eine App mit GPX-Unterstützung. Die Originalspur bleibt erhalten.")
                 envelope = {"document": payload["document"], "revision": revision + 1,
                             "deleted": mutation.deleted}
                 if record:

@@ -62,3 +62,7 @@ Die POI-Fixture ergänzt fünf Nicht-Kraftstoffkategorien mit ausdrücklich synt
 `BIKENAVI_CAR_QUIET_TRAFFIC_PREVIEW=1` ersetzt zusammen mit der Auto-Assistenz-Vorschau den erfundenen Stau durch eine synthetische Baustelle mit null Sekunden Verzögerung. `testQuietTrafficHidesZeroDelayAndLaneGuidanceOverlaysMap` prüft das Ausblenden beider Verkehrstexte, die Lage der Spurhilfe innerhalb der Kartenfläche und deren Verschwinden bei Pause; Bild 91 zeigt dieses öffentliche Beispiel.
 
 Die Auto-Charakterprüfung verwendet dieselbe öffentliche synthetische Auto-Vorschau ohne Serverzugang. Bilder 11/93 zeigen den ehrlichen Pi-offline-Zustand, Bild 88 die Systemstimmenauswahl. Backend-/native Charaktertests verwenden ausschließlich simulierte Schlüssel und HTTP-Antworten; keine echte Fahrt wird an OpenAI übertragen.
+
+## GPX-Beispiele
+
+`gpx/heidelberg-example.gpx` und `gpx/route-1.0.gpx` enthalten ausschließlich synthetische, ausdrücklich benannte öffentliche Heidelberger Beispielpunkte, keine privaten Fahrten. Sie prüfen GPX 1.1/1.0, Präfixnamespace, Rundtour, getrennte Abschnitte, Routen-/Wegpunkte, fehlende Höhen, Zeitpräzision und ignorierte Erweiterungen. Das erste Beispiel ist für die Debug-Importvorschau im Simulator eingebunden; es ist keine Aussage über befahrbare Wege.

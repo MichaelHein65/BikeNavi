@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum MapStyle: String, CaseIterable, Identifiable {
-    case standard, light, detailed, dark, satellite, topographic, seamap, custom
+    case standard, light, detailed, dark, satellite, topographic, seamap, custom, regional
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -12,6 +12,7 @@ enum MapStyle: String, CaseIterable, Identifiable {
         case .satellite: "Satellit"
         case .topographic: "Topografisch"
         case .seamap: "Seekarte · OpenSeaMap"
+        case .regional: "Offline-Wegenetz"
         case .custom: "Eigener Kartenstil"
         }
     }
@@ -22,6 +23,7 @@ enum MapStyle: String, CaseIterable, Identifiable {
         case .detailed: "https://tiles.openfreemap.org/styles/bright"
         case .dark: "https://tiles.openfreemap.org/styles/dark"
         case .satellite, .topographic, .seamap: Bundle.main.url(forResource: rawValue, withExtension: "json")!.absoluteString
+        case .regional: customURL
         case .custom: customURL.trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }
@@ -33,7 +35,7 @@ struct MapStyleMenu: View {
     var body: some View {
         Menu {
             Picker("Kartenansicht", selection: $state.selectedMapStyle) {
-                ForEach(MapStyle.allCases.filter { ($0 != .custom || !state.customMapStyleURL.isEmpty) && (mode == .sea || $0 != .seamap) }) { style in
+                ForEach(MapStyle.allCases.filter { ($0 != .regional || state.offlineRegionStyle != nil) && ($0 != .custom || !state.customMapStyleURL.isEmpty) && (mode == .sea || $0 != .seamap) }) { style in
                     Text(style.title).tag(style)
                 }
             }

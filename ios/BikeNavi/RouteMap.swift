@@ -130,6 +130,8 @@ struct RouteMap: UIViewRepresentable {
         private var trackAnnotations: [MLNAnnotation] = []
         private var waypointAnnotations: [MLNAnnotation] = []
         private var placeAnnotations: [MLNAnnotation] = []
+        private var gpxAnnotations: [MLNAnnotation] = []
+        private var gpxWaypoints: [GPXPoint] = []
         var points: [Waypoint] = []
         var savedPlaces: [SavedPlace] = []
         var modeSections: [RideModeSection]?
@@ -238,6 +240,17 @@ struct RouteMap: UIViewRepresentable {
             if force || savedPlaces != parent.savedPlaces {
                 replace(&placeAnnotations, with: parent.savedPlaces.map { SavedPlaceAnnotation(place: $0) }, on: map)
                 savedPlaces = parent.savedPlaces
+            }
+            let imported = parent.route?.gpxTrack?.waypoints ?? []
+            if force || gpxWaypoints != imported {
+                replace(&gpxAnnotations, with: imported.enumerated().map { index, point in
+                    let pin = MLNPointAnnotation()
+                    pin.coordinate = point.coordinate.cl
+                    pin.title = point.details.name ?? "GPX-Wegpunkt \(index + 1)"
+                    pin.subtitle = "GPX"
+                    return pin
+                }, on: map)
+                gpxWaypoints = imported
             }
         }
 

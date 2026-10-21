@@ -3,7 +3,8 @@ from pathlib import Path
 import hashlib
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = (ROOT / "VERSION").read_text().strip()
+RELEASE_VERSION = (ROOT / "VERSION").read_text().strip()
+VERSION = RELEASE_VERSION.split("-", 1)[0]
 PROJECT = ROOT / "BikeNavi.xcodeproj"
 PROJECT.mkdir(exist_ok=True)
 objects = []
@@ -72,9 +73,10 @@ for path in sorted((ROOT / "ios/BikeNavi/MapStyles").glob("*.json")):
     refs.append(ref)
     map_style_builds.append(obj(relative + "/build", f"isa = PBXBuildFile; fileRef = {ref};"))
 # Public road-route fixture for the Debug-only simulator preview. No private ride data.
-for path in sorted((ROOT / "ios/BikeNavi/PreviewData").glob("*.json")):
+for path in sorted((ROOT / "ios/BikeNavi/PreviewData").glob("*.json")) + [ROOT / "tests/fixtures/gpx/heidelberg-example.gpx"]:
     relative = path.relative_to(ROOT).as_posix()
-    ref = obj(relative, f'isa = PBXFileReference; lastKnownFileType = text.json; path = "{relative}"; sourceTree = SOURCE_ROOT;')
+    file_type = "text.xml" if path.suffix == ".gpx" else "text.json"
+    ref = obj(relative, f'isa = PBXFileReference; lastKnownFileType = {file_type}; path = "{relative}"; sourceTree = SOURCE_ROOT;')
     refs.append(ref)
     map_style_builds.append(obj(relative + "/build", f"isa = PBXBuildFile; fileRef = {ref};"))
 resources = obj("resources", f"isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ({','.join([asset_build] + map_style_builds)},); runOnlyForDeploymentPostprocessing = 0;")
@@ -94,7 +96,8 @@ settings = '''
     PRODUCT_NAME = "$(TARGET_NAME)";
     INFOPLIST_FILE = ios/BikeNavi/Info.plist;
     MARKETING_VERSION = __VERSION__;
-    CURRENT_PROJECT_VERSION = 4;
+    BIKENAVI_RELEASE_VERSION = "__RELEASE_VERSION__";
+    CURRENT_PROJECT_VERSION = 5;
     ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
     CODE_SIGN_STYLE = Automatic;
     DEVELOPMENT_TEAM = 4JDC67R76Q;
@@ -103,7 +106,7 @@ settings = '''
     ENABLE_USER_SCRIPT_SANDBOXING = YES;
     SWIFT_EMIT_LOC_STRINGS = YES;
 '''
-settings = settings.replace("__VERSION__", VERSION)
+settings = settings.replace("__VERSION__", VERSION).replace("__RELEASE_VERSION__", RELEASE_VERSION)
 configs = []
 for name in ["Debug", "Release"]:
     extra = 'SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = dwarf; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; ENABLE_TESTABILITY = YES; ENABLE_TESTABILITY = YES;' if name == "Debug" else 'SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";'
@@ -117,7 +120,7 @@ for name in ["Debug", "Release"]:
         PRODUCT_NAME = BikeNaviLiveActivity;
         INFOPLIST_FILE = ios/BikeNaviWidget/Info.plist;
         MARKETING_VERSION = {VERSION};
-        CURRENT_PROJECT_VERSION = 4;
+        CURRENT_PROJECT_VERSION = 5;
         SWIFT_VERSION = 5.0;
         IPHONEOS_DEPLOYMENT_TARGET = 17.0;
         SDKROOT = iphoneos;

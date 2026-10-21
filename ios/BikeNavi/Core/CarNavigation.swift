@@ -162,6 +162,31 @@ struct CarVoiceGuidance {
     }
 }
 
+/// Road context is supplied with the route, never inferred from the speed limit.
+enum CarRoadEnvironment: String, Codable {
+    case urban, rural, divided, offRoad
+
+    var overspeedDistance: Double { self == .urban ? 100 : 200 }
+
+    func previewDistance(speed: Double, targetKPH: Double) -> Double {
+        switch self {
+        case .urban: return 100
+        case .rural: return 500
+        case .divided:
+            // Three seconds to react, then comfortable 1.5 m/s² deceleration.
+            let target = targetKPH / 3.6
+            return max(100, speed * 3 + max(0, speed * speed - target * target) / 3)
+        case .offRoad: return 0
+        }
+    }
+}
+
+struct CarRoadSection: Codable, Equatable {
+    var startIndex: Int
+    var endIndex: Int
+    var environment: CarRoadEnvironment
+}
+
 struct CarSpeedLimit: Codable, Equatable {
     var startIndex: Int
     var endIndex: Int
@@ -211,6 +236,14 @@ struct CarTraffic: Codable, Equatable {
 }
 
 extension CarNavigation {
+    static func environment(route: CalculatedRoute, progress: RouteProgress) -> CarRoadEnvironment? {
+        let distances = LocalRouteMetrics.distances(route)
+        return route.carRoadSections?.first {
+            valid(start: $0.startIndex, end: $0.endIndex, distances: distances)
+                && progress.traveled >= distances[$0.startIndex] && progress.traveled < distances[$0.endIndex]
+        }?.environment
+    }
+
     static let trafficRefreshInterval: TimeInterval = 300
 
     static func trafficRefreshDue(fetchedAt: Double, lastAttempt: Double, now: Double) -> Bool {

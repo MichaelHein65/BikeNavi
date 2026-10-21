@@ -14,6 +14,7 @@ import httpx
 from fastapi import HTTPException
 
 from .models import Route, RouteRequest
+from .car_environment import provider_environments
 from .providers import _distance_m
 
 # Below the documented free 20,000/month. Use a dedicated, unbilled key.
@@ -150,6 +151,7 @@ def parse_route(data, request, fetched_at):
                  duration=duration, ascent=0, descent=0, maneuvers=maneuvers, surfaces=[], warnings=warnings,
                  provider="TomTom · Pkw", calculatedAt=fetched_at, waypointIndices=waypoints,
                  carTimeSections=time_sections, carSpeedLimits=limits, carLaneSections=lanes,
+                 carRoadSections=provider_environments(count, raw.get("sections", [])),
                  carTraffic=dict(fetchedAt=fetched_at, delaySeconds=number(summary["trafficDelayInSeconds"]), sections=traffic))
     for ordinal, waypoint in enumerate(request.waypoints):
         gap = _distance_m(waypoint.coordinate.model_dump(), coordinates[waypoints[ordinal]])
@@ -186,13 +188,13 @@ class TomTomCar:
         params = [("key", self.key), ("travelMode", "car"), ("routeType", "fastest"),
                   ("traffic", "true"), ("departAt", "now"), ("instructionsType", "text"), ("language", "de-DE"),
                   ("routeRepresentation", "polyline"), ("extendedRouteRepresentation", "travelTime"),
-                  ("sectionType", "lanes"), ("sectionType", "speedLimit"), ("sectionType", "traffic")]
+                  ("sectionType", "lanes"), ("sectionType", "speedLimit"), ("sectionType", "traffic"),
+                  ("sectionType", "urban"), ("sectionType", "motorway")]
         options = request.profile.carOptions
         if options:
             params.extend(("avoid", name) for enabled, name in ((options.avoidHighways, "motorways"),
                 (options.avoidTolls, "tollRoads"), (options.avoidFerries, "ferries")) if enabled)
-            params.extend(("sectionType", name) for enabled, name in ((options.avoidHighways, "motorway"),
-                (options.avoidTolls, "tollRoad"), (options.avoidFerries, "ferry")) if enabled)
+            params.extend(("sectionType", name) for enabled, name in ((options.avoidTolls, "tollRoad"), (options.avoidFerries, "ferry")) if enabled)
         if request.startBearing is not None:
             params.append(("vehicleHeading", str(round(request.startBearing) % 360)))
         async with self.lock:

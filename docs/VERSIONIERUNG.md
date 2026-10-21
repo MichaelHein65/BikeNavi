@@ -1,5 +1,17 @@
 # Versionierung und Releases
 
+## Vorabversion 0.5.0-rc.1 — 21. Oktober 2026
+
+Auf ausdrücklichen Nutzerwunsch ein eigener GitHub-Versionsstand, weil die Änderungen noch keine reale Fahrabnahme haben. `VERSION` enthält **0.5.0-rc.1**. Der Generator übernimmt den numerischen Anteil **0.5.0** als Apple-Marketingversion und die fortlaufende Buildnummer **5** für App und Live-Aktivität. `BikeNaviReleaseVersion` zeigt in den App-Einstellungen den vollständigen Vorabversionshinweis. Backend/API: **0.5.0-rc.1**, Python-Paketversion nach PEP 440 **0.5.0rc1**.
+
+Geplanter Tag **v0.5.0-rc.1**, GitHub ausdrücklich als **Prerelease**, nicht als neuer stabiler Latest-Release. Enthält die bisher unveröffentlichten Änderungen seit v0.4.0 einschließlich Auto-Korrekturen und P1–P6. P5-Datenaudit sperrt numerische Prognosen; echte Flugmodus-/Fahr-/Geräteabnahme steht aus. Ein späterer stabiler Release erfordert entsprechende Rückmeldung. Neue Änderungen nach diesem Tag wieder unter Unveröffentlicht sammeln. Die folgenden Abschnitte dokumentieren frühere Arbeitsstände und werden nicht nachträglich umgeschrieben.
+
+
+**21. Oktober 2026, GPX-Originalspuren:** Additiver Import-/Metadatenvertrag und unveränderte Originalspur-Verfolgung lokal ergänzt. Weiterhin **0.4.0 (4), Unveröffentlicht**. Kein Release, Tag, Push oder Geräte-/Pi-Deployment. Alte Backends werden über die fehlende GPX-Fähigkeitsmeldung erkannt; importierte Touren bleiben bis zum Backendupdate lokal. [Prüfstand und Grenzen](UMSETZUNG.md#gpx-import-und-originalspur-21-oktober-2026).
+
+**20. Oktober 2026, vier Auto-Umgebungen:** Automatische Straßeneinteilung, getrennte Vorwarnung/Limitbeginn/Überschreitung und unabhängig gedrosselte Kommentare lokal umgesetzt. Weiterhin **0.4.0 (4), Unveröffentlicht**. Neues optionales Routenfeld benötigt für die Nutzung Backend-/App-Update und Neuberechnung; bisherige Touren bleiben lesbar. Backend auf Nutzerwunsch auf dem Pi bereitgestellt; signierter Release-Gerätebuild geprüft. Nach anfänglicher Gerätesperre am **21. Oktober um 06:48 Uhr MESZ auf Michaels iPhone 15 Pro installiert und gestartet**. Sicherung mit 304 Archivdatensätzen erfolgreich wiederhergestellt. Kein Commit/Push, Tag oder Release. [Prüfung und Grenzen](UMSETZUNG.md#vier-auto-umgebungen-und-streckenabhängige-tempohinweise-20-oktober-2026).
+
+
 **19. Oktober 2026, ruhigere Auto-Ansagen:** Drei Minuten Ruhe vor Vorausschau/Limitwechseln und persistente 30-Minuten-Sperre für wiederholte Charaktersprüche. **194 Kerntests und 40 native Simulatortests erfolgreich**, stille Mac-Kernsimulation und signierter Release-Build geprüft. Um **16:03 Uhr MESZ auf Michaels iPhone 15 Pro installiert und gestartet**. **0.4.0 (4), Unveröffentlicht** bleibt bestehen; kein Pi-Deployment oder neuer Release/Tag. Quellen, Tests und Doku auf `main` für Git/GitHub. [Prüfung und Grenzen](UMSETZUNG.md#ruhigere-auto-ansagen-19-oktober-2026).
 
 **18. Oktober 2026, Humorprüfung:** Zehn Rollen still geprüft und die Textgenerierung in mehreren Gegenproben verbessert; zehn Rollen im Repertoire, ausdrückliche Trennung von Pointe und Sachansage, zusätzliche Textprüfungen und ernste Ersatzwarnungen. **415 Backendtests erfolgreich**, auf dem Pi installiert und über den regulären HTTPS-App-Zugang mit zwei echten KI-Repertoires geprüft; unverändert **0.4.0 (4), Unveröffentlicht**. iPhone-Code und API-Vertrag bleiben kompatibel; bestehende Texte wechseln erst bei neuer Planung oder Charakterwechsel. [Prüfung und Grenzen](UMSETZUNG.md#stille-humorprüfung-und-korrektur-18-oktober-2026).

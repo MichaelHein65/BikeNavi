@@ -1,7 +1,41 @@
 import Foundation
 
 enum GPX {
+    private static func escape(_ value: String) -> String {
+        value.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&apos;")
+    }
+    static func xml(_ file: GPXFile) -> String {
+        func point(_ point: GPXPoint, tag: String) -> String {
+            var xml = "<\(tag) lat=\"\(point.coordinate.latitude)\" lon=\"\(point.coordinate.longitude)\">"
+            if let altitude = point.coordinate.altitude { xml += "<ele>\(altitude)</ele>" }
+            if let time = point.details.time { xml += "<time>\(escape(time))</time>" }
+            if let name = point.details.name { xml += "<name>\(escape(name))</name>" }
+            return xml + "</\(tag)>"
+        }
+        var xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><gpx version=\"1.1\" creator=\"BikeNavi\" xmlns=\"http://www.topografix.com/GPX/1/1\"><metadata><name>\(escape(file.name))</name></metadata>"
+        for waypoint in file.waypoints { xml += point(waypoint, tag: "wpt") }
+        // GPX 1.1 orders all routes before tracks.
+        for part in file.parts.filter({ $0.kind == "rte" }) {
+            xml += "<rte><name>\(escape(part.name))</name>"
+            for item in part.points { xml += point(item, tag: "rtept") }
+            xml += "</rte>"
+        }
+        for part in file.parts.filter({ $0.kind == "trk" }) {
+            xml += "<trk><name>\(escape(part.name))</name><trkseg>"
+            for item in part.points { xml += point(item, tag: "trkpt") }
+            xml += "</trkseg></trk>"
+        }
+        return xml + "</gpx>"
+    }
     static func xml(_ document: TourDocument) -> String {
+        if document.kind == .plan, let route = document.route, let metadata = route.gpxTrack {
+            let points = route.coordinates.enumerated().map { index, coordinate in
+                GPXPoint(coordinate: coordinate, details: metadata.points.indices.contains(index) ? metadata.points[index] : GPXPointDetails())
+            }
+            return xml(GPXFile(name: document.title, parts: [GPXPart(name: document.title, kind: metadata.kind, points: points)], waypoints: metadata.waypoints))
+        }
         func escape(_ text: String) -> String {
             text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
                 .replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;")

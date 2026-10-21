@@ -24,7 +24,7 @@ struct APIError: LocalizedError {
     }
 }
 
-struct ServerStatus: Codable { var routingAvailable: Bool; var version: String }
+struct ServerStatus: Codable { var routingAvailable: Bool; var version: String; var gpxImportAvailable: Bool?; var cyclePlanningAvailable: Bool? }
 struct PlaceName: Decodable { var name: String? }
 private struct APIErrorBody: Decodable { var detail: String }
 

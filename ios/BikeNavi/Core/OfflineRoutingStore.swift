@@ -7,7 +7,8 @@ actor OfflineRoutingStore {
     private var prepared: (graph: OfflineGraph, entries: [Entry])?
     private var downloads: [UUID: [Entry]] = [:]
     let directory: URL
-    init(directory: URL) { self.directory = directory }
+    private let regions: OfflineRegionStore
+    init(directory: URL, regions: OfflineRegionStore = .shared) { self.directory = directory; self.regions = regions }
     private func manifest(_ route: CalculatedRoute) -> URL { directory.appendingPathComponent(route.id.uuidString + ".manifest") }
     private func read(_ entry: Entry) throws -> OfflineGraphTile {
         guard !entry.file.contains("/"), entry.file.hasPrefix(entry.id.key + ".") || entry.file.hasPrefix(entry.id.key + "-") else { throw LocalRoutingError.noData }
@@ -47,7 +48,8 @@ actor OfflineRoutingStore {
         let ref = directory.appendingPathComponent(id.key + ".ref")
         return Entry(id: id, file: (try? String(contentsOf: ref, encoding: .utf8)) ?? id.key + ".json")
     }
-    func load(route: CalculatedRoute) throws -> OfflineGraph {
+    func load(route: CalculatedRoute) async throws -> OfflineGraph {
+        if let graph = try await regions.covering(route.coordinates) { return graph }
         let entries = try JSONDecoder().decode([Entry].self, from: Data(contentsOf: manifest(route)))
         return try OfflineGraph(tiles: entries.map { try read($0) })
     }
@@ -58,13 +60,17 @@ actor OfflineRoutingStore {
         if document.profile.mode == .car && api == nil {
             throw APIError(status: 0, message: "Auto-Routen benötigen Internet und einen aktualisierten Pi. Gespeicherte Routen bleiben nutzbar.")
         }
-        if let api { return try await api.route(document, includeContext: false) }
-        return try await plan(document: document, api: nil, progress: progress).0
+        if document.profile.mode == .cycling, let graph = try await regions.covering(document.waypoints.map(\.coordinate)) {
+            return try await Task.detached { try LocalRouter.plan(graph: graph, document: document) }.value
+        }
+        if let api, document.profile.cyclePreference == nil || document.profile.mode != .cycling { return try await api.route(document, includeContext: false) }
+        return try await plan(document: document, api: api, progress: progress).0
     }
 
     func prepareNeighborhood(route: CalculatedRoute, center: Coordinate, api: APIClient?, refresh: Bool = false,
                              progress: @Sendable (Int, Int) async -> Void) async throws -> OfflineGraph {
-        try await prepare(route: route, api: api, refresh: refresh,
+        if let graph = try await regions.covering([center] + route.coordinates) { return graph }
+        return try await prepare(route: route, api: api, refresh: refresh,
                           ids: OfflineTileID.neighborhood(center), progress: progress)
     }
 
@@ -140,7 +146,7 @@ actor OfflineRoutingStore {
                          ids: [OfflineTileID], progress: @Sendable (Int, Int) async -> Void) async throws -> OfflineGraph {
         if refresh { prepared = nil }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        if !refresh, let complete = try? load(route: route),
+        if !refresh, let complete = try? await load(route: route),
            (api == nil || complete.hasCurrentAccessRules), Set(ids) == complete.tiles {
             await progress(ids.count, ids.count)
             return complete

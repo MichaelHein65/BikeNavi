@@ -280,7 +280,7 @@ final class AppState: ObservableObject {
     }
     var applicationMapStyles: [MapStyle] {
         let mode = applicationMode ?? plan.profile.mode
-        return MapStyle.allCases.filter { $0 != .seamap || mode == .sea }
+        return MapStyle.allCases.filter { ($0 != .seamap || mode == .sea) && ($0 != .regional || offlineRegionStyle != nil) }
     }
     private func workspacePlanKey(_ mode: TravelMode) -> String { "applicationPlan." + mode.rawValue }
     private func defaultMapStyle(_ mode: TravelMode) -> MapStyle {
@@ -478,7 +478,23 @@ final class AppState: ObservableObject {
     @Published var customMapStyleURL = UserDefaults.standard.string(forKey: "mapStyleURL") ?? "" {
         didSet { UserDefaults.standard.set(customMapStyleURL, forKey: "mapStyleURL") }
     }
-    var mapStyleURL: String { selectedMapStyle.url(customURL: customMapStyleURL) }
+    @Published var offlineRegionStyle: String?
+    func useRegion(_ region: OfflineRegion) async throws {
+        _ = try await OfflineRegionStore.shared.graph(region)
+        offlineRegionStyle = try await OfflineRegionStore.shared.styleURL(region).absoluteString
+        UserDefaults.standard.set(region.id, forKey: "offlineRegionID")
+        selectedMapStyle = .regional
+    }
+    func regionDeleted(_ region: OfflineRegion) {
+        if UserDefaults.standard.string(forKey: "offlineRegionID") == region.id {
+            UserDefaults.standard.removeObject(forKey: "offlineRegionID")
+            offlineRegionStyle = nil
+            if selectedMapStyle == .regional { selectedMapStyle = .standard }
+        }
+        preparedGraph = nil; preparedRouteID = nil; rideGraph = nil
+        prepareLocalRouting()
+    }
+    var mapStyleURL: String { selectedMapStyle == .regional ? (offlineRegionStyle ?? MapStyle.standard.url(customURL: customMapStyleURL)) : selectedMapStyle.url(customURL: customMapStyleURL) }
     var canDownloadMapStyle: Bool { offlineMapsAllowed && selectedMapStyle == .custom }
     @Published var offlineMapsAllowed = UserDefaults.standard.bool(forKey: "offlineMapsAllowed")
     @Published var voice = true { didSet { if !voice { speech.stopSpeaking(at: .immediate) } } }
@@ -548,10 +564,31 @@ final class AppState: ObservableObject {
     }
     let location = LocationService()
     let store: LocalStore
+    @Published var gpxImport: GPXFile?
+    @Published var readingGPX = false
+
+    func readGPX(_ url: URL) async {
+        guard !readingGPX else { return }
+        readingGPX = true
+        defer { readingGPX = false }
+        do {
+            gpxImport = try await Task.detached(priority: .userInitiated) { try GPX.read(url) }.value
+        } catch { errorMessage = "GPX konnte nicht geöffnet werden: \(error.localizedDescription)" }
+    }
+
+    func importGPX(_ document: TourDocument) {
+        guard savePlan() else { return }
+        do {
+            try store.save(document)
+            open(document)
+            gpxImport = nil
+        } catch { errorMessage = "GPX konnte nicht gespeichert werden: \(error.localizedDescription)" }
+    }
     @Published var routeDescriptions: [UUID: SavedRouteDescription] = [:]
     private var routeDescriptionTasks: [UUID: Task<Void, Never>] = [:]
 
     func insertRouteDescriptionHighlight(_ id: UUID) async throws -> String {
+        guard plan.route?.isGPXTrack != true else { throw GPXImportError.message("Die GPX-Originalspur bleibt unverändert. Erstelle für zusätzliche Ziele eine neue Planung.") }
         guard let report = routeDescriptions[plan.id]?.report, report.planID == plan.id,
               let highlight = report.highlights?.first(where: { $0.id == id }) else {
             throw APIError(status: 0, message: "Dieses Highlight gehört nicht zur geöffneten Planung.")
@@ -757,6 +794,11 @@ final class AppState: ObservableObject {
             serverURL = url
             token = ProcessInfo.processInfo.environment["BIKENAVI_TOKEN"] ?? token
         }
+        if ProcessInfo.processInfo.environment["BIKENAVI_GPX_PREVIEW"] == "1",
+           let url = Bundle.main.url(forResource: "heidelberg-example", withExtension: "gpx") {
+            gpxImport = try? GPX.read(url)
+            serverURL = ""; token = ""; voice = false
+        }
         if let value = ProcessInfo.processInfo.environment["BIKENAVI_PLAN_ID"], let id = UUID(uuidString: value),
            let preview = records.first(where: { $0.id == id && !$0.deleted }) {
             plan = preview.document
@@ -859,6 +901,10 @@ final class AppState: ObservableObject {
             }
             return
         }
+        if ProcessInfo.processInfo.environment["BIKENAVI_REGION_PREVIEW"] == "1" {
+            Task { await prepareRegionalPreview() }
+            return
+        }
         if ProcessInfo.processInfo.environment["BIKENAVI_CONFIGURE"] == "1" {
             Task { await saveSettings() }
         }
@@ -868,13 +914,16 @@ final class AppState: ObservableObject {
     }
 
     func restoreLocalRouting() {
+        if let id = UserDefaults.standard.string(forKey: "offlineRegionID"), plan.profile.mode == .cycling {
+            Task { if let region = try? await OfflineRegionStore.shared.list().first(where: { $0.id == id }) { try? await useRegion(region) } }
+        }
         if plan.profile.mode == .sea && plan.route != nil && (plan.route?.marineDraft != boatDraft || !MarineNavigation.current(plan.route)) { invalidateRoute(showErrorAlert: false) }
         if activeRide?.profile.mode == .sea || (activeRide == nil && plan.profile.mode == .sea) { selectedMapStyle = .seamap }
         if let ride = activeRide, let route = ride.route {
-            navigationRoute = ride.profile.mode == .car ? (ride.localNavigation?.carRoute ?? route) : LocalRouteMetrics.combined(original: route, state: ride.localNavigation, profile: ride.profile)
+            navigationRoute = route.isGPXTrack ? route : ride.profile.mode == .car ? (ride.localNavigation?.carRoute ?? route) : LocalRouteMetrics.combined(original: route, state: ride.localNavigation, profile: ride.profile)
             tracker = RouteTracker(lastProgress: ride.localNavigation?.routeProgress ?? 0, lastTimestamp: Date().timeIntervalSince1970)
             originalTracker = RouteTracker(lastProgress: ride.localNavigation?.originalProgress ?? 0, lastTimestamp: Date().timeIntervalSince1970)
-            if ride.profile.mode == .cycling {
+            if ride.profile.mode == .cycling && !route.isGPXTrack {
             Task {
                 do {
                     let graph = try await offlineRouting.load(route: route)
@@ -891,7 +940,7 @@ final class AppState: ObservableObject {
             }
             } else {
                 rideGraph = nil
-                localRideStatus = ride.profile.mode == .sea ? nil : ride.profile.mode == .car ? CarNavigation.onlineNotice : "Gespeicherte Wanderroute · keine lokale Rückführung"
+                localRideStatus = route.isGPXTrack ? "GPX-Originalspur · keine automatische Rückführung" : ride.profile.mode == .sea ? nil : ride.profile.mode == .car ? CarNavigation.onlineNotice : "Gespeicherte Wanderroute · keine lokale Rückführung"
             }
         }
         prepareLocalRouting()
@@ -903,6 +952,13 @@ final class AppState: ObservableObject {
     }
 
     func prepareLocalRouting(refresh: Bool = false) {
+        if plan.route?.isGPXTrack == true {
+            cancelElevation()
+            preparationTask?.cancel(); preparationID = nil; preparingLocalRouting = false
+            preparedGraph = nil; preparedRouteID = nil
+            localRoutingStatus = "GPX-Originalspur lokal gespeichert · keine automatische Rückführung"
+            return
+        }
         loadPlanElevation()
         guard plan.profile.mode == .cycling else {
             preparationTask?.cancel(); preparationID = nil; preparingLocalRouting = false
@@ -932,7 +988,7 @@ final class AppState: ObservableObject {
                 }
                 preparedGraph = graph
                 preparedRouteID = route.id
-                localRoutingStatus = "Rückführung im geladenen 3-km-Umkreis bereit"
+                localRoutingStatus = graph.regional ? "Regionale Offline-Rückführung bereit" : "Rückführung im geladenen 3-km-Umkreis bereit"
 
             } catch {
                 guard !Task.isCancelled, preparationID == id else { return }
@@ -949,6 +1005,7 @@ final class AppState: ObservableObject {
     }
 
     func loadPlanElevation() {
+        guard plan.route?.isGPXTrack != true else { return }
         guard plan.profile.mode != .sea && plan.profile.mode != .car else { return }
         guard let route = plan.route, !route.hasElevation, !loadingElevation else { return }
         guard let api else {
@@ -1081,6 +1138,10 @@ final class AppState: ObservableObject {
         }
     }
     func addPoint(_ point: Waypoint, role: PointRole) {
+        guard plan.route?.isGPXTrack != true else {
+            errorMessage = "Die GPX-Originalspur bleibt unverändert. Start und Ziel kannst du über „Track bearbeiten“ wählen."
+            return
+        }
         switch role {
         case .start:
             requestedStartPlanID = nil
@@ -1118,6 +1179,10 @@ final class AppState: ObservableObject {
         routeTask = Task { await calculateRoute() }
     }
     func useCurrentLocation() {
+        guard plan.route?.isGPXTrack != true else {
+            errorMessage = "Wähle den Start der Originalspur über „Track bearbeiten“. Für eine Route ab deinem Standort bitte eine neue Tour anlegen."
+            return
+        }
         requestedStartPlanID = plan.id
         location.request()
         guard let coordinate = location.freshCoordinate else {
@@ -1127,6 +1192,18 @@ final class AppState: ObservableObject {
         addPoint(Waypoint(name: "Mein Standort", coordinate: coordinate), role: .start)
     }
     func reversePlan() {
+        if var route = plan.route, route.isGPXTrack {
+            route.id = UUID()
+            route.coordinates.reverse()
+            route.gpxTrack?.points.reverse()
+            let ascent = route.ascent; route.ascent = route.descent; route.descent = ascent
+            route.waypointIndices = [0, route.coordinates.count - 1]
+            plan.route = route
+            plan.waypoints.reverse()
+            mapRevision = UUID()
+            savePlan()
+            return
+        }
         guard plan.reverseWaypoints() else {
             errorMessage = "Zum Umkehren werden ein Start und ein Ziel benötigt."
             return
@@ -1142,6 +1219,7 @@ final class AppState: ObservableObject {
         }
     }
     func invalidateRoute(showErrorAlert: Bool = true) {
+        guard plan.route?.isGPXTrack != true else { savePlan(); return }
         cancelElevation()
         planningError = nil
         preparationTask?.cancel()
@@ -1163,6 +1241,7 @@ final class AppState: ObservableObject {
         localRoutingStatus = done < total ? "Wegedaten: \(done) von \(total) Bereichen geladen" : "Das iPhone berechnet die Route …"
     }
     func calculateRoute(showErrorAlert: Bool = true) async {
+        guard plan.route?.isGPXTrack != true else { return }
         guard plan.canCalculateRoute else { return }
         cancelElevation()
         preparationTask?.cancel(); preparationID = nil; preparingLocalRouting = false
@@ -1229,6 +1308,7 @@ final class AppState: ObservableObject {
         savePlan()
     }
     func resetPlan() {
+        if plan.route?.isGPXTrack == true { newPlan(); return }
         cancelElevation()
         planningError = nil
         preparationTask?.cancel()
@@ -1320,7 +1400,23 @@ final class AppState: ObservableObject {
         synchronizing = true
         defer { synchronizing = false; reload() }
         do {
-            for record in try store.all() where record.dirty {
+            let pending = try store.all()
+            var supportsGPX = false
+            var supportsCycle = false
+            if pending.contains(where: { $0.dirty && ($0.document.route?.isGPXTrack == true || $0.document.profile.cyclePreference != nil || $0.document.route?.cycleQuality != nil) }) {
+                let status: ServerStatus = try await api.request("/v1/status", timeout: 10)
+                supportsGPX = status.gpxImportAvailable == true
+                supportsCycle = status.cyclePlanningAvailable == true
+            }
+            for record in pending where record.dirty {
+                if (record.document.profile.cyclePreference != nil || record.document.route?.cycleQuality != nil) && !supportsCycle {
+                    notice = "Routenvariante lokal gespeichert. Für ihren Abgleich benötigt der Pi das Radplanungs-Update."
+                    continue
+                }
+                if record.document.route?.isGPXTrack == true && !supportsGPX {
+                    notice = "GPX-Tour lokal gespeichert. Für ihren Abgleich benötigt der Pi das GPX-Update."
+                    continue
+                }
                 if record.document.recordingState == .recording {
                     let pendingPoints = try store.blogPoints(rideID: record.id, pendingOnly: true)
                     if pendingPoints.isEmpty { continue }
@@ -1590,6 +1686,7 @@ final class AppState: ObservableObject {
             localRideStatus = !followsRoute || ride.profile.mode == .sea ? nil : ride.profile.mode == .cycling
                 ? (rideGraph == nil ? "Lokale Rückführung noch nicht vorbereitet" : nil)
                 : ride.profile.mode == .car ? CarNavigation.onlineNotice : "Gespeicherte Wanderroute · keine lokale Rückführung"
+            if ride.route?.isGPXTrack == true { localRideStatus = "GPX-Originalspur · keine automatische Rückführung"; rideGraph = nil }
             originalTracker = RouteTracker(lastProgress: 0, lastTimestamp: Date().timeIntervalSince1970)
             tracker = RouteTracker(lastProgress: 0, lastTimestamp: Date().timeIntervalSince1970)
             reroutePolicy = ReroutePolicy()
@@ -1946,6 +2043,7 @@ final class AppState: ObservableObject {
                 nav.carRoute = route; nav.carPendingWaypointOrdinals = pending; nav.routeProgress = match.traveled
                 current.localNavigation = nav
                 try store.save(current)
+                carSpeedGuidance.rebase(oldProgress: self.progress?.traveled ?? match.traveled, newProgress: match.traveled)
                 activeRide = current; navigationRoute = route; self.progress = match
                 tracker = RouteTracker(lastProgress: match.traveled, lastTimestamp: latest.timestamp.timeIntervalSince1970)
                 carVoice.rebase(from: previous, to: route); carTrafficError = nil
@@ -2134,12 +2232,14 @@ final class AppState: ObservableObject {
     /// Called only for fresh, accurate fixes. Keep the previous window on errors;
     /// retry after 30 seconds and never install data for another or paused ride.
     private func updateNeighborhood(ride: TourDocument, position: Coordinate) {
+        guard ride.route?.isGPXTrack != true else { return }
         guard ride.profile.mode == .cycling else { return }
         guard let route = ride.route, let required = try? OfflineTileID.neighborhood(position) else { return }
         if neighborhoodRideID != ride.id {
             neighborhoodTask?.cancel(); neighborhoodTask = nil; neighborhoodRequestID = nil
             neighborhoodRideID = ride.id; neighborhoodAttempt = 0
         }
+        if let graph = rideGraph, graph.regional, graph.tiles.contains(.at(position)) { return }
         if let graph = rideGraph, (api == nil || graph.hasCurrentAccessRules),
            Set(required).isSubset(of: graph.tiles) { return }
         let now = Date().timeIntervalSince1970
@@ -2190,7 +2290,18 @@ final class AppState: ObservableObject {
         }
         let heading = sample.course >= 0 && sample.speed >= 1 ? sample.course : nil
         progress?.snappedPosition = nil
-        if !isMarinePresentation, ride.profile.mode != .car, let original = ride.route, let route = ridingRoute, abs(sample.timestamp.timeIntervalSinceNow) < 5,
+        if let route = ride.route, route.isGPXTrack, abs(sample.timestamp.timeIntervalSinceNow) < 5,
+           sample.horizontalAccuracy >= 0, sample.horizontalAccuracy <= 25 {
+            progress = tracker.update(position: point.coordinate, timestamp: point.timestamp, route: route, heading: heading, accuracy: point.accuracy)
+            var navigation = ride.localNavigation ?? LocalNavigationState()
+            navigation.routeProgress = progress?.traveled ?? navigation.routeProgress
+            navigation.originalProgress = navigation.routeProgress
+            ride.localNavigation = navigation
+            localRideStatus = (progress?.distanceFromRoute ?? 0) > 35
+                ? "Abseits der GPX-Spur · keine automatische Rückführung"
+                : "GPX-Originalspur · keine Abbiegehinweise"
+        }
+        if !isMarinePresentation, ride.profile.mode != .car, let original = ride.route, !original.isGPXTrack, let route = ridingRoute, abs(sample.timestamp.timeIntervalSinceNow) < 5,
            sample.horizontalAccuracy >= 0, sample.horizontalAccuracy <= 25 {
             updateNeighborhood(ride: ride, position: point.coordinate)
             var nav = ride.localNavigation ?? LocalNavigationState()
@@ -2300,7 +2411,7 @@ final class AppState: ObservableObject {
         guard ride.recordingState == .recording else { return }
         rideActivity.carLookAhead = carLookAhead
         rideActivity.update(progress: progress, route: ridingRoute, headingDegrees: heading, paused: false, rerouting: rerouting)
-        if !isMarinePresentation, ride.profile.mode == .cycling, let progress, !rerouting,
+        if !isMarinePresentation, ride.profile.mode == .cycling, ride.route?.isGPXTrack != true, let progress, !rerouting,
            reroutePolicy.observe(distanceFromRoute: progress.distanceFromRoute, timestamp: point.timestamp,
                 accuracy: point.accuracy, now: Date().timeIntervalSince1970) {
             proposeWaypointSkip(ride: ride, position: point.coordinate, heading: heading)
@@ -2325,9 +2436,9 @@ final class AppState: ObservableObject {
             }
             if let route = ridingRoute, let warning = carSpeedGuidance.update(route: route, progress: progress,
                 speed: point.speed, timestamp: point.timestamp, now: now, active: !rerouting,
-                canSpeak: voice && !turnSoon && !speech.isSpeaking && now - carLastSpeech >= 8,
+                canSpeak: voice && !turnSoon && !speech.isSpeaking,
                 lastAnnouncement: carLastSpeech) {
-                speakCar(warning.text, event: warning.event)
+                speakCar(warning.text, event: warning.event, character: warning.event != .faster && warning.event != .offRoad)
             }
         }
         if !isMarinePresentation, ride.profile.mode != .car, voice, let progress, progress.distanceFromRoute < 35,
